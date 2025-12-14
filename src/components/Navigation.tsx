@@ -8,7 +8,7 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
 } from '@/components/ui/navigation-menu';
-import { Logo } from '@/components/Logo';
+
 
 export function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -25,23 +25,12 @@ export function Navigation() {
 
   const isActive = (path: string) => location.pathname === path;
 
-  const scrollToSection = (sectionId: string) => {
-    if (location.pathname !== '/') {
-      window.location.href = `/#${sectionId}`;
-    } else {
-      const element = document.getElementById(sectionId);
-      if (element) {
-        element.scrollIntoView({ behavior: 'smooth' });
-      }
-    }
-    setIsMobileMenuOpen(false);
-  };
+
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-background ${
-        isScrolled ? 'h-16 shadow-sm' : 'h-20'
-      }`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-background ${isScrolled ? 'h-16 shadow-sm' : 'h-20'
+        }`}
     >
       <nav className="container mx-auto px-4 h-full flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
@@ -56,9 +45,8 @@ export function Navigation() {
               <NavigationMenuItem>
                 <Link to="/">
                   <NavigationMenuLink
-                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer ${
-                      isActive('/') ? 'text-primary font-medium' : 'text-foreground'
-                    }`}
+                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer ${isActive('/') ? 'text-primary font-medium' : 'text-foreground'
+                      }`}
                   >
                     Home
                   </NavigationMenuLink>
@@ -67,9 +55,8 @@ export function Navigation() {
               <NavigationMenuItem>
                 <Link to="/funktionen">
                   <NavigationMenuLink
-                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer ${
-                      isActive('/funktionen') ? 'text-primary font-medium' : 'text-foreground'
-                    }`}
+                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer ${isActive('/funktionen') ? 'text-primary font-medium' : 'text-foreground'
+                      }`}
                   >
                     Funktionen
                   </NavigationMenuLink>
@@ -78,9 +65,8 @@ export function Navigation() {
               <NavigationMenuItem>
                 <Link to="/preise">
                   <NavigationMenuLink
-                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer ${
-                      isActive('/preise') ? 'text-primary font-medium' : 'text-foreground'
-                    }`}
+                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer ${isActive('/preise') ? 'text-primary font-medium' : 'text-foreground'
+                      }`}
                   >
                     Preise
                   </NavigationMenuLink>
@@ -89,9 +75,8 @@ export function Navigation() {
               <NavigationMenuItem>
                 <Link to="/kontakt">
                   <NavigationMenuLink
-                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer ${
-                      isActive('/kontakt') ? 'text-primary font-medium' : 'text-foreground'
-                    }`}
+                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer ${isActive('/kontakt') ? 'text-primary font-medium' : 'text-foreground'
+                      }`}
                   >
                     Kontakt
                   </NavigationMenuLink>
@@ -100,14 +85,14 @@ export function Navigation() {
             </NavigationMenuList>
           </NavigationMenu>
           <div className="flex items-center gap-3">
-            <Button 
+            <Button
               variant="ghost"
               className="text-foreground hover:text-primary font-normal"
               onClick={() => window.location.href = '/anmelden'}
             >
               Login
             </Button>
-            <Button 
+            <Button
               className="bg-primary text-primary-foreground hover:bg-secondary font-normal"
               onClick={() => window.location.href = '/anmelden'}
             >
@@ -134,9 +119,8 @@ export function Navigation() {
               <NavigationMenuItem className="w-full">
                 <Link to="/" onClick={() => setIsMobileMenuOpen(false)} className="w-full">
                   <NavigationMenuLink
-                    className={`block w-full py-3 px-4 text-base font-body transition-colors hover:bg-muted rounded-md cursor-pointer ${
-                      isActive('/') ? 'text-primary font-medium bg-muted' : 'text-foreground'
-                    }`}
+                    className={`block w-full py-3 px-4 text-base font-body transition-colors hover:bg-muted rounded-md cursor-pointer ${isActive('/') ? 'text-primary font-medium bg-muted' : 'text-foreground'
+                      }`}
                   >
                     Home
                   </NavigationMenuLink>
@@ -145,9 +129,8 @@ export function Navigation() {
               <NavigationMenuItem className="w-full">
                 <Link to="/funktionen" onClick={() => setIsMobileMenuOpen(false)} className="w-full">
                   <NavigationMenuLink
-                    className={`block w-full py-3 px-4 text-base font-body transition-colors hover:bg-muted rounded-md cursor-pointer ${
-                      isActive('/funktionen') ? 'text-primary font-medium bg-muted' : 'text-foreground'
-                    }`}
+                    className={`block w-full py-3 px-4 text-base font-body transition-colors hover:bg-muted rounded-md cursor-pointer ${isActive('/funktionen') ? 'text-primary font-medium bg-muted' : 'text-foreground'
+                      }`}
                   >
                     Funktionen
                   </NavigationMenuLink>
@@ -156,9 +139,8 @@ export function Navigation() {
               <NavigationMenuItem className="w-full">
                 <Link to="/preise" onClick={() => setIsMobileMenuOpen(false)} className="w-full">
                   <NavigationMenuLink
-                    className={`block w-full py-3 px-4 text-base font-body transition-colors hover:bg-muted rounded-md cursor-pointer ${
-                      isActive('/preise') ? 'text-primary font-medium bg-muted' : 'text-foreground'
-                    }`}
+                    className={`block w-full py-3 px-4 text-base font-body transition-colors hover:bg-muted rounded-md cursor-pointer ${isActive('/preise') ? 'text-primary font-medium bg-muted' : 'text-foreground'
+                      }`}
                   >
                     Preise
                   </NavigationMenuLink>
@@ -167,16 +149,15 @@ export function Navigation() {
               <NavigationMenuItem className="w-full">
                 <Link to="/kontakt" onClick={() => setIsMobileMenuOpen(false)} className="w-full">
                   <NavigationMenuLink
-                    className={`block w-full py-3 px-4 text-base font-body transition-colors hover:bg-muted rounded-md cursor-pointer ${
-                      isActive('/kontakt') ? 'text-primary font-medium bg-muted' : 'text-foreground'
-                    }`}
+                    className={`block w-full py-3 px-4 text-base font-body transition-colors hover:bg-muted rounded-md cursor-pointer ${isActive('/kontakt') ? 'text-primary font-medium bg-muted' : 'text-foreground'
+                      }`}
                   >
                     Kontakt
                   </NavigationMenuLink>
                 </Link>
               </NavigationMenuItem>
               <NavigationMenuItem className="w-full pt-2">
-                <Button 
+                <Button
                   variant="outline"
                   className="w-full bg-background text-foreground border-border hover:bg-muted font-normal mb-2"
                   onClick={() => window.location.href = '/anmelden'}
@@ -185,7 +166,7 @@ export function Navigation() {
                 </Button>
               </NavigationMenuItem>
               <NavigationMenuItem className="w-full">
-                <Button 
+                <Button
                   className="w-full bg-primary text-primary-foreground hover:bg-secondary font-normal"
                   onClick={() => window.location.href = '/anmelden'}
                 >
