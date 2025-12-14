@@ -10,6 +10,7 @@ import { AnmeldenPage } from './pages/AnmeldenPage';
 import { ImpressumPage } from './pages/ImpressumPage';
 import { DatenschutzPage } from './pages/DatenschutzPage';
 import { AGBPage } from './pages/AGBPage';
+import { EinstellungenPage } from './pages/EinstellungenPage';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
           <Route path="/impressum" element={<ImpressumPage />} />
           <Route path="/datenschutz" element={<DatenschutzPage />} />
           <Route path="/agb" element={<AGBPage />} />
+          <Route path="/einstellungen" element={<EinstellungenPage />} />
         </Routes>
         <Footer />
       </div>

@@ -4,16 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, User, Building2, Phone } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 
 export function AnmeldenPage() {
+  const [searchParams] = useSearchParams();
+  const shouldRegister = searchParams.get('register') === 'true';
+  
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(!shouldRegister);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -47,7 +50,7 @@ export function AnmeldenPage() {
             {/* Logo */}
             <div className="text-center mb-8">
               <Link to="/" className="inline-flex items-center gap-3">
-                <Logo className="w-12 h-12" />
+                <img src="/logo.png" alt="Pfotencard Logo" className="w-12 h-12" />
                 <span className="text-3xl font-sans font-bold text-primary">Pfotencard</span>
               </Link>
             </div>

@@ -55,9 +55,11 @@ const plans = [
   },
 ];
 
-export function PricingTableSection() {
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+interface PricingTableSectionProps {
+  billingCycle: 'monthly' | 'yearly';
+}
 
+export function PricingTableSection({ billingCycle }: PricingTableSectionProps) {
   return (
     <section className="py-16 bg-background">
       <div className="container mx-auto px-4">
@@ -104,7 +106,7 @@ export function PricingTableSection() {
                     ? 'bg-primary text-primary-foreground hover:bg-secondary'
                     : 'bg-background text-foreground border border-border hover:bg-muted'
                 }`}
-                onClick={() => window.location.href = '/anmelden'}
+                onClick={() => window.location.href = '/anmelden?register=true'}
               >
                 Jetzt starten
               </Button>

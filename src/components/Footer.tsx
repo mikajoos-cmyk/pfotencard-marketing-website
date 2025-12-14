@@ -13,7 +13,7 @@ export function Footer() {
           {/* Brand Column */}
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <Logo className="w-10 h-10" />
+              <img src="/logo.png" alt="Pfotencard Logo" className="w-10 h-10" />
               <h3 className="text-2xl font-sans font-bold text-primary">Pfotencard</h3>
             </div>
             <p className="text-muted-foreground text-sm leading-relaxed">

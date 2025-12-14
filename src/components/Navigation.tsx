@@ -45,7 +45,7 @@ export function Navigation() {
     >
       <nav className="container mx-auto px-4 h-full flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
-          <Logo className="w-10 h-10" />
+          <img src="/logo.png" alt="Pfotencard Logo" className="w-10 h-10" />
           <span className="text-2xl font-sans font-bold text-primary">Pfotencard</span>
         </Link>
 
@@ -99,12 +99,21 @@ export function Navigation() {
               </NavigationMenuItem>
             </NavigationMenuList>
           </NavigationMenu>
-          <Button 
-            className="bg-primary text-primary-foreground hover:bg-secondary font-normal"
-            onClick={() => window.location.href = '/anmelden'}
-          >
-            14 Tage kostenlos testen
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="ghost"
+              className="text-foreground hover:text-primary font-normal"
+              onClick={() => window.location.href = '/anmelden'}
+            >
+              Login
+            </Button>
+            <Button 
+              className="bg-primary text-primary-foreground hover:bg-secondary font-normal"
+              onClick={() => window.location.href = '/anmelden'}
+            >
+              14 Tage kostenlos testen
+            </Button>
+          </div>
         </div>
 
         {/* Mobile Menu Button */}
@@ -167,6 +176,15 @@ export function Navigation() {
                 </Link>
               </NavigationMenuItem>
               <NavigationMenuItem className="w-full pt-2">
+                <Button 
+                  variant="outline"
+                  className="w-full bg-background text-foreground border-border hover:bg-muted font-normal mb-2"
+                  onClick={() => window.location.href = '/anmelden'}
+                >
+                  Login
+                </Button>
+              </NavigationMenuItem>
+              <NavigationMenuItem className="w-full">
                 <Button 
                   className="w-full bg-primary text-primary-foreground hover:bg-secondary font-normal"
                   onClick={() => window.location.href = '/anmelden'}

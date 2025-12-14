@@ -1,9 +1,11 @@
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 
-export function PricingHeaderSection() {
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+interface PricingHeaderSectionProps {
+  billingCycle: 'monthly' | 'yearly';
+  setBillingCycle: (cycle: 'monthly' | 'yearly') => void;
+}
 
+export function PricingHeaderSection({ billingCycle, setBillingCycle }: PricingHeaderSectionProps) {
   return (
     <section className="py-24 bg-background">
       <div className="container mx-auto px-4">
