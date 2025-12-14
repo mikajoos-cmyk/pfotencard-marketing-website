@@ -1,0 +1,69 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Inter:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: 142 72% 45%;
+    --color-primary-foreground: 0 0% 100%;
+    --color-secondary: 142 35% 35%;
+    --color-secondary-foreground: 0 0% 100%;
+    --color-tertiary: 216 80% 35%;
+    --color-tertiary-foreground: 0 0% 100%;
+    --color-accent: 24 92% 58%;
+    --color-accent-foreground: 0 0% 100%;
+    --color-neutral: 0 0% 98%;
+    --color-neutral-foreground: 210 10% 20%;
+    --color-success: 142 72% 35%;
+    --color-warning: 24 92% 50%;
+    --color-background: 0 0% 100%;
+    --color-foreground: 210 10% 20%;
+    --color-border: 210 10% 90%;
+    --color-input: 210 10% 90%;
+    --color-ring: 142 72% 45%;
+    --color-muted: 210 10% 95%;
+    --color-muted-foreground: 210 6% 35%;
+    --color-card: 0 0% 100%;
+    --color-card-foreground: 210 10% 20%;
+    --color-popover: 0 0% 100%;
+    --color-popover-foreground: 210 10% 20%;
+    --color-destructive: 0 84% 60%;
+    --color-destructive-foreground: 0 0% 100%;
+    
+    --font-sans: "DM Sans", sans-serif;
+    --font-body: "Inter", sans-serif;
+    --font-mono: "IBM Plex Mono", monospace;
+    
+    --radius: 0.75rem;
+  }
+  
+  * {
+    @apply border-border;
+  }
+  
+  html,
+  body {
+    @apply bg-background text-foreground font-body;
+    scroll-behavior: smooth;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-sans text-foreground;
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+  }
+  
+  p, span, div, a {
+    @apply text-foreground;
+    line-height: 1.5;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
