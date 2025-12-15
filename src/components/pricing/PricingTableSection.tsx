@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Check, X } from 'lucide-react';
@@ -57,9 +56,25 @@ const plans = [
 
 interface PricingTableSectionProps {
   billingCycle: 'monthly' | 'yearly';
+  onSelectPlan?: (planName: string) => void;
+  isUpgradeMode?: boolean;
 }
 
-export function PricingTableSection({ billingCycle }: PricingTableSectionProps) {
+export function PricingTableSection({ 
+  billingCycle, 
+  onSelectPlan, 
+  isUpgradeMode = false 
+}: PricingTableSectionProps) {
+  
+  const handleAction = (planName: string) => {
+    if (onSelectPlan) {
+      onSelectPlan(planName);
+    } else {
+      // Default behavior if not in upgrade mode (redirect to register)
+      window.location.href = '/anmelden?register=true';
+    }
+  };
+
   return (
     <section className="py-16 bg-background">
       <div className="container mx-auto px-4">
@@ -100,16 +115,18 @@ export function PricingTableSection({ billingCycle }: PricingTableSectionProps) 
                   </span>
                 </div>
               </div>
+              
               <Button
                 className={`w-full mb-6 font-normal ${
                   plan.featured
                     ? 'bg-primary text-primary-foreground hover:bg-secondary'
                     : 'bg-background text-foreground border border-border hover:bg-muted'
                 }`}
-                onClick={() => window.location.href = '/anmelden?register=true'}
+                onClick={() => handleAction(plan.name)}
               >
-                Jetzt starten
+                {isUpgradeMode ? 'Jetzt buchen' : 'Jetzt starten'}
               </Button>
+
               <div className="space-y-3 flex-grow">
                 {plan.features.map((feature, featureIndex) => (
                   <div key={featureIndex} className="flex items-start gap-3">
