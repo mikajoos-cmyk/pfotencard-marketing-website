@@ -28,9 +28,8 @@ export function Navigation() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-background ${
-        isScrolled ? 'h-16 shadow-sm' : 'h-20'
-      }`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-background ${isScrolled ? 'h-16 shadow-sm' : 'h-20'
+        }`}
     >
       <nav className="container mx-auto px-4 h-full flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
@@ -43,48 +42,48 @@ export function Navigation() {
           <NavigationMenu>
             <NavigationMenuList className="flex gap-6">
               <NavigationMenuItem>
-                <Link to="/">
-                  <NavigationMenuLink
-                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer ${
-                      isActive('/') ? 'text-primary font-medium' : 'text-foreground'
-                    }`}
+                <NavigationMenuLink asChild>
+                  <Link
+                    to="/"
+                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer px-4 py-2 rounded-md ${isActive('/') ? 'text-primary font-medium bg-accent/50' : 'text-foreground'
+                      }`}
                   >
                     Home
-                  </NavigationMenuLink>
-                </Link>
+                  </Link>
+                </NavigationMenuLink>
               </NavigationMenuItem>
               <NavigationMenuItem>
-                <Link to="/funktionen">
-                  <NavigationMenuLink
-                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer ${
-                      isActive('/funktionen') ? 'text-primary font-medium' : 'text-foreground'
-                    }`}
+                <NavigationMenuLink asChild>
+                  <Link
+                    to="/funktionen"
+                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer px-4 py-2 rounded-md ${isActive('/funktionen') ? 'text-primary font-medium bg-accent/50' : 'text-foreground'
+                      }`}
                   >
                     Funktionen
-                  </NavigationMenuLink>
-                </Link>
+                  </Link>
+                </NavigationMenuLink>
               </NavigationMenuItem>
               <NavigationMenuItem>
-                <Link to="/preise">
-                  <NavigationMenuLink
-                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer ${
-                      isActive('/preise') ? 'text-primary font-medium' : 'text-foreground'
-                    }`}
+                <NavigationMenuLink asChild>
+                  <Link
+                    to="/preise"
+                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer px-4 py-2 rounded-md ${isActive('/preise') ? 'text-primary font-medium bg-accent/50' : 'text-foreground'
+                      }`}
                   >
                     Preise
-                  </NavigationMenuLink>
-                </Link>
+                  </Link>
+                </NavigationMenuLink>
               </NavigationMenuItem>
               <NavigationMenuItem>
-                <Link to="/kontakt">
-                  <NavigationMenuLink
-                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer ${
-                      isActive('/kontakt') ? 'text-primary font-medium' : 'text-foreground'
-                    }`}
+                <NavigationMenuLink asChild>
+                  <Link
+                    to="/kontakt"
+                    className={`text-base font-body transition-colors hover:text-primary cursor-pointer px-4 py-2 rounded-md ${isActive('/kontakt') ? 'text-primary font-medium bg-accent/50' : 'text-foreground'
+                      }`}
                   >
                     Kontakt
-                  </NavigationMenuLink>
-                </Link>
+                  </Link>
+                </NavigationMenuLink>
               </NavigationMenuItem>
             </NavigationMenuList>
           </NavigationMenu>
@@ -101,8 +100,8 @@ export function Navigation() {
                     Einstellungen
                   </Button>
                 </Link>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={logout}
                   className="gap-2 border-destructive text-destructive hover:bg-destructive/10"
                 >
@@ -145,14 +144,51 @@ export function Navigation() {
         <div className="md:hidden bg-background border-t border-border absolute w-full left-0 top-full shadow-lg">
           <NavigationMenu className="w-full">
             <NavigationMenuList className="flex flex-col w-full p-4 gap-4">
-              {/* Links... (gleich wie vorher, hier gekürzt) */}
               <NavigationMenuItem className="w-full">
-                <Link to="/" onClick={() => setIsMobileMenuOpen(false)} className="w-full">
-                  <NavigationMenuLink className="block w-full py-3 px-4 text-base hover:bg-muted rounded-md">Home</NavigationMenuLink>
-                </Link>
+                <NavigationMenuLink asChild>
+                  <Link
+                    to="/"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="block w-full py-3 px-4 text-base hover:bg-muted rounded-md"
+                  >
+                    Home
+                  </Link>
+                </NavigationMenuLink>
               </NavigationMenuItem>
-              {/* Weitere Links für Funktionen, Preise etc... */}
-              
+              <NavigationMenuItem className="w-full">
+                <NavigationMenuLink asChild>
+                  <Link
+                    to="/funktionen"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="block w-full py-3 px-4 text-base hover:bg-muted rounded-md"
+                  >
+                    Funktionen
+                  </Link>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+              <NavigationMenuItem className="w-full">
+                <NavigationMenuLink asChild>
+                  <Link
+                    to="/preise"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="block w-full py-3 px-4 text-base hover:bg-muted rounded-md"
+                  >
+                    Preise
+                  </Link>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+              <NavigationMenuItem className="w-full">
+                <NavigationMenuLink asChild>
+                  <Link
+                    to="/kontakt"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="block w-full py-3 px-4 text-base hover:bg-muted rounded-md"
+                  >
+                    Kontakt
+                  </Link>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+
               <div className="h-px bg-border my-2" />
 
               {isAuthenticated ? (
@@ -165,8 +201,8 @@ export function Navigation() {
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem className="w-full">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       className="w-full justify-start gap-2 text-destructive border-destructive"
                       onClick={() => {
                         logout();

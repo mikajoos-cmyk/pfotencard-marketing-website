@@ -144,7 +144,14 @@ export async function saveSettings(data: any) {
 
 export async function uploadImage(file: File) {
     const headers = getAuthHeaders();
-    if (!headers.Authorization) throw new Error("Not authenticated");
+
+    // Prüfen ob Token existiert UND gültig aussieht
+    if (!headers.Authorization || headers.Authorization === 'Bearer null') {
+        // Token löschen um sauberen State zu haben
+        localStorage.removeItem('pfotencard_token');
+        window.location.href = '/anmelden';
+        throw new Error("Nicht authentifiziert. Bitte melden Sie sich an.");
+    }
 
     const formData = new FormData();
     formData.append('file', file);
@@ -154,9 +161,16 @@ export async function uploadImage(file: File) {
         headers: {
             'Authorization': headers.Authorization,
             'x-tenant-subdomain': headers['x-tenant-subdomain'],
+            // WICHTIG: Kein Content-Type Header setzen! Der Browser macht das für FormData automatisch (boundary).
         },
         body: formData,
     });
+
+    if (response.status === 401) {
+        localStorage.removeItem('pfotencard_token');
+        window.location.href = '/anmelden';
+        throw new Error("Sitzung abgelaufen");
+    }
 
     if (!response.ok) {
         throw new Error('Image upload failed');
