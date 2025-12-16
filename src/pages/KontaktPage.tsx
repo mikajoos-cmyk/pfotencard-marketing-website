@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Mail, Phone, MapPin, Send } from 'lucide-react';
 
 export function KontaktPage() {
+  const navigate = useNavigate();
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -241,7 +243,7 @@ export function KontaktPage() {
                 <Button
                   variant="outline"
                   className="bg-background text-foreground border-border hover:bg-muted font-normal"
-                  onClick={() => window.location.href = '/faq'}
+                  onClick={() => navigate('/faq')}
                 >
                   Zu den FAQs
                 </Button>

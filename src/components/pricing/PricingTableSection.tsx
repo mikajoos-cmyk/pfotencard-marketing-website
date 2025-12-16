@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Check, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const plans = [
   {
@@ -60,18 +61,20 @@ interface PricingTableSectionProps {
   isUpgradeMode?: boolean;
 }
 
-export function PricingTableSection({ 
-  billingCycle, 
-  onSelectPlan, 
-  isUpgradeMode = false 
+export function PricingTableSection({
+  billingCycle,
+  onSelectPlan,
+  isUpgradeMode = false
 }: PricingTableSectionProps) {
-  
+
+  const navigate = useNavigate();
+
   const handleAction = (planName: string) => {
     if (onSelectPlan) {
       onSelectPlan(planName);
     } else {
       // Default behavior if not in upgrade mode (redirect to register)
-      window.location.href = '/anmelden?register=true';
+      navigate('/anmelden?register=true');
     }
   };
 
@@ -86,11 +89,10 @@ export function PricingTableSection({
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6, delay: index * 0.1 }}
-              className={`relative bg-card rounded-lg border p-8 flex flex-col ${
-                plan.featured
+              className={`relative bg-card rounded-lg border p-8 flex flex-col ${plan.featured
                   ? 'border-primary shadow-lg scale-105 md:scale-110'
                   : 'border-border'
-              }`}
+                }`}
             >
               {plan.featured && (
                 <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-primary text-primary-foreground px-4 py-1 rounded-full text-sm font-body font-medium">
@@ -115,13 +117,12 @@ export function PricingTableSection({
                   </span>
                 </div>
               </div>
-              
+
               <Button
-                className={`w-full mb-6 font-normal ${
-                  plan.featured
+                className={`w-full mb-6 font-normal ${plan.featured
                     ? 'bg-primary text-primary-foreground hover:bg-secondary'
                     : 'bg-background text-foreground border border-border hover:bg-muted'
-                }`}
+                  }`}
                 onClick={() => handleAction(plan.name)}
               >
                 {isUpgradeMode ? 'Jetzt buchen' : 'Jetzt starten'}
@@ -136,9 +137,8 @@ export function PricingTableSection({
                       <X size={20} strokeWidth={2} className="text-muted-foreground flex-shrink-0 mt-0.5" />
                     )}
                     <span
-                      className={`text-sm font-body ${
-                        feature.included ? 'text-foreground' : 'text-muted-foreground'
-                      }`}
+                      className={`text-sm font-body ${feature.included ? 'text-foreground' : 'text-muted-foreground'
+                        }`}
                     >
                       {feature.name}
                     </span>

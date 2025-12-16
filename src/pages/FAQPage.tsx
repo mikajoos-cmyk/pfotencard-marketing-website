@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   Accordion,
   AccordionContent,
@@ -111,6 +112,7 @@ const faqCategories = [
 ];
 
 export function FAQPage() {
+  const navigate = useNavigate();
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
@@ -242,7 +244,7 @@ export function FAQPage() {
               <Button
                 size="lg"
                 className="bg-primary text-primary-foreground hover:bg-secondary font-normal"
-                onClick={() => (window.location.href = '/kontakt')}
+                onClick={() => navigate('/kontakt')}
               >
                 Kontakt aufnehmen
               </Button>
@@ -250,7 +252,7 @@ export function FAQPage() {
                 size="lg"
                 variant="outline"
                 className="bg-background text-foreground border-border hover:bg-muted font-normal"
-                onClick={() => (window.location.href = '/anmelden')}
+                onClick={() => navigate('/anmelden')}
               >
                 Kostenlos testen
               </Button>

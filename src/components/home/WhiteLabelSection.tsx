@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Palette, Smartphone, Star, Upload, Paintbrush, Globe, MessageSquare } from 'lucide-react';
 import {
@@ -13,6 +14,7 @@ import {
 
 export function WhiteLabelSection() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <section className="py-24 bg-gradient-to-br from-primary/5 to-primary/10">
@@ -181,7 +183,7 @@ export function WhiteLabelSection() {
                       className="bg-primary text-primary-foreground hover:bg-secondary font-normal"
                       onClick={() => {
                         setIsModalOpen(false);
-                        window.location.href = '/anmelden';
+                        navigate('/anmelden');
                       }}
                     >
                       Jetzt Branding testen (14 Tage kostenlos)

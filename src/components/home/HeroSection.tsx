@@ -1,8 +1,10 @@
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Play } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export function HeroSection() {
+  const navigate = useNavigate();
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-background">
       {/* Video Background */}
@@ -41,10 +43,10 @@ export function HeroSection() {
             Digitalisiere deine Hundeschule mit einer individuellen White-Label-App. Einfach, effizient und komplett auf deine Marke zugeschnitten.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               className="bg-primary text-primary-foreground hover:bg-secondary font-normal min-w-[200px]"
-              onClick={() => window.location.href = '/anmelden'}
+              onClick={() => navigate('/anmelden')}
             >
               14 Tage kostenlos testen
             </Button>

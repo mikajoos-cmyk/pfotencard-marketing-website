@@ -1,7 +1,9 @@
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 
 export function TrialReminderSection() {
+  const navigate = useNavigate();
   return (
     <section className="py-24 bg-gradient-to-br from-primary/5 to-primary/10">
       <div className="container mx-auto px-4">
@@ -18,10 +20,10 @@ export function TrialReminderSection() {
           <p className="text-lg text-muted-foreground font-body mb-8">
             Keine Kreditkarte erforderlich. Keine versteckten Kosten. Starte noch heute und überzeuge dich selbst von den Vorteilen.
           </p>
-          <Button 
-            size="lg" 
+          <Button
+            size="lg"
             className="bg-primary text-primary-foreground hover:bg-secondary font-normal"
-            onClick={() => window.location.href = '/anmelden'}
+            onClick={() => navigate('/anmelden')}
           >
             Kostenlose Testversion starten
           </Button>

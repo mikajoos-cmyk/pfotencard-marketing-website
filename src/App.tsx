@@ -46,15 +46,15 @@ function AppContent() {
           <Route path="/impressum" element={<ImpressumPage />} />
           <Route path="/datenschutz" element={<DatenschutzPage />} />
           <Route path="/agb" element={<AGBPage />} />
-          
+
           {/* Geschützte Route: Nur für eingeloggte User */}
-          <Route 
-            path="/einstellungen" 
+          <Route
+            path="/einstellungen"
             element={
               <ProtectedRoute>
                 <EinstellungenPage />
               </ProtectedRoute>
-            } 
+            }
           />
         </Routes>
       </div>
@@ -66,11 +66,11 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
+    <Router>
+      <AuthProvider>
         <AppContent />
-      </Router>
-    </AuthProvider>
+      </AuthProvider>
+    </Router>
   );
 }
 

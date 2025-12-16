@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { UserPlus, Settings, Rocket } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const steps = [
   {
@@ -24,6 +25,7 @@ const steps = [
 ];
 
 export function HowItWorksSection() {
+  const navigate = useNavigate();
   return (
     <section className="py-24 bg-background">
       <div className="container mx-auto px-4">
@@ -81,10 +83,10 @@ export function HowItWorksSection() {
           transition={{ duration: 0.6, delay: 0.8 }}
           className="text-center"
         >
-          <Button 
-            size="lg" 
+          <Button
+            size="lg"
             className="bg-primary text-primary-foreground hover:bg-secondary font-normal"
-            onClick={() => window.location.href = '/anmelden'}
+            onClick={() => navigate('/anmelden')}
           >
             Kostenlos starten
           </Button>

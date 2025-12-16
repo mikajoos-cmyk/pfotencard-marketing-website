@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, LogOut, Settings, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,6 +14,7 @@ export function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { isAuthenticated, logout, subdomain } = useAuth();
 
   useEffect(() => {
@@ -114,13 +115,13 @@ export function Navigation() {
                 <Button
                   variant="ghost"
                   className="text-foreground hover:text-primary font-normal"
-                  onClick={() => window.location.href = '/anmelden'}
+                  onClick={() => navigate('/anmelden')}
                 >
                   Login
                 </Button>
                 <Button
                   className="bg-primary text-primary-foreground hover:bg-secondary font-normal"
-                  onClick={() => window.location.href = '/anmelden?register=true'}
+                  onClick={() => navigate('/anmelden?register=true')}
                 >
                   14 Tage kostenlos testen
                 </Button>
@@ -219,7 +220,7 @@ export function Navigation() {
                     <Button
                       variant="outline"
                       className="w-full mb-2"
-                      onClick={() => window.location.href = '/anmelden'}
+                      onClick={() => navigate('/anmelden')}
                     >
                       Login
                     </Button>
@@ -227,7 +228,7 @@ export function Navigation() {
                   <NavigationMenuItem className="w-full">
                     <Button
                       className="w-full bg-primary text-primary-foreground"
-                      onClick={() => window.location.href = '/anmelden?register=true'}
+                      onClick={() => navigate('/anmelden?register=true')}
                     >
                       14 Tage kostenlos testen
                     </Button>
