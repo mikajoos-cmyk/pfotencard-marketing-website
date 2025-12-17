@@ -1,7 +1,7 @@
 // src/lib/api.ts
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-
+// const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 function getAuthHeaders() {
     const token = localStorage.getItem('pfotencard_token');
     const subdomain = localStorage.getItem('pfotencard_subdomain');

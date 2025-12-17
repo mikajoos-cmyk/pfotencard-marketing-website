@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { fetchAppConfig, saveSettings, uploadImage } from '@/lib/api';
+import { API_BASE_URL, fetchAppConfig, saveSettings, uploadImage } from '@/lib/api';
 import {
   Save,
   Upload,
@@ -51,7 +51,7 @@ import {
 
 // --- TYPES (Frontend State) ---
 interface Service {
-  id?: number; 
+  id?: number;
   name: string;
   category: string;
   price: number;
@@ -81,6 +81,12 @@ const colorPresets = [
   { name: 'Orange', value: '#F97316' },
   { name: 'Rot', value: '#EF4444' },
 ];
+
+const toRelativeUrl = (url: string | undefined) => {
+  if (!url) return undefined;
+  // Entfernt die API_BASE_URL, falls sie im String enthalten ist
+  return url.replace(API_BASE_URL, '');
+};
 
 export function EinstellungenPage() {
   const { toast } = useToast();
@@ -204,10 +210,12 @@ export function EinstellungenPage() {
         setVipTerm(wording.vip || 'VIP');
 
         if (branding.logo_url) {
-          // Volle URL sicherstellen für Preview
-          const logoUrl = branding.logo_url.startsWith('http') 
-            ? branding.logo_url 
-            : `http://127.0.0.1:8000${branding.logo_url}`;
+          // Wenn es eine absolute URL ist (z.B. extern), lass sie so.
+          // Wenn es relativ ist (startet mit /), hänge die API URL davor.
+          const logoUrl = branding.logo_url.startsWith('http')
+            ? branding.logo_url
+            : `${API_BASE_URL}${branding.logo_url}`;
+
           setPreviewLogo(logoUrl);
           setHasLogo(true);
         }
@@ -224,7 +232,8 @@ export function EinstellungenPage() {
           id: l.id,
           name: l.name,
           rank_order: l.rank_order,
-          badgeImage: l.icon_url,
+          // In useEffect -> loadData -> mappedLevels:
+badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BASE_URL}${l.icon_url}`) : undefined,
           requirements: l.requirements.map((r: any) => ({
             id: r.id,
             training_type_id: r.training_type_id,
@@ -254,8 +263,8 @@ export function EinstellungenPage() {
       // Levels normalisieren (1,2,3...)
       const normalizedLevels = levels.map((l, index) => ({
         ...l,
-        rank_order: index + 1, 
-        badge_image: l.badgeImage, 
+        rank_order: index + 1,
+        badge_image: l.badgeImage,
       }));
 
       const payload = {
@@ -298,7 +307,7 @@ export function EinstellungenPage() {
       try {
         const { url } = await uploadImage(file);
         // Volle URL für Preview bauen
-        const fullUrl = url.startsWith('http') ? url : `http://127.0.0.1:8000${url}`;
+        const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
         setPreviewLogo(fullUrl);
         setHasLogo(true);
       } catch (err) {
@@ -320,7 +329,7 @@ export function EinstellungenPage() {
     const file = e.target.files[0];
     try {
       const { url } = await uploadImage(file);
-      const fullUrl = url.startsWith('http') ? url : `http://127.0.0.1:8000${url}`;
+      const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
 
       const newLevels = [...levels];
       newLevels[uploadingLevelIndex].badgeImage = fullUrl;
