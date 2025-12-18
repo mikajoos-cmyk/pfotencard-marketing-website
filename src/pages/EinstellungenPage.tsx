@@ -98,8 +98,10 @@ export function EinstellungenPage() {
   const [subdomain, setSubdomain] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#22C55E');
   const [secondaryColor, setSecondaryColor] = useState('#3B82F6');
+  const [backgroundColor, setBackgroundColor] = useState('#F8FAFC');
   const [customPrimaryColor, setCustomPrimaryColor] = useState('');
   const [customSecondaryColor, setCustomSecondaryColor] = useState('');
+  const [customBackgroundColor, setCustomBackgroundColor] = useState('');
   const [levelTerm, setLevelTerm] = useState('Level');
   const [vipTerm, setVipTerm] = useState('VIP');
 
@@ -137,6 +139,7 @@ export function EinstellungenPage() {
     const configPayload = {
       primary_color: customPrimaryColor || primaryColor,
       secondary_color: customSecondaryColor || secondaryColor,
+      background_color: customBackgroundColor || backgroundColor,
       school_name: schoolName,
       logo: previewLogo || (hasLogo ? '/paw.png' : undefined),
       levels: mappedLevels,
@@ -159,7 +162,7 @@ export function EinstellungenPage() {
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [showPreview, primaryColor, secondaryColor, customPrimaryColor, customSecondaryColor, schoolName, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp]);
+  }, [showPreview, primaryColor, secondaryColor, backgroundColor, customPrimaryColor, customSecondaryColor, customBackgroundColor, schoolName, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp]);
 
   // Funktion für "In neuem Tab öffnen"
   const getPreviewUrl = () => {
@@ -176,6 +179,7 @@ export function EinstellungenPage() {
     const config = {
       primary_color: customPrimaryColor || primaryColor,
       secondary_color: customSecondaryColor || secondaryColor,
+      background_color: customBackgroundColor || backgroundColor,
       school_name: schoolName,
       logo: previewLogo || (hasLogo ? '/paw.png' : undefined),
       levels: mappedLevels,
@@ -219,6 +223,7 @@ export function EinstellungenPage() {
 
         setPrimaryColor(branding.primary_color || '#22C55E');
         setSecondaryColor(branding.secondary_color || '#3B82F6');
+        setBackgroundColor(branding.background_color || '#F8FAFC');
         setLevelTerm(wording.level || 'Level');
         setVipTerm(wording.vip || 'VIP');
         setTopUpOptions(balance.top_up_options || []);
@@ -285,6 +290,7 @@ export function EinstellungenPage() {
         subdomain: subdomain,
         primary_color: customPrimaryColor || primaryColor,
         secondary_color: customSecondaryColor || secondaryColor,
+        background_color: customBackgroundColor || backgroundColor,
         logo_url: previewLogo,
         level_term: levelTerm,
         vip_term: vipTerm,
@@ -565,6 +571,34 @@ export function EinstellungenPage() {
                       <div>
                         <Label>Sekundärfarbe</Label>
                         <div className="flex gap-3 mb-3 mt-2">{colorPresets.map(c => <button key={c.value} onClick={() => { setSecondaryColor(c.value); setCustomSecondaryColor(''); }} className="w-12 h-12 rounded-lg" style={{ backgroundColor: c.value }} />)}<div className="relative"><input type="color" value={customSecondaryColor || secondaryColor} onChange={e => { setCustomSecondaryColor(e.target.value); setSecondaryColor(e.target.value); }} className="w-12 h-12 rounded-lg cursor-pointer border-2" /><Palette size={16} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" /></div></div>
+                      </div>
+                      <div>
+                        <Label>Hintergrundfarbe</Label>
+                        <div className="flex gap-3 mb-3 mt-2">
+                          {[
+                            { name: 'Weiß', value: '#FFFFFF' },
+                            { name: 'Hellgrau', value: '#F8FAFC' },
+                            { name: 'Dunkelblau', value: '#0F172A' },
+                            { name: 'Schwarz', value: '#000000' }
+                          ].map(c => (
+                            <button
+                              key={c.value}
+                              onClick={() => { setBackgroundColor(c.value); setCustomBackgroundColor(''); }}
+                              className="w-12 h-12 rounded-lg border border-border"
+                              style={{ backgroundColor: c.value }}
+                              title={c.name}
+                            />
+                          ))}
+                          <div className="relative">
+                            <input
+                              type="color"
+                              value={customBackgroundColor || backgroundColor}
+                              onChange={e => { setCustomBackgroundColor(e.target.value); setBackgroundColor(e.target.value); }}
+                              className="w-12 h-12 rounded-lg cursor-pointer border-2"
+                            />
+                            <Palette size={16} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
+                          </div>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
