@@ -472,7 +472,7 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
                         <CardTitle className="flex items-center gap-2"><Smartphone size={20} /> Live-Vorschau</CardTitle>
-                        <CardDescription>Die App wird live im IFrame geladen</CardDescription>
+                        <CardDescription>So sieht deine Hundeschule später aus</CardDescription>
                       </div>
                       <Button variant="outline" size="sm" onClick={() => window.open(getPreviewUrl(), '_blank')} title="In neuem Tab öffnen"><ExternalLink size={16} /></Button>
                     </div>
@@ -662,3 +662,4 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
     </main>
   );
 }
+

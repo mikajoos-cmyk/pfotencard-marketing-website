@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getRepoDemoUrl } from '@/lib/utils';
 
 export function HeroSection() {
   const navigate = useNavigate();
@@ -54,6 +55,7 @@ export function HeroSection() {
               size="lg"
               variant="outline"
               className="bg-background text-tertiary border-tertiary hover:bg-tertiary hover:text-tertiary-foreground font-normal min-w-[200px]"
+              onClick={() => window.open(getRepoDemoUrl(), '_blank')}
             >
               <Play size={20} strokeWidth={1.5} className="mr-2" />
               Demo ansehen
