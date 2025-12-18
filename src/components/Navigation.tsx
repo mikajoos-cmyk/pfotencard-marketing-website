@@ -93,7 +93,14 @@ export function Navigation() {
             {isAuthenticated ? (
               <>
                 <span className="text-sm text-muted-foreground mr-2 hidden lg:inline-block">
-                  {subdomain}.pfotencard.de
+                  <a
+                    href={`https://${subdomain}.pfotencard.de`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:text-primary transition-colors"
+                  >
+                    {subdomain}.pfotencard.de
+                  </a>
                 </span>
                 <Link to="/einstellungen">
                   <Button variant="ghost" className="gap-2">
