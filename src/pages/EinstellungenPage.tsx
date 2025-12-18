@@ -27,7 +27,6 @@ import React from 'react';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -57,10 +56,16 @@ interface Service {
   price: number;
 }
 
+interface TopUpOption {
+  amount: number;
+  bonus: number;
+}
+
 interface LevelRequirement {
   id?: number;
   training_type_id: number;
   required_count: number;
+  is_additional?: boolean;
 }
 
 interface Level {
@@ -68,10 +73,10 @@ interface Level {
   name: string;
   rank_order: number;
   badgeImage?: string;
+  has_additional_requirements?: boolean;
   requirements: LevelRequirement[];
 }
 
-// Preview URL
 // Preview URL - Nutzt die Env-Variable oder Fallback auf deine echte App-URL
 const PREVIEW_APP_URL = import.meta.env.VITE_PREVIEW_APP_URL || 'https://preview.pfotencard.de/?mode=preview';
 
@@ -82,12 +87,6 @@ const colorPresets = [
   { name: 'Orange', value: '#F97316' },
   { name: 'Rot', value: '#EF4444' },
 ];
-
-const toRelativeUrl = (url: string | undefined) => {
-  if (!url) return undefined;
-  // Entfernt die API_BASE_URL, falls sie im String enthalten ist
-  return url.replace(API_BASE_URL, '');
-};
 
 export function EinstellungenPage() {
   const { toast } = useToast();
@@ -103,6 +102,9 @@ export function EinstellungenPage() {
   const [customSecondaryColor, setCustomSecondaryColor] = useState('');
   const [levelTerm, setLevelTerm] = useState('Level');
   const [vipTerm, setVipTerm] = useState('VIP');
+
+  const [topUpOptions, setTopUpOptions] = useState<TopUpOption[]>([]);
+  const [allowCustomTopUp, setAllowCustomTopUp] = useState(true);
 
   const [services, setServices] = useState<Service[]>([]);
   const [levels, setLevels] = useState<Level[]>([]);
@@ -136,9 +138,13 @@ export function EinstellungenPage() {
       primary_color: customPrimaryColor || primaryColor,
       secondary_color: customSecondaryColor || secondaryColor,
       school_name: schoolName,
-      logo: previewLogo || (hasLogo ? '/paw.png' : undefined), // App.tsx erwartet "logo"
+      logo: previewLogo || (hasLogo ? '/paw.png' : undefined),
       levels: mappedLevels,
       services: services,
+      balance: {
+        allow_custom_top_up: allowCustomTopUp,
+        top_up_options: topUpOptions
+      },
       view_mode: previewViewMode,
       role: previewRole
     };
@@ -153,7 +159,7 @@ export function EinstellungenPage() {
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [showPreview, primaryColor, secondaryColor, customPrimaryColor, customSecondaryColor, schoolName, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole]);
+  }, [showPreview, primaryColor, secondaryColor, customPrimaryColor, customSecondaryColor, schoolName, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp]);
 
   // Funktion für "In neuem Tab öffnen"
   const getPreviewUrl = () => {
@@ -174,6 +180,10 @@ export function EinstellungenPage() {
       logo: previewLogo || (hasLogo ? '/paw.png' : undefined),
       levels: mappedLevels,
       services: services,
+      balance: {
+        allow_custom_top_up: allowCustomTopUp,
+        top_up_options: topUpOptions
+      },
       view_mode: previewViewMode,
       role: previewRole
     };
@@ -187,6 +197,7 @@ export function EinstellungenPage() {
   const [serviceForm, setServiceForm] = useState({ name: '', category: 'training', price: 0 });
 
   const [isRequirementDialogOpen, setIsRequirementDialogOpen] = useState(false);
+  const [isAdditionalDialogOpen, setIsAdditionalDialogOpen] = useState(false);
   const [currentLevelIndex, setCurrentLevelIndex] = useState<number>(-1);
   const [requirementForm, setRequirementForm] = useState({ serviceId: '', quantity: 1 });
 
@@ -204,19 +215,19 @@ export function EinstellungenPage() {
 
         const branding = t.config?.branding || {};
         const wording = t.config?.wording || {};
+        const balance = t.config?.balance || {};
 
         setPrimaryColor(branding.primary_color || '#22C55E');
         setSecondaryColor(branding.secondary_color || '#3B82F6');
         setLevelTerm(wording.level || 'Level');
         setVipTerm(wording.vip || 'VIP');
+        setTopUpOptions(balance.top_up_options || []);
+        setAllowCustomTopUp(balance.allow_custom_top_up !== undefined ? balance.allow_custom_top_up : true);
 
         if (branding.logo_url) {
-          // Wenn es eine absolute URL ist (z.B. extern), lass sie so.
-          // Wenn es relativ ist (startet mit /), hänge die API URL davor.
           const logoUrl = branding.logo_url.startsWith('http')
             ? branding.logo_url
             : `${API_BASE_URL}${branding.logo_url}`;
-
           setPreviewLogo(logoUrl);
           setHasLogo(true);
         }
@@ -233,12 +244,13 @@ export function EinstellungenPage() {
           id: l.id,
           name: l.name,
           rank_order: l.rank_order,
-          // In useEffect -> loadData -> mappedLevels:
-badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BASE_URL}${l.icon_url}`) : undefined,
+          badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BASE_URL}${l.icon_url}`) : undefined,
+          has_additional_requirements: l.has_additional_requirements || false,
           requirements: l.requirements.map((r: any) => ({
             id: r.id,
             training_type_id: r.training_type_id,
-            required_count: r.required_count
+            required_count: r.required_count,
+            is_additional: r.is_additional || false
           }))
         }));
         setLevels(mappedLevels);
@@ -261,11 +273,11 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
-      // Levels normalisieren (1,2,3...)
       const normalizedLevels = levels.map((l, index) => ({
         ...l,
         rank_order: index + 1,
         badge_image: l.badgeImage,
+        has_additional_requirements: l.has_additional_requirements
       }));
 
       const payload = {
@@ -273,9 +285,11 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
         subdomain: subdomain,
         primary_color: customPrimaryColor || primaryColor,
         secondary_color: customSecondaryColor || secondaryColor,
-        logo_url: previewLogo, // Das gespeicherte Logo verwenden
+        logo_url: previewLogo,
         level_term: levelTerm,
         vip_term: vipTerm,
+        allow_custom_top_up: allowCustomTopUp,
+        top_up_options: topUpOptions,
         services: services,
         levels: normalizedLevels
       };
@@ -307,13 +321,11 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
       const file = e.target.files[0];
       try {
         const { url } = await uploadImage(file);
-        // Volle URL für Preview bauen
         const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
         setPreviewLogo(fullUrl);
         setHasLogo(true);
       } catch (err) {
         console.error("Upload failed", err);
-        // Fehler wird schon in api.ts geworfen/behandelt, aber Toast hier schadet nicht
         toast({ variant: "destructive", title: "Upload fehlgeschlagen" });
       }
     }
@@ -347,7 +359,7 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
     if (editingService) {
       setServices(services.map((s) => s === editingService ? { ...editingService, ...serviceForm } : s));
     } else {
-      setServices([...services, { ...serviceForm, id: -Date.now() }]); // Temp ID
+      setServices([...services, { ...serviceForm, id: -Date.now() }]);
     }
     setIsServiceDialogOpen(false);
     setEditingService(null);
@@ -368,7 +380,6 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
 
   // --- LEVEL LOGIC ---
   const handleAddLevel = () => {
-    // Richtige Nummerierung: Max Rank + 1
     const maxRank = levels.length > 0 ? Math.max(...levels.map(l => l.rank_order || 0)) : 0;
     const nextRank = maxRank + 1;
 
@@ -376,6 +387,7 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
       name: `${levelTerm} ${nextRank}`,
       rank_order: nextRank,
       badgeImage: undefined,
+      has_additional_requirements: false,
       requirements: [],
     };
     setLevels([...levels, newLevel]);
@@ -400,16 +412,27 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
     }
   };
 
+  const handleToggleAdditional = (index: number, val: boolean) => {
+    const newLevels = [...levels];
+    newLevels[index].has_additional_requirements = val;
+    // Wenn deaktiviert, alle zusätzlichen Anforderungen löschen? 
+    // Wahrscheinlich besser sie zu behalten falls man es sich anders überlegt,
+    // aber die UI filtert sie dann eh aus.
+    setLevels(newLevels);
+  };
+
   // --- REQUIREMENTS LOGIC ---
-  const handleAddRequirement = () => {
+  const handleAddRequirement = (isAdditional: boolean = false) => {
     const newLevels = [...levels];
     const serviceId = parseInt(requirementForm.serviceId);
     newLevels[currentLevelIndex].requirements.push({
       training_type_id: serviceId,
       required_count: requirementForm.quantity,
+      is_additional: isAdditional
     });
     setLevels(newLevels);
     setIsRequirementDialogOpen(false);
+    setIsAdditionalDialogOpen(false);
     setRequirementForm({ serviceId: '', quantity: 1 });
   };
 
@@ -502,9 +525,10 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
 
           <div className={`order-2 lg:order-1 ${showPreview ? '' : 'col-span-1'}`}>
             <Tabs defaultValue="branding" className="w-full">
-              <TabsList className={`grid w-full gap-2 mb-8 h-auto p-2 ${showPreview ? 'grid-cols-1 xl:grid-cols-3' : 'grid-cols-1 md:grid-cols-3'}`}>
+              <TabsList className={`grid w-full gap-2 mb-8 h-auto p-2 ${showPreview ? 'grid-cols-1 xl:grid-cols-4' : 'grid-cols-1 md:grid-cols-4'}`}>
                 <TabsTrigger value="branding">Branding</TabsTrigger>
                 <TabsTrigger value="services">Leistungen</TabsTrigger>
+                <TabsTrigger value="balance">Guthaben</TabsTrigger>
                 <TabsTrigger value="levels">Level-System</TabsTrigger>
               </TabsList>
 
@@ -592,6 +616,89 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
                 </motion.div>
               </TabsContent>
 
+              <TabsContent value="balance">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="space-y-6">
+                  <Card>
+                    <CardHeader>
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <CardTitle>Guthaben-Aufladung</CardTitle>
+                          <CardDescription>Konfiguriere Bonus-Stufen und Optionen</CardDescription>
+                        </div>
+                        <Button onClick={() => setTopUpOptions([...topUpOptions, { amount: 0, bonus: 0 }])}>
+                          <Plus size={20} className="mr-2" />Neue Stufe
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                        <div className="space-y-0.5">
+                          <Label>Individuelle Beträge</Label>
+                          <p className="text-sm text-muted-foreground">Kunden können beliebige Beträge aufladen</p>
+                        </div>
+                        <Switch checked={allowCustomTopUp} onCheckedChange={setAllowCustomTopUp} />
+                      </div>
+
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Betrag (€)</TableHead>
+                            <TableHead>Bonus (€)</TableHead>
+                            <TableHead className="text-right">Aktionen</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {topUpOptions.map((opt, index) => (
+                            <TableRow key={index}>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  value={opt.amount}
+                                  onChange={(e) => {
+                                    const newOpts = [...topUpOptions];
+                                    newOpts[index].amount = parseFloat(e.target.value) || 0;
+                                    setTopUpOptions(newOpts);
+                                  }}
+                                  className="w-32"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  value={opt.bonus}
+                                  onChange={(e) => {
+                                    const newOpts = [...topUpOptions];
+                                    newOpts[index].bonus = parseFloat(e.target.value) || 0;
+                                    setTopUpOptions(newOpts);
+                                  }}
+                                  className="w-32"
+                                />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setTopUpOptions(topUpOptions.filter((_, i) => i !== index))}
+                                >
+                                  <Trash2 size={16} className="text-destructive" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {topUpOptions.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={3} className="text-center text-muted-foreground italic py-8">
+                                Keine festen Auflade-Beträge definiert.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </TabsContent>
+
               <TabsContent value="levels">
                 <input type="file" id="level-badge-upload-input" className="hidden" accept="image/*" onChange={handleLevelBadgeFileChange} />
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="space-y-6">
@@ -620,17 +727,28 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
                                       {level.badgeImage ? <div className="flex items-center justify-center gap-2"><Award size={24} className="text-primary" /><span className="text-sm font-medium">Abzeichen hochgeladen</span></div> : <div className="flex items-center justify-center gap-2"><Upload size={20} className="text-muted-foreground" /><span className="text-sm text-muted-foreground">Abzeichen hochladen</span></div>}
                                     </div>
                                   </div>
+                                  <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
+                                    <div className="space-y-0.5">
+                                      <Label className="text-base font-medium">Zusatzleistungen</Label>
+                                      <p className="text-sm text-muted-foreground">Sollen für dieses Level Zusatzleistungen (Vorträge/Workshops) abgefragt werden?</p>
+                                    </div>
+                                    <Switch checked={level.has_additional_requirements} onCheckedChange={(val) => handleToggleAdditional(index, val)} />
+                                  </div>
                                   <div>
                                     <Label className="text-sm font-medium mb-3 block">Anforderungen</Label>
-                                    {level.requirements.length === 0 ? <p className="text-sm text-muted-foreground italic">Noch keine Anforderungen definiert</p> : (
-                                      <div className="space-y-2">{level.requirements.map((req, reqIdx) => (
-                                        <div key={req.id || reqIdx} className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                                          <GripVertical size={16} className="text-muted-foreground" />
-                                          <Input type="number" min="1" value={req.required_count} onChange={(e) => handleUpdateRequirement(index, reqIdx, parseInt(e.target.value) || 1)} className="w-16 h-8 text-center" />
-                                          <span className="text-sm flex-1">x {getServiceName(req.training_type_id)}</span>
-                                          <Button variant="ghost" size="sm" onClick={() => handleDeleteRequirement(index, reqIdx)}><Trash2 size={14} /></Button>
-                                        </div>
-                                      ))}</div>
+                                    {level.requirements.filter(r => !r.is_additional).length === 0 ? <p className="text-sm text-muted-foreground italic">Noch keine Anforderungen definiert</p> : (
+                                      <div className="space-y-2">{level.requirements.filter(r => !r.is_additional).map((req) => {
+                                        // Original index finden für update/delete
+                                        const originalIdx = level.requirements.indexOf(req);
+                                        return (
+                                          <div key={req.id || originalIdx} className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                                            <GripVertical size={16} className="text-muted-foreground" />
+                                            <Input type="number" min="1" value={req.required_count} onChange={(e) => handleUpdateRequirement(index, originalIdx, parseInt(e.target.value) || 1)} className="w-16 h-8 text-center" />
+                                            <span className="text-sm flex-1">x {getServiceName(req.training_type_id)}</span>
+                                            <Button variant="ghost" size="sm" onClick={() => handleDeleteRequirement(index, originalIdx)}><Trash2 size={14} /></Button>
+                                          </div>
+                                        );
+                                      })}</div>
                                     )}
                                   </div>
                                   <Dialog open={isRequirementDialogOpen && currentLevelIndex === index} onOpenChange={(open) => { setIsRequirementDialogOpen(open); if (open) setCurrentLevelIndex(index); }}>
@@ -641,9 +759,48 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
                                         <div><Label>Anzahl</Label><Input type="number" min="1" value={requirementForm.quantity} onChange={(e) => setRequirementForm({ ...requirementForm, quantity: parseInt(e.target.value) || 1 })} className="mt-2" /></div>
                                         <div><Label>Leistung</Label><Select value={requirementForm.serviceId} onValueChange={(v) => setRequirementForm({ ...requirementForm, serviceId: v })}><SelectTrigger className="mt-2"><SelectValue placeholder="Leistung auswählen" /></SelectTrigger><SelectContent>{services.filter(s => s.id !== undefined).map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name} ({s.price.toFixed(2)} €)</SelectItem>)}</SelectContent></Select></div>
                                       </div>
-                                      <DialogFooter><Button variant="outline" onClick={() => setIsRequirementDialogOpen(false)}>Abbrechen</Button><Button onClick={handleAddRequirement} disabled={!requirementForm.serviceId}>Hinzufügen</Button></DialogFooter>
+                                      <DialogFooter><Button variant="outline" onClick={() => setIsRequirementDialogOpen(false)}>Abbrechen</Button><Button onClick={() => handleAddRequirement(false)} disabled={!requirementForm.serviceId}>Hinzufügen</Button></DialogFooter>
                                     </DialogContent>
                                   </Dialog>
+
+                                  {level.has_additional_requirements && (
+                                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 pt-4 border-t">
+                                      <Label className="text-sm font-medium mb-3 block">Zusatzleistungen (nur Vorträge & Workshops)</Label>
+                                      {level.requirements.filter(r => r.is_additional).length === 0 ? <p className="text-sm text-muted-foreground italic">Noch keine Zusatzleistungen definiert</p> : (
+                                        <div className="space-y-2">{level.requirements.filter(r => r.is_additional).map((req) => {
+                                          const originalIdx = level.requirements.indexOf(req);
+                                          return (
+                                            <div key={req.id || originalIdx} className="flex items-center gap-2 p-3 bg-primary/5 border border-primary/10 rounded-lg">
+                                              <span className="text-sm flex-1">{getServiceName(req.training_type_id)}</span>
+                                              <Button variant="ghost" size="sm" onClick={() => handleDeleteRequirement(index, originalIdx)}><Trash2 size={14} /></Button>
+                                            </div>
+                                          );
+                                        })}</div>
+                                      )}
+                                      <Dialog open={isAdditionalDialogOpen && currentLevelIndex === index} onOpenChange={(open) => { setIsAdditionalDialogOpen(open); if (open) setCurrentLevelIndex(index); }}>
+                                        <DialogTrigger asChild><Button variant="outline" size="sm" className="w-full border-primary/20 hover:bg-primary/5 text-primary" onClick={() => { setCurrentLevelIndex(index); setRequirementForm({ serviceId: '', quantity: 1 }); }}><Plus size={16} className="mr-2" />Zusatzleistung hinzufügen</Button></DialogTrigger>
+                                        <DialogContent>
+                                          <DialogHeader><DialogTitle>Zusatzleistung hinzufügen</DialogTitle></DialogHeader>
+                                          <div className="space-y-4 py-4">
+                                            <p className="text-sm text-muted-foreground">Zusatzleistungen können pro Level nur einmal hinzugefügt werden.</p>
+                                            <div><Label>Leistung</Label>
+                                              <Select value={requirementForm.serviceId} onValueChange={(v) => setRequirementForm({ ...requirementForm, serviceId: v })}>
+                                                <SelectTrigger className="mt-2"><SelectValue placeholder="Wähle einen Vortrag oder Workshop" /></SelectTrigger>
+                                                <SelectContent>
+                                                  {services
+                                                    .filter(s => (s.category === 'lecture' || s.category === 'workshop') && s.id !== undefined)
+                                                    .filter(s => !level.requirements.some(r => r.training_type_id === s.id)) // Nur einmal pro Level
+                                                    .map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.name} ({getCategoryLabel(s.category)})</SelectItem>)
+                                                  }
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                          </div>
+                                          <DialogFooter><Button variant="outline" onClick={() => setIsAdditionalDialogOpen(false)}>Abbrechen</Button><Button onClick={() => handleAddRequirement(true)} disabled={!requirementForm.serviceId}>Hinzufügen</Button></DialogFooter>
+                                        </DialogContent>
+                                      </Dialog>
+                                    </motion.div>
+                                  )}
                                 </div>
                               </CardContent>
                             </Card>
@@ -662,4 +819,3 @@ badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BA
     </main>
   );
 }
-
