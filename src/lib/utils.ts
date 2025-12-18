@@ -87,7 +87,7 @@ export function getRepoDemoUrl(viewMode: 'app' | 'login' = 'app', role: 'custome
   const schoolName = 'PfotenCard';
   
   // Logo aus public/logo.png
-  const logo = 'logo.png'; // Hinweis: In der echten Preview muss dies eine volle URL sein, wenn es nicht lokal läuft.
+  const logo = typeof window !== 'undefined' ? `${window.location.origin}/logo.png` : '/logo.png';
 
   // Services (abgeleitet aus "debits" in index.tsx)
   // Wir geben ihnen feste IDs, um sie in den Levels zu referenzieren
