@@ -88,7 +88,7 @@ interface Level {
 }
 
 // Preview URL - Nutzt die Env-Variable oder Fallback auf deine echte App-URL
-const PREVIEW_APP_URL = import.meta.env.VITE_PREVIEW_APP_URL || 'https://preview.pfotencard.de/?mode=preview';
+const PREVIEW_APP_URL = (import.meta as any).env.VITE_PREVIEW_APP_URL || 'https://preview.pfotencard.de/?mode=preview';
 
 const colorPresets = [
   { name: 'Grün', value: '#22C55E' },
