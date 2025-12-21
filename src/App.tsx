@@ -14,7 +14,7 @@ import { EinstellungenPage } from './pages/EinstellungenPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from './components/ui/toaster';
 
-// Komponente für geschützte Routen
+// Komponente für geschützte Routen2
 function ProtectedRoute({ children }: { children: JSX.Element }) {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
