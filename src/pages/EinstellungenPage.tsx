@@ -21,7 +21,8 @@ import {
   Smartphone,
   ExternalLink,
   Award,
-  Loader2
+  Loader2,
+  LayoutPanelLeft
 } from 'lucide-react';
 import React from 'react';
 import {
@@ -96,12 +97,14 @@ export function EinstellungenPage() {
 
   const [schoolName, setSchoolName] = useState('');
   const [subdomain, setSubdomain] = useState('');
-  const [primaryColor, setPrimaryColor] = useState('#22C55E');
+  const [primaryColor, setPrimaryColor] = useState('#22C55E'); // Button Farbe
   const [secondaryColor, setSecondaryColor] = useState('#3B82F6');
-  const [backgroundColor, setBackgroundColor] = useState('#F8FAFC');
+  const [backgroundColor, setBackgroundColor] = useState('#F8FAFC'); // App Hintergrund
+  const [sidebarColor, setSidebarColor] = useState('#1E293B'); // Seitenleiste
   const [customPrimaryColor, setCustomPrimaryColor] = useState('');
   const [customSecondaryColor, setCustomSecondaryColor] = useState('');
   const [customBackgroundColor, setCustomBackgroundColor] = useState('');
+  const [customSidebarColor, setCustomSidebarColor] = useState('');
   const [levelTerm, setLevelTerm] = useState('Level');
   const [vipTerm, setVipTerm] = useState('VIP');
 
@@ -140,6 +143,7 @@ export function EinstellungenPage() {
       primary_color: customPrimaryColor || primaryColor,
       secondary_color: customSecondaryColor || secondaryColor,
       background_color: customBackgroundColor || backgroundColor,
+      sidebar_color: customSidebarColor || sidebarColor,
       school_name: schoolName,
       logo: previewLogo || (hasLogo ? '/paw.png' : undefined),
       levels: mappedLevels,
@@ -162,7 +166,7 @@ export function EinstellungenPage() {
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [showPreview, primaryColor, secondaryColor, backgroundColor, customPrimaryColor, customSecondaryColor, customBackgroundColor, schoolName, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp]);
+  }, [showPreview, primaryColor, secondaryColor, backgroundColor, sidebarColor, customPrimaryColor, customSecondaryColor, customBackgroundColor, customSidebarColor, schoolName, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp]);
 
   // Funktion für "In neuem Tab öffnen"
   const getPreviewUrl = () => {
@@ -180,6 +184,7 @@ export function EinstellungenPage() {
       primary_color: customPrimaryColor || primaryColor,
       secondary_color: customSecondaryColor || secondaryColor,
       background_color: customBackgroundColor || backgroundColor,
+      sidebar_color: customSidebarColor || sidebarColor,
       school_name: schoolName,
       logo: previewLogo || (hasLogo ? '/paw.png' : undefined),
       levels: mappedLevels,
@@ -224,6 +229,7 @@ export function EinstellungenPage() {
         setPrimaryColor(branding.primary_color || '#22C55E');
         setSecondaryColor(branding.secondary_color || '#3B82F6');
         setBackgroundColor(branding.background_color || '#F8FAFC');
+        setSidebarColor(branding.sidebar_color || '#1E293B');
         setLevelTerm(wording.level || 'Level');
         setVipTerm(wording.vip || 'VIP');
         setTopUpOptions(balance.top_up_options || []);
@@ -291,6 +297,7 @@ export function EinstellungenPage() {
         primary_color: customPrimaryColor || primaryColor,
         secondary_color: customSecondaryColor || secondaryColor,
         background_color: customBackgroundColor || backgroundColor,
+        sidebar_color: customSidebarColor || sidebarColor,
         logo_url: previewLogo,
         level_term: levelTerm,
         vip_term: vipTerm,
@@ -548,7 +555,13 @@ export function EinstellungenPage() {
                     </CardContent>
                   </Card>
                   <Card>
-                    <CardHeader><CardTitle>Design</CardTitle></CardHeader>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Palette className="w-5 h-5" />
+                        Design & Farben
+                      </CardTitle>
+                      <CardDescription>Passe das Aussehen deiner App an. Texte und Rahmen passen sich automatisch an.</CardDescription>
+                    </CardHeader>
                     <CardContent className="space-y-6">
                       <div>
                         <Label>Logo</Label>
@@ -564,40 +577,63 @@ export function EinstellungenPage() {
                           )}
                         </div>
                       </div>
-                      <div>
-                        <Label>Primärfarbe</Label>
-                        <div className="flex gap-3 mb-3 mt-2">{colorPresets.map(c => <button key={c.value} onClick={() => { setPrimaryColor(c.value); setCustomPrimaryColor(''); }} className="w-12 h-12 rounded-lg" style={{ backgroundColor: c.value }} />)}<div className="relative"><input type="color" value={customPrimaryColor || primaryColor} onChange={e => { setCustomPrimaryColor(e.target.value); setPrimaryColor(e.target.value); }} className="w-12 h-12 rounded-lg cursor-pointer border-2" /><Palette size={16} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" /></div></div>
-                      </div>
-                      <div>
-                        <Label>Sekundärfarbe</Label>
-                        <div className="flex gap-3 mb-3 mt-2">{colorPresets.map(c => <button key={c.value} onClick={() => { setSecondaryColor(c.value); setCustomSecondaryColor(''); }} className="w-12 h-12 rounded-lg" style={{ backgroundColor: c.value }} />)}<div className="relative"><input type="color" value={customSecondaryColor || secondaryColor} onChange={e => { setCustomSecondaryColor(e.target.value); setSecondaryColor(e.target.value); }} className="w-12 h-12 rounded-lg cursor-pointer border-2" /><Palette size={16} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" /></div></div>
-                      </div>
-                      <div>
-                        <Label>Hintergrundfarbe</Label>
-                        <div className="flex gap-3 mb-3 mt-2">
-                          {[
-                            { name: 'Weiß', value: '#FFFFFF' },
-                            { name: 'Hellgrau', value: '#F8FAFC' },
-                            { name: 'Dunkelblau', value: '#0F172A' },
-                            { name: 'Schwarz', value: '#000000' }
-                          ].map(c => (
-                            <button
-                              key={c.value}
-                              onClick={() => { setBackgroundColor(c.value); setCustomBackgroundColor(''); }}
-                              className="w-12 h-12 rounded-lg border border-border"
-                              style={{ backgroundColor: c.value }}
-                              title={c.name}
-                            />
-                          ))}
-                          <div className="relative">
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <Label>App Hintergrundfarbe</Label>
+                          <div className="flex gap-3 mt-2">
                             <input
                               type="color"
                               value={customBackgroundColor || backgroundColor}
                               onChange={e => { setCustomBackgroundColor(e.target.value); setBackgroundColor(e.target.value); }}
                               className="w-12 h-12 rounded-lg cursor-pointer border-2"
                             />
-                            <Palette size={16} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
+                            <Input
+                              value={customBackgroundColor || backgroundColor}
+                              onChange={e => { setCustomBackgroundColor(e.target.value); setBackgroundColor(e.target.value); }}
+                              placeholder="#F8FAFC"
+                            />
                           </div>
+                          <p className="text-xs text-muted-foreground mt-1">Bestimmt den Hintergrund der gesamten App. Texte und Rahmen passen sich automatisch an (hell/dunkel).</p>
+                        </div>
+
+                        <div>
+                          <Label className="flex items-center gap-2">
+                            <LayoutPanelLeft className="w-4 h-4" />
+                            Seitenleiste / Menü
+                          </Label>
+                          <div className="flex gap-3 mt-2">
+                            <input
+                              type="color"
+                              value={customSidebarColor || sidebarColor}
+                              onChange={e => { setCustomSidebarColor(e.target.value); setSidebarColor(e.target.value); }}
+                              className="w-12 h-12 rounded-lg cursor-pointer border-2"
+                            />
+                            <Input
+                              value={customSidebarColor || sidebarColor}
+                              onChange={e => { setCustomSidebarColor(e.target.value); setSidebarColor(e.target.value); }}
+                              placeholder="#1E293B"
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">Hintergrundfarbe des Menüs (Links/Mobil oben).</p>
+                        </div>
+
+                        <div>
+                          <Label>Button-Farbe (Primär)</Label>
+                          <div className="flex gap-3 mt-2">
+                            <input
+                              type="color"
+                              value={customPrimaryColor || primaryColor}
+                              onChange={e => { setCustomPrimaryColor(e.target.value); setPrimaryColor(e.target.value); }}
+                              className="w-12 h-12 rounded-lg cursor-pointer border-2"
+                            />
+                            <Input
+                              value={customPrimaryColor || primaryColor}
+                              onChange={e => { setCustomPrimaryColor(e.target.value); setPrimaryColor(e.target.value); }}
+                              placeholder="#22C55E"
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">Wird <strong>nur</strong> für wichtige Buttons und Aktionen verwendet.</p>
                         </div>
                       </div>
                     </CardContent>
