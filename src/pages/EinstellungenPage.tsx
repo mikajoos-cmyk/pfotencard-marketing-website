@@ -22,7 +22,16 @@ import {
   ExternalLink,
   Award,
   Loader2,
-  LayoutPanelLeft
+  LayoutPanelLeft,
+  Sun,
+  Moon,
+  Calendar,
+  ShoppingBag,
+  Newspaper,
+  MessageCircle,
+  FileText,
+  Layers,
+  Store
 } from 'lucide-react';
 import React from 'react';
 import {
@@ -87,6 +96,62 @@ const colorPresets = [
   { name: 'Lila', value: '#A855F7' },
   { name: 'Orange', value: '#F97316' },
   { name: 'Rot', value: '#EF4444' },
+  { name: 'Rot', value: '#EF4444' },
+];
+
+interface AppModule {
+  id: string;
+  name: string;
+  description: string;
+  premiumOnly: boolean;
+  comingSoon?: boolean;
+  icon: React.ElementType;
+}
+
+const AVAILABLE_MODULES: AppModule[] = [
+  {
+    id: 'calendar',
+    name: 'Kalender & Terminbuchung',
+    description: 'Ermöglicht Kunden die direkte Buchung von Terminen inkl. Warteliste.',
+    premiumOnly: true,
+    icon: Calendar
+  },
+  {
+    id: 'shop',
+    name: 'Online-Shop',
+    description: 'Verkaufe Produkte, Gutscheine und 10er-Karten direkt in der App.',
+    premiumOnly: true,
+    icon: ShoppingBag
+  },
+  {
+    id: 'news',
+    name: 'News & Updates',
+    description: 'Poste Neuigkeiten, die deine Kunden sofort auf dem Home-Screen sehen.',
+    premiumOnly: false,
+    icon: Newspaper
+  },
+  {
+    id: 'chat',
+    name: 'Chat-System',
+    description: 'Direkter Draht zu deinen Kunden über einen integrierten Messenger.',
+    premiumOnly: true,
+    icon: MessageCircle
+  },
+  {
+    id: 'documents',
+    name: 'Dokumenten-Center',
+    description: 'Stelle wichtige Unterlagen (AGB, Impfpass-Upload) bereit.',
+    premiumOnly: false,
+    icon: FileText
+  },
+  {
+    id: 'marketplace',
+    name: 'Partner-Marktplatz',
+    description: 'Empfehle Futter & Zubehör und verdiene Provisionen.',
+    premiumOnly: false, // Maybe open for all
+    comingSoon: true,
+    icon: Store
+  }
 ];
 
 export function EinstellungenPage() {
@@ -113,6 +178,9 @@ export function EinstellungenPage() {
 
   const [services, setServices] = useState<Service[]>([]);
   const [levels, setLevels] = useState<Level[]>([]);
+
+  // State für Zusatz-Module (nur IDs speichern)
+  const [activeModules, setActiveModules] = useState<string[]>(['news', 'documents']); // Default an
 
   const [hasLogo, setHasLogo] = useState(false);
   const [previewLogo, setPreviewLogo] = useState<string | undefined>(undefined);
@@ -153,7 +221,8 @@ export function EinstellungenPage() {
         top_up_options: topUpOptions
       },
       view_mode: previewViewMode,
-      role: previewRole
+      role: previewRole,
+      active_modules: activeModules
     };
 
     const message = {
@@ -166,7 +235,7 @@ export function EinstellungenPage() {
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [showPreview, primaryColor, secondaryColor, backgroundColor, sidebarColor, customPrimaryColor, customSecondaryColor, customBackgroundColor, customSidebarColor, schoolName, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp]);
+  }, [showPreview, primaryColor, secondaryColor, backgroundColor, sidebarColor, customPrimaryColor, customSecondaryColor, customBackgroundColor, customSidebarColor, schoolName, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp, activeModules]);
 
   // Funktion für "In neuem Tab öffnen"
   const getPreviewUrl = () => {
@@ -194,7 +263,8 @@ export function EinstellungenPage() {
         top_up_options: topUpOptions
       },
       view_mode: previewViewMode,
-      role: previewRole
+      role: previewRole,
+      active_modules: activeModules
     };
 
     const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(config))));
@@ -234,6 +304,7 @@ export function EinstellungenPage() {
         setVipTerm(wording.vip || 'VIP');
         setTopUpOptions(balance.top_up_options || []);
         setAllowCustomTopUp(balance.allow_custom_top_up !== undefined ? balance.allow_custom_top_up : true);
+        setActiveModules(t.config?.active_modules || ['news', 'documents']);
 
         if (branding.logo_url) {
           const logoUrl = branding.logo_url.startsWith('http')
@@ -304,7 +375,8 @@ export function EinstellungenPage() {
         allow_custom_top_up: allowCustomTopUp,
         top_up_options: topUpOptions,
         services: services,
-        levels: normalizedLevels
+        levels: normalizedLevels,
+        active_modules: activeModules
       };
 
       await saveSettings(payload);
@@ -467,6 +539,14 @@ export function EinstellungenPage() {
     return labels[category] || category;
   };
 
+  const handleToggleModule = (moduleId: string, isActive: boolean) => {
+    if (isActive) {
+      setActiveModules([...activeModules, moduleId]);
+    } else {
+      setActiveModules(activeModules.filter(id => id !== moduleId));
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
@@ -541,6 +621,7 @@ export function EinstellungenPage() {
               <TabsList className={`grid w-full gap-2 mb-8 h-auto p-2 ${showPreview ? 'grid-cols-1 xl:grid-cols-4' : 'grid-cols-1 md:grid-cols-4'}`}>
                 <TabsTrigger value="branding">Branding</TabsTrigger>
                 <TabsTrigger value="services">Leistungen</TabsTrigger>
+                <TabsTrigger value="modules">Zusatz-Module</TabsTrigger>
                 <TabsTrigger value="balance">Guthaben</TabsTrigger>
                 <TabsTrigger value="levels">Level-System</TabsTrigger>
               </TabsList>
@@ -577,6 +658,55 @@ export function EinstellungenPage() {
                           )}
                         </div>
                       </div>
+
+                      <div>
+                        <Label className="mb-3 block">Design-Presets</Label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div
+                            className="border rounded-lg p-4 cursor-pointer hover:border-primary hover:bg-muted transition-all flex items-center gap-4 group"
+                            onClick={() => {
+                              setPrimaryColor('#22C55E');
+                              setCustomPrimaryColor('#22C55E');
+                              setBackgroundColor('#F8FAFC');
+                              setCustomBackgroundColor('#F8FAFC');
+                              setSidebarColor('#1E293B');
+                              setCustomSidebarColor('#1E293B');
+                              toast({ title: "Light Mode angewendet", description: "Standard-Farben wurden gesetzt." });
+                            }}
+                          >
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border group-hover:bg-white transition-colors">
+                              <Sun size={20} className="text-orange-500" />
+                            </div>
+                            <div>
+                              <span className="font-semibold block text-sm">Light Mode</span>
+                              <span className="text-xs text-muted-foreground">Standard-Design (Hell)</span>
+                            </div>
+                          </div>
+
+                          <div
+                            className="border rounded-lg p-4 cursor-pointer hover:border-primary hover:bg-muted transition-all flex items-center gap-4 group"
+                            onClick={() => {
+                              setPrimaryColor('#22C55E');
+                              setCustomPrimaryColor('#22C55E');
+                              setBackgroundColor('#0F172A'); // Slate 900
+                              setCustomBackgroundColor('#0F172A');
+                              setSidebarColor('#020617'); // Slate 950
+                              setCustomSidebarColor('#020617');
+                              toast({ title: "Dark Mode angewendet", description: "Dunkle Farben wurden gesetzt." });
+                            }}
+                          >
+                            <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border group-hover:bg-slate-800 transition-colors">
+                              <Moon size={20} className="text-blue-400" />
+                            </div>
+                            <div>
+                              <span className="font-semibold block text-sm">Dark Mode</span>
+                              <span className="text-xs text-muted-foreground">Modernes Dunkel-Design</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="h-px bg-border my-6" />
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
@@ -681,6 +811,58 @@ export function EinstellungenPage() {
                           ))}
                         </TableBody>
                       </Table>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </TabsContent>
+
+              <TabsContent value="modules">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Layers className="w-5 h-5" />
+                        App-Module & Zusatzfunktionen
+                      </CardTitle>
+                      <CardDescription>
+                        Erweitere deine App um leistungsstarke Funktionen.
+                        <span className="block mt-1 text-xs text-secondary-foreground/70">* Manche Module erfordern ein höheres Abo-Paket.</span>
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid grid-cols-1 gap-4">
+                        {AVAILABLE_MODULES.map((module) => {
+                          const isActive = activeModules.includes(module.id);
+                          const Icon = module.icon;
+                          return (
+                            <div key={module.id} className={`flex items-start justify-between p-4 border rounded-lg transition-all ${isActive ? 'bg-primary/5 border-primary/20' : 'bg-card border-border hover:border-primary/50'}`}>
+                              <div className="flex items-start gap-4">
+                                <div className={`p-2 rounded-md ${isActive ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                                  <Icon size={24} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-semibold text-foreground">{module.name}</h3>
+                                    {module.comingSoon && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold uppercase tracking-wider">Bald verfügbar</span>}
+                                    {module.premiumOnly && !module.comingSoon && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold uppercase tracking-wider">Premium</span>}
+                                  </div>
+                                  <p className="text-sm text-muted-foreground mt-1 max-w-lg">{module.description}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                {module.comingSoon ? (
+                                  <Button size="sm" variant="ghost" disabled>Nicht verfügbar</Button>
+                                ) : (
+                                  <Switch
+                                    checked={isActive}
+                                    onCheckedChange={(val) => handleToggleModule(module.id, val)}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </CardContent>
                   </Card>
                 </motion.div>
