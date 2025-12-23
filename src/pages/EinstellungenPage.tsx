@@ -203,7 +203,9 @@ export function EinstellungenPage() {
       requirements: l.requirements.map(r => ({
         id: r.id || `temp-${r.training_type_id}-${Math.random()}`,
         name: services.find(s => s.id === r.training_type_id)?.name || 'Unbekannt',
-        required: r.required_count
+        required: r.required_count,
+        is_additional: r.is_additional,
+        training_type_id: r.training_type_id
       }))
     }));
 
@@ -240,7 +242,6 @@ export function EinstellungenPage() {
 
     return () => clearTimeout(timer);
   }, [showPreview, primaryColor, secondaryColor, backgroundColor, sidebarColor, customPrimaryColor, customSecondaryColor, customBackgroundColor, customSidebarColor, schoolName, levelTerm, vipTerm, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp, activeModules]);
-
   // Funktion für "In neuem Tab öffnen"
   const getPreviewUrl = () => {
     const mappedLevels = levels.map((l, index) => ({
@@ -249,7 +250,9 @@ export function EinstellungenPage() {
       requirements: l.requirements.map(r => ({
         id: r.id || `temp-${r.training_type_id}-${Math.random()}`,
         name: services.find(s => s.id === r.training_type_id)?.name || 'Unbekannt',
-        required: r.required_count
+        required: r.required_count,
+        is_additional: r.is_additional,
+        training_type_id: r.training_type_id
       }))
     }));
 
