@@ -222,7 +222,11 @@ export function EinstellungenPage() {
       },
       view_mode: previewViewMode,
       role: previewRole,
-      active_modules: activeModules
+      active_modules: activeModules,
+
+      // !!! DIESE BEIDEN ZEILEN HINZUFÜGEN !!!
+      level_term: levelTerm,
+      vip_term: vipTerm
     };
 
     const message = {
@@ -235,7 +239,7 @@ export function EinstellungenPage() {
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [showPreview, primaryColor, secondaryColor, backgroundColor, sidebarColor, customPrimaryColor, customSecondaryColor, customBackgroundColor, customSidebarColor, schoolName, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp, activeModules]);
+  }, [showPreview, primaryColor, secondaryColor, backgroundColor, sidebarColor, customPrimaryColor, customSecondaryColor, customBackgroundColor, customSidebarColor, schoolName, levelTerm, vipTerm, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp, activeModules]);
 
   // Funktion für "In neuem Tab öffnen"
   const getPreviewUrl = () => {
@@ -264,7 +268,9 @@ export function EinstellungenPage() {
       },
       view_mode: previewViewMode,
       role: previewRole,
-      active_modules: activeModules
+      active_modules: activeModules,
+      level_term: levelTerm,
+      vip_term: vipTerm
     };
 
     const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(config))));
