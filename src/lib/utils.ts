@@ -76,18 +76,18 @@ export function generatePreviewUrl(data: PreviewConfigData): string {
 
 // 4. Die Demo-Funktion mit den Repo-Daten
 export function getRepoDemoUrl(viewMode: 'app' | 'login' = 'app', role: 'customer' | 'admin' = 'customer'): string {
-  
+
   // -- Daten aus index.tsx / index.css --
-  
+
   // Farben aus index.css (--brand-green, --brand-blue)
   const primaryColor = '#22C55E';
   const secondaryColor = '#3B82F6';
-  
+
   // Name aus Sidebar/Manifest
   const schoolName = 'PfotenCard';
-  
-  // Logo aus public/logo.png
-  const logo = typeof window !== 'undefined' ? `${window.location.origin}/logo.png` : '/logo.png';
+
+  // Logo aus Supabase
+  const logo = 'https://ctsoisfxbhaynonnudua.supabase.co/storage/v1/object/public/public_uploads/paw.png';
 
   // Services (abgeleitet aus "debits" in index.tsx)
   // Wir geben ihnen feste IDs, um sie in den Levels zu referenzieren
