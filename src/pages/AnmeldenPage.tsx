@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { Phone, Globe, ArrowRight, Loader2, ArrowLeft } from 'lucide-react';
+import { ArrowRight, Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { registerTenant, checkTenantStatus, loginUser } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext'; // NEU
@@ -133,9 +133,11 @@ export function AnmeldenPage() {
 
       toast({
         title: "Registrierung erfolgreich!",
-        description: "Bitte überprüfe deine E-Mails (auch den Spam-Ordner), um dein Konto zu aktivieren und deine Hundeschule zu starten.",
+        description: "Bitte überprüfe deine E-Mails, um dein Konto zu aktivieren.",
       });
-      setRegData({ email: '', password: '', name: '', schoolName: '', subdomain: '', phone: '' });
+
+      // Weiterleitung zur Email-Verifikationsseite
+      navigate(`/email-verifizierung?email=${encodeURIComponent(regData.email)}`);
 
     } catch (error: any) {
       toast({

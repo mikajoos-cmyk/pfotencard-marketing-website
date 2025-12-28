@@ -30,6 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setIsAuthenticated(true);
         }
         setIsLoading(false);
+
+        // Auf unbefugte API-Antworten reagieren
+        const handleUnauthorized = () => {
+            logout();
+        };
+
+        window.addEventListener('auth-unauthorized', handleUnauthorized);
+        return () => window.removeEventListener('auth-unauthorized', handleUnauthorized);
     }, []);
 
     const login = (newToken: string, newSubdomain: string) => {

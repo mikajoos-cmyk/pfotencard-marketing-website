@@ -7,6 +7,7 @@ import { PreisePage } from './pages/PreisePage';
 import { KontaktPage } from './pages/KontaktPage';
 import { FAQPage } from './pages/FAQPage';
 import { AnmeldenPage } from './pages/AnmeldenPage';
+import { EmailVerificationPage } from './pages/EmailVerificationPage';
 import { ImpressumPage } from './pages/ImpressumPage';
 import { DatenschutzPage } from './pages/DatenschutzPage';
 import { AGBPage } from './pages/AGBPage';
@@ -43,6 +44,7 @@ function AppContent() {
           <Route path="/kontakt" element={<KontaktPage />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/anmelden" element={<AnmeldenPage />} />
+          <Route path="/email-verifizierung" element={<EmailVerificationPage />} />
           <Route path="/impressum" element={<ImpressumPage />} />
           <Route path="/datenschutz" element={<DatenschutzPage />} />
           <Route path="/agb" element={<AGBPage />} />

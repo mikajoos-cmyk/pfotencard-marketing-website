@@ -17,6 +17,28 @@ function getAuthHeaders() {
     };
 }
 
+// Zentrale Response-Behandlung für 401 Handling
+async function handleResponse(response: Response) {
+    if (response.status === 401) {
+        localStorage.removeItem('pfotencard_token');
+        localStorage.removeItem('pfotencard_subdomain');
+        // Custom Event für AuthContext
+        window.dispatchEvent(new Event('auth-unauthorized'));
+        window.location.href = '/anmelden';
+        throw new Error("Sitzung abgelaufen. Bitte neu anmelden.");
+    }
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Anfrage fehlgeschlagen (${response.status})`);
+    }
+
+    // Bei 204 No Content oder leeren Responses
+    if (response.status === 204) return null;
+
+    return response.json();
+}
+
 export async function loginUser(subdomain: string, email: string, password: string) {
     const formData = new FormData();
     formData.append('username', email);
@@ -30,12 +52,7 @@ export async function loginUser(subdomain: string, email: string, password: stri
         body: formData,
     });
 
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Anmeldung fehlgeschlagen');
-    }
-
-    return response.json();
+    return handleResponse(response);
 }
 
 export async function registerTenant(data: {
@@ -74,18 +91,12 @@ export async function registerTenant(data: {
         body: JSON.stringify(payload),
     });
 
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Registrierung fehlgeschlagen');
-    }
-
-    return response.json();
+    return handleResponse(response);
 }
 
 export async function checkTenantStatus(subdomain: string) {
     const response = await fetch(`${API_BASE_URL}/api/tenants/status?subdomain=${subdomain}`);
-    if (!response.ok) throw new Error('Status-Check fehlgeschlagen');
-    return response.json();
+    return handleResponse(response);
 }
 
 export async function subscribeTenant(subdomain: string, plan: string) {
@@ -95,12 +106,7 @@ export async function subscribeTenant(subdomain: string, plan: string) {
         body: JSON.stringify({ subdomain, plan }),
     });
 
-    if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Buchung fehlgeschlagen');
-    }
-
-    return response.json();
+    return handleResponse(response);
 }
 
 export async function fetchAppConfig() {
@@ -110,8 +116,7 @@ export async function fetchAppConfig() {
     const response = await fetch(`${API_BASE_URL}/api/config`, {
         headers: { 'x-tenant-subdomain': subdomain }
     });
-    if (!response.ok) throw new Error("Failed to load config");
-    return response.json();
+    return handleResponse(response);
 }
 
 export async function saveSettings(data: any) {
@@ -128,18 +133,7 @@ export async function saveSettings(data: any) {
         body: JSON.stringify(data),
     });
 
-    if (response.status === 401) {
-        // Optional: Automatisch ausloggen
-        localStorage.removeItem('pfotencard_token');
-        window.location.href = '/anmelden';
-        throw new Error("Sitzung abgelaufen. Bitte neu anmelden.");
-    }
-
-    if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || "Failed to save settings");
-    }
-    return response.json();
+    return handleResponse(response);
 }
 
 export async function uploadImage(file: File) {
@@ -166,15 +160,17 @@ export async function uploadImage(file: File) {
         body: formData,
     });
 
-    if (response.status === 401) {
-        localStorage.removeItem('pfotencard_token');
-        window.location.href = '/anmelden';
-        throw new Error("Sitzung abgelaufen");
-    }
+    return handleResponse(response);
+}
 
-    if (!response.ok) {
-        throw new Error('Image upload failed');
-    }
+export async function resendVerificationEmail(email: string) {
+    const response = await fetch(`${API_BASE_URL}/api/auth/resend-verification`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+    });
 
-    return response.json();
+    return handleResponse(response);
 }
