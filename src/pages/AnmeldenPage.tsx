@@ -131,12 +131,9 @@ export function AnmeldenPage() {
         phone: regData.phone
       });
 
-      setIsLogin(true);
-      setLoginSubdomain(regData.subdomain);
-
       toast({
-        title: "Konto erstellt!",
-        description: "Bitte melde dich nun mit deinen Daten an.",
+        title: "Registrierung erfolgreich!",
+        description: "Bitte überprüfe deine E-Mails (auch den Spam-Ordner), um dein Konto zu aktivieren und deine Hundeschule zu starten.",
       });
       setRegData({ email: '', password: '', name: '', schoolName: '', subdomain: '', phone: '' });
 
