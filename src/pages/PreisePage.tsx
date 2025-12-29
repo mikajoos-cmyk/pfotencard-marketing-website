@@ -11,28 +11,35 @@ export function PreisePage() {
   const [currentPlan, setCurrentPlan] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const subdomain = searchParams.get('subdomain'); // Prüfen, ob wir im "Kauf-Modus" sind
   const { toast } = useToast();
+
+  const urlSubdomain = searchParams.get('subdomain');
+  const storedSubdomain = localStorage.getItem('pfotencard_subdomain');
+  const activeSubdomain = urlSubdomain || storedSubdomain;
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    if (subdomain) {
-      // Status laden um aktuellen Plan zu ermitteln
-      checkTenantStatus(subdomain).then((status) => {
+
+    // Wenn eine Subdomain bekannt ist (URL oder LocalStorage), Plan laden
+    if (activeSubdomain) {
+      checkTenantStatus(activeSubdomain).then((status) => {
         if (status && status.exists) {
           setCurrentPlan(status.plan || 'starter');
         }
       }).catch(console.error);
+    }
 
+    // Nur wenn explizit via URL angefordert (Kauf-Modus), Warnung anzeigen
+    if (urlSubdomain) {
       toast({
         title: "Abo erforderlich",
-        description: `Bitte wähle einen Plan für "${subdomain}", um fortzufahren.`,
+        description: `Bitte wähle einen Plan für "${urlSubdomain}", um fortzufahren.`,
       });
     }
-  }, [subdomain, toast]);
+  }, [activeSubdomain, urlSubdomain, toast]);
 
   const handleSelectPlan = async (planName: string) => {
-    if (!subdomain) {
+    if (!activeSubdomain) {
       // Normaler Modus: Zur Registrierung
       navigate('/anmelden?register=true');
       return;
@@ -40,7 +47,7 @@ export function PreisePage() {
 
     // Kauf-Modus: Simuliere Zahlung & Abo-Update
     try {
-      await subscribeTenant(subdomain, planName.toLowerCase());
+      await subscribeTenant(activeSubdomain, planName.toLowerCase());
 
       toast({
         title: "Zahlung erfolgreich!",
@@ -65,18 +72,19 @@ export function PreisePage() {
     <main className="pt-20">
       <PricingHeaderSection billingCycle={billingCycle} setBillingCycle={setBillingCycle} />
 
-      {/* Wenn 'subdomain' in der URL ist, aktivieren wir den Upgrade-Modus.
-        Die Buttons zeigen dann "Jetzt buchen" statt "Jetzt starten".
+      {/* Wenn 'activeSubdomain' bekannt ist, aktivieren wir den Upgrade-Modus.
+        Die Buttons zeigen dann "Jetzt wechseln" statt "Jetzt starten",
+        und der aktuelle Plan wird markiert.
       */}
       <PricingTableSection
         billingCycle={billingCycle}
         onSelectPlan={handleSelectPlan}
-        isUpgradeMode={!!subdomain}
+        isUpgradeMode={!!activeSubdomain}
         currentPlan={currentPlan}
       />
 
       {/* Test-Hinweis nur anzeigen, wenn man nicht schon ein Konto hat */}
-      {!subdomain && <TrialReminderSection />}
+      {!activeSubdomain && <TrialReminderSection />}
     </main>
   );
 }
