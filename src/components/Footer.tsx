@@ -1,11 +1,34 @@
-import { Mail, Facebook, Instagram, Linkedin } from 'lucide-react';
+import { Mail, Facebook, Instagram, Linkedin, CheckCircle, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { Logo } from '@/components/Logo';
+import { useState } from 'react';
+import { newsletterSubscribe } from '@/lib/api';
 
 export function Footer() {
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+
+    setStatus('loading');
+    setErrorMessage('');
+
+    try {
+      await newsletterSubscribe(email);
+      setStatus('success');
+      setEmail('');
+    } catch (error: any) {
+      console.error(error);
+      setStatus('error');
+      setErrorMessage('Etwas ist schiefgelaufen. Bitte versuchen Sie es später erneut.');
+    }
+  };
+
   return (
     <footer id="kontakt" className="bg-gray-50 text-foreground pt-16 pb-8">
       <div className="container mx-auto px-4">
@@ -76,16 +99,42 @@ export function Footer() {
             <p className="text-muted-foreground text-sm mb-4">
               Bleiben Sie auf dem Laufenden mit unseren neuesten Updates.
             </p>
-            <form className="flex flex-col gap-3">
-              <Input
-                type="email"
-                placeholder="Ihre E-Mail"
-                className="bg-background text-foreground border-border"
-              />
-              <Button type="submit" className="bg-primary text-primary-foreground hover:bg-secondary font-normal">
-                Abonnieren
-              </Button>
-            </form>
+
+            {status === 'success' ? (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex flex-col items-center text-center animate-in fade-in zoom-in duration-300">
+                <CheckCircle className="w-8 h-8 text-green-500 mb-2" />
+                <p className="text-green-800 font-medium text-sm">Vielen Dank für die Anmeldung!</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+                <Input
+                  type="email"
+                  placeholder="Ihre E-Mail"
+                  className="bg-background text-foreground border-border"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={status === 'loading'}
+                  required
+                />
+                <Button
+                  type="submit"
+                  className="bg-primary text-primary-foreground hover:bg-secondary font-normal"
+                  disabled={status === 'loading'}
+                >
+                  {status === 'loading' ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Wird angemeldet...
+                    </>
+                  ) : (
+                    'Abonnieren'
+                  )}
+                </Button>
+                {status === 'error' && (
+                  <p className="text-destructive text-xs mt-1">{errorMessage}</p>
+                )}
+              </form>
+            )}
           </div>
         </div>
 

@@ -174,3 +174,15 @@ export async function resendVerificationEmail(email: string) {
 
     return handleResponse(response);
 }
+
+export async function newsletterSubscribe(email: string) {
+    const response = await fetch(`${API_BASE_URL}/api/newsletter/subscribe`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+    });
+
+    return handleResponse(response);
+}
