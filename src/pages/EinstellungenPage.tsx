@@ -627,7 +627,7 @@ export function EinstellungenPage() {
 
           <div className={`order-2 lg:order-1 ${showPreview ? '' : 'col-span-1'}`}>
             <Tabs defaultValue="branding" className="w-full">
-              <TabsList className={`grid w-full gap-2 mb-8 h-auto p-2 ${showPreview ? 'grid-cols-1 xl:grid-cols-4' : 'grid-cols-1 md:grid-cols-4'}`}>
+              <TabsList className={`grid w-full gap-2 mb-8 h-auto p-2 sticky top-24 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 ${showPreview ? 'grid-cols-1 xl:grid-cols-4' : 'grid-cols-1 md:grid-cols-4'}`}>
                 <TabsTrigger value="branding">Branding</TabsTrigger>
                 <TabsTrigger value="services">Leistungen</TabsTrigger>
                 <TabsTrigger value="modules">Zusatz-Module</TabsTrigger>

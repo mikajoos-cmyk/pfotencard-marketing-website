@@ -31,34 +31,62 @@
     --color-popover-foreground: 210 10% 20%;
     --color-destructive: 0 84% 60%;
     --color-destructive-foreground: 0 0% 100%;
-    
+
     --font-sans: "DM Sans", sans-serif;
     --font-body: "Inter", sans-serif;
     --font-mono: "IBM Plex Mono", monospace;
-    
+
     --radius: 0.75rem;
   }
-  
+
   * {
     @apply border-border;
   }
-  
+
   html,
   body {
     @apply bg-background text-foreground font-body;
     scroll-behavior: smooth;
   }
-  
-  h1, h2, h3, h4, h5, h6 {
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-sans text-foreground;
     font-weight: 500;
     letter-spacing: -0.025em;
     line-height: 1.2;
   }
-  
-  p, span, div, a {
+
+  p,
+  span,
+  div,
+  a {
     @apply text-foreground;
     line-height: 1.5;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #22C55E;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #16a34a;
+    /* darken green */
   }
 }
 

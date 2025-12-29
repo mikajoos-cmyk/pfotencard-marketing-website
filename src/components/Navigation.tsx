@@ -103,7 +103,10 @@ export function Navigation() {
                   </a>
                 </span>
                 <Link to="/einstellungen">
-                  <Button variant="ghost" className="gap-2">
+                  <Button
+                    variant="ghost"
+                    className={`gap-2 ${isActive('/einstellungen') ? 'text-primary font-medium bg-accent/50' : ''}`}
+                  >
                     <Settings size={18} />
                     Einstellungen
                   </Button>
