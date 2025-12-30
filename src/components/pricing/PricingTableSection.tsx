@@ -103,10 +103,10 @@ export function PricingTableSection({
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, delay: index * 0.1 }}
                 className={`relative bg-card rounded-lg border p-8 flex flex-col ${isCurrentPlan
-                    ? 'border-primary ring-2 ring-primary/20 shadow-lg'
-                    : plan.featured
-                      ? 'border-primary shadow-lg scale-105 md:scale-110 z-10'
-                      : 'border-border'
+                  ? 'border-primary ring-2 ring-primary/20 shadow-lg'
+                  : plan.featured
+                    ? 'border-primary shadow-lg scale-105 md:scale-110 z-10'
+                    : 'border-border'
                   }`}
               >
                 {plan.featured && !isCurrentPlan && (
@@ -147,16 +147,20 @@ export function PricingTableSection({
                 </div>
 
                 <Button
-                  disabled={!!isCurrentPlan}
+                  disabled={!!isCurrentPlan && !isUpgradeMode}
                   className={`w-full mb-6 font-normal ${isCurrentPlan
-                      ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
-                      : plan.featured
-                        ? 'bg-primary text-primary-foreground hover:bg-secondary'
-                        : 'bg-background text-foreground border border-border hover:bg-muted'
+                    ? isUpgradeMode
+                      ? 'bg-primary text-primary-foreground hover:bg-secondary'
+                      : 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
+                    : plan.featured
+                      ? 'bg-primary text-primary-foreground hover:bg-secondary'
+                      : 'bg-background text-foreground border border-border hover:bg-muted'
                     }`}
                   onClick={() => handleAction(plan.name)}
                 >
-                  {isCurrentPlan ? 'Aktives Abo' : isUpgradeMode ? 'Jetzt wechseln' : 'Jetzt starten'}
+                  {isCurrentPlan
+                    ? (isUpgradeMode ? 'Jetzt verlängern' : 'Aktives Abo')
+                    : (isUpgradeMode ? 'Jetzt wechseln' : 'Jetzt starten')}
                 </Button>
 
                 <div className="space-y-3 flex-grow">
