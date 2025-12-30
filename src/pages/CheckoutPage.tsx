@@ -22,8 +22,7 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
 
         setIsProcessing(true);
 
-        const subdomain = localStorage.getItem('pfotencard_subdomain');
-        const returnUrl = `https://${subdomain}.pfotencard.de/dashboard?subscription_success=true`;
+        const returnUrl = `https://pfotencard.de/settings`;
 
         const isSetupIntent = clientSecret.startsWith('seti_');
 
@@ -107,6 +106,9 @@ export function CheckoutPage() {
                 const data = await res.json();
                 if (data.clientSecret) {
                     setClientSecret(data.clientSecret);
+                } else if (data.status === 'updated') {
+                    // Sofortiger Erfolg bei Plan-Wechsel ohne direkte Kosten
+                    navigate('/settings?subscription_success=true');
                 } else {
                     throw new Error("Kein Client Secret erhalten");
                 }
