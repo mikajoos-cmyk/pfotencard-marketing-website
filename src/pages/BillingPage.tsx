@@ -73,8 +73,10 @@ export function BillingPage() {
             if (!res.ok) throw new Error("Konnte Abo nicht kündigen");
 
             toast({ title: "Kündigung vorgemerkt", description: "Dein Abo läuft zum Ende des Zeitraums aus." });
-            // UI aktualisieren via Reload
-            window.location.reload();
+            // UI aktualisieren via Reload - Kleiner Timeout damit Stripe sicher fertig ist
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
         } catch (e) {
             toast({ variant: "destructive", title: "Fehler", description: "Die Kündigung konnte nicht verarbeitet werden." });
         } finally {
