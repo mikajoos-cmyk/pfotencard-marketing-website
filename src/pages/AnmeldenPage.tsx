@@ -19,11 +19,22 @@ export function AnmeldenPage() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
+
+    // NEU: Beim Laden prüfen, ob ein Plan in der URL ist und speichern
+    const plan = searchParams.get('plan');
+    const cycle = searchParams.get('cycle');
+    const isRegister = searchParams.get('register') === 'true';
+
+    if (isRegister && plan) {
+      localStorage.setItem('pfotencard_pending_plan', plan);
+      if (cycle) localStorage.setItem('pfotencard_pending_cycle', cycle);
+    }
+
     // Wenn bereits eingeloggt, direkt weiterleiten
     if (isAuthenticated) {
       navigate('/einstellungen');
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, searchParams]);
 
   const [isLogin, setIsLogin] = useState(!shouldRegister);
   const [isLoading, setIsLoading] = useState(false);
@@ -92,6 +103,25 @@ export function AnmeldenPage() {
       // NEU: Auth Context nutzen statt manuell LocalStorage
       login(response.access_token, loginSubdomain);
 
+      // NEU: Prüfen ob ein Kauf "ausstehend" ist
+      const pendingPlan = localStorage.getItem('pfotencard_pending_plan');
+      const pendingCycle = localStorage.getItem('pfotencard_pending_cycle') || 'monthly';
+
+      if (pendingPlan) {
+        // Aufräumen
+        localStorage.removeItem('pfotencard_pending_plan');
+        localStorage.removeItem('pfotencard_pending_cycle');
+
+        toast({
+          title: "Anmeldung erfolgreich",
+          description: "Bitte schließe deine Buchung ab.",
+        });
+
+        // WICHTIG: Weiterleitung zum Checkout statt zu Einstellungen
+        navigate(`/checkout?plan=${pendingPlan}&cycle=${pendingCycle}`);
+        return;
+      }
+
       if (verifiedTenant && !verifiedTenant.subscription_valid) {
         toast({
           title: "Abo abgelaufen",
@@ -121,6 +151,9 @@ export function AnmeldenPage() {
     e.preventDefault();
     setIsLoading(true);
 
+    // Plan aus URL holen für die API
+    const planFromUrl = searchParams.get('plan') || 'starter';
+
     try {
       await registerTenant({
         schoolName: regData.schoolName,
@@ -128,7 +161,8 @@ export function AnmeldenPage() {
         adminName: regData.name,
         email: regData.email,
         password: regData.password,
-        phone: regData.phone
+        phone: regData.phone,
+        plan: planFromUrl // NEU: Plan an API übergeben
       });
 
       toast({

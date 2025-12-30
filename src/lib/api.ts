@@ -62,12 +62,13 @@ export async function registerTenant(data: {
     email: string;
     password: string;
     phone?: string;
+    plan?: string;
 }) {
     const payload = {
         tenant_data: {
             name: data.schoolName,
             subdomain: data.subdomain.toLowerCase(),
-            plan: "starter",
+            plan: data.plan || "starter",
             config: {
                 branding: { primary_color: "#22C55E", secondary_color: "#3B82F6" },
                 wording: { level: "Level", vip: "VIP" }

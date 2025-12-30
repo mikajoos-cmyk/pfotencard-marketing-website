@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, LogOut, Settings, User } from 'lucide-react';
+import { Menu, X, LogOut, Settings, CreditCard } from 'lucide-react'; // CreditCard importieren
 import { Button } from '@/components/ui/button';
 import {
   NavigationMenu,
@@ -102,13 +102,26 @@ export function Navigation() {
                     {subdomain}.pfotencard.de
                   </a>
                 </span>
+
+                {/* NEU: Billing Link */}
+                <Link to="/billing">
+                  <Button
+                    variant="ghost"
+                    className={`gap-2 ${isActive('/billing') ? 'text-primary font-medium bg-accent/50' : ''}`}
+                    title="Abo & Rechnungen"
+                  >
+                    <CreditCard size={18} />
+                    <span className="hidden xl:inline">Abo</span>
+                  </Button>
+                </Link>
+
                 <Link to="/einstellungen">
                   <Button
                     variant="ghost"
                     className={`gap-2 ${isActive('/einstellungen') ? 'text-primary font-medium bg-accent/50' : ''}`}
                   >
                     <Settings size={18} />
-                    Einstellungen
+                    <span className="hidden xl:inline">Einstellungen</span>
                   </Button>
                 </Link>
                 <Button
@@ -117,7 +130,6 @@ export function Navigation() {
                   className="gap-2 border-destructive text-destructive hover:bg-destructive/10"
                 >
                   <LogOut size={18} />
-                  Logout
                 </Button>
               </>
             ) : (
@@ -152,7 +164,7 @@ export function Navigation() {
 
       {/* Mobile Navigation */}
       {isMobileMenuOpen && (
-        <div className="md:hidden bg-background border-t border-border absolute w-full left-0 top-full shadow-lg">
+        <div className="md:hidden bg-background border-t border-border absolute w-full left-0 top-full shadow-lg h-[calc(100vh-80px)] overflow-y-auto pb-8">
           <NavigationMenu className="w-full">
             <NavigationMenuList className="flex flex-col w-full p-4 gap-4">
               <NavigationMenuItem className="w-full">
@@ -204,6 +216,13 @@ export function Navigation() {
 
               {isAuthenticated ? (
                 <>
+                  <NavigationMenuItem className="w-full">
+                    <Link to="/billing" onClick={() => setIsMobileMenuOpen(false)}>
+                      <Button variant="ghost" className="w-full justify-start gap-2">
+                        <CreditCard size={18} /> Abo & Rechnungen
+                      </Button>
+                    </Link>
+                  </NavigationMenuItem>
                   <NavigationMenuItem className="w-full">
                     <Link to="/einstellungen" onClick={() => setIsMobileMenuOpen(false)}>
                       <Button variant="ghost" className="w-full justify-start gap-2">

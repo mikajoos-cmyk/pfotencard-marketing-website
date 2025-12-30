@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PricingHeaderSection } from '../components/pricing/PricingHeaderSection';
 import { PricingTableSection } from '../components/pricing/PricingTableSection';
 import { TrialReminderSection } from '../components/pricing/TrialReminderSection';
-import { checkTenantStatus, subscribeTenant } from '@/lib/api';
+import { checkTenantStatus } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 export function PreisePage() {
@@ -20,7 +20,6 @@ export function PreisePage() {
   useEffect(() => {
     window.scrollTo(0, 0);
 
-    // Wenn eine Subdomain bekannt ist (URL oder LocalStorage), Plan laden
     if (activeSubdomain) {
       checkTenantStatus(activeSubdomain).then((status) => {
         if (status && status.exists) {
@@ -29,7 +28,6 @@ export function PreisePage() {
       }).catch(console.error);
     }
 
-    // Nur wenn explizit via URL angefordert (Kauf-Modus), Warnung anzeigen
     if (urlSubdomain) {
       toast({
         title: "Abo erforderlich",
@@ -40,42 +38,19 @@ export function PreisePage() {
 
   const handleSelectPlan = async (planName: string) => {
     if (!activeSubdomain) {
-      // Normaler Modus: Zur Registrierung
-      navigate('/anmelden?register=true');
+      // Normaler Modus: Zur Registrierung MIT Parametern
+      navigate(`/anmelden?register=true&plan=${planName.toLowerCase()}&cycle=${billingCycle}`);
       return;
     }
 
-    // Kauf-Modus: Simuliere Zahlung & Abo-Update
-    try {
-      await subscribeTenant(activeSubdomain, planName.toLowerCase());
-
-      toast({
-        title: "Zahlung erfolgreich!",
-        description: "Dein Abo ist jetzt aktiv. Weiterleitung...",
-      });
-
-      setTimeout(() => {
-        // Nach Zahlung direkt zur Personalisierung (Einstellungen)
-        navigate('/einstellungen');
-      }, 1500);
-
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Fehler",
-        description: error.message || "Konnte Abo nicht aktualisieren.",
-      });
-    }
+    // ÄNDERUNG: Statt direkter API Call -> Weiterleitung zum Checkout
+    navigate(`/checkout?plan=${planName.toLowerCase()}&cycle=${billingCycle}`);
   };
 
   return (
     <main className="pt-20">
       <PricingHeaderSection billingCycle={billingCycle} setBillingCycle={setBillingCycle} />
 
-      {/* Wenn 'activeSubdomain' bekannt ist, aktivieren wir den Upgrade-Modus.
-        Die Buttons zeigen dann "Jetzt wechseln" statt "Jetzt starten",
-        und der aktuelle Plan wird markiert.
-      */}
       <PricingTableSection
         billingCycle={billingCycle}
         onSelectPlan={handleSelectPlan}
@@ -83,7 +58,6 @@ export function PreisePage() {
         currentPlan={currentPlan}
       />
 
-      {/* Test-Hinweis nur anzeigen, wenn man nicht schon ein Konto hat */}
       {!activeSubdomain && <TrialReminderSection />}
     </main>
   );
