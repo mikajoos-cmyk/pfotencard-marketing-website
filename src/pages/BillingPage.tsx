@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 export function BillingPage() {
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState<any>(null);
+    const [subDetails, setSubDetails] = useState<any>(null); // <--- NEU
     const [canceling, setCanceling] = useState(false);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
     const navigate = useNavigate();
@@ -30,6 +31,21 @@ export function BillingPage() {
                 ]);
 
                 setStatus(configStatus);
+
+                // 2. Stripe Details laden (NEU)
+                const token = localStorage.getItem('pfotencard_token');
+                if (token) {
+                    const detailsRes = await fetch(`${API_BASE_URL}/api/stripe/details`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'x-tenant-subdomain': subdomain
+                        }
+                    });
+                    if (detailsRes.ok) {
+                        const details = await detailsRes.json();
+                        setSubDetails(details);
+                    }
+                }
             } catch (e) {
                 navigate('/anmelden');
             } finally {
@@ -90,6 +106,14 @@ export function BillingPage() {
     const nextBillingDate = subscriptionEnd.toLocaleDateString('de-DE');
     const isTrial = status?.in_trial;
     const hasPayment = status?.has_payment_method;
+    const isCancelled = subDetails?.cancel_at_period_end; // <--- Prüfen ob gekündigt (KORREKTER NAME)
+
+    // Bedingung für Pricing Table:
+    // 1. Keine Zahlungsmethode (ganz neu)
+    // 2. Im Trial (noch nicht gezahlt)
+    // 3. Gekündigt (läuft aus -> muss neu wählen um zu bleiben)
+    const showPricing = !hasPayment || isTrial || isCancelled;
+
     const planName = status?.plan ? status.plan.charAt(0).toUpperCase() + status.plan.slice(1) : 'Starter';
 
     const handleSelectPlan = (plan: string) => {
@@ -107,7 +131,18 @@ export function BillingPage() {
                     <Button variant="outline" onClick={() => navigate('/einstellungen')}>Zurück zu Einstellungen</Button>
                 </div>
 
-                {!hasPayment || isTrial ? (
+                {/* Warnung bei Kündigung */}
+                {isCancelled && subDetails?.current_period_end && (
+                    <div className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-lg mb-6 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                        <Info className="w-5 h-5" />
+                        <div>
+                            <strong>Dein Abo ist gekündigt.</strong>
+                            <p className="text-sm">Du hast noch Zugriff bis zum {new Date(subDetails.current_period_end).toLocaleDateString()}. Wähle unten einen Plan, um dein Abo unterbrechungsfrei zu reaktivieren.</p>
+                        </div>
+                    </div>
+                )}
+
+                {showPricing ? (
                     <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
                         {isTrial && (
                             <Card className="border-blue-200 bg-blue-50/50">
@@ -160,6 +195,24 @@ export function BillingPage() {
                                 <div className="flex items-center gap-4 mb-4">
                                     <div className="text-4xl font-bold text-foreground">{planName}</div>
                                 </div>
+
+                                {/* NÄCHSTE ZAHLUNG INFO */}
+                                {subDetails?.next_payment_date && (
+                                    <div className="bg-white/50 p-3 rounded border border-primary/10 mb-4">
+                                        <p className="text-sm text-muted-foreground font-medium">Nächste Zahlung:</p>
+                                        <div className="flex items-baseline gap-2 mt-1">
+                                            <span className="text-lg font-bold text-primary">
+                                                {subDetails.next_payment_amount?.toFixed(2)} €
+                                            </span>
+                                            <span className="text-sm">
+                                                am {new Date(subDetails.next_payment_date).toLocaleDateString((navigator.language || 'de-DE'))}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            (Der Betrag kann sich bei Plan-Wechseln ändern)
+                                        </p>
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                                     <div className="flex items-center gap-2">
                                         <Calendar className="w-4 h-4 text-muted-foreground" />
@@ -175,7 +228,7 @@ export function BillingPage() {
                             </CardContent>
                             <CardFooter className="gap-2 border-t pt-4">
                                 <Button variant="default" className="gap-2" onClick={openCustomerPortal}>
-                                    <ExternalLink className="w-4 h-4" /> Zahlungsdaten & Rechnungen (Stripe)
+                                    <ExternalLink className="w-4 h-4" /> Rechnungen
                                 </Button>
                                 <Button variant="outline" onClick={() => navigate(`/preise?subdomain=${status.subdomain}`)}>Plan ändern</Button>
                                 <Button
