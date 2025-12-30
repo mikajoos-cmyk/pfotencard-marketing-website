@@ -25,12 +25,21 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
         const subdomain = localStorage.getItem('pfotencard_subdomain');
         const returnUrl = `https://${subdomain}.pfotencard.de/dashboard?subscription_success=true`;
 
-        const { error } = await stripe.confirmPayment({
-            elements,
-            confirmParams: {
-                return_url: returnUrl,
-            },
-        });
+        const isSetupIntent = clientSecret.startsWith('seti_');
+
+        const { error } = isSetupIntent
+            ? await stripe.confirmSetup({
+                elements,
+                confirmParams: {
+                    return_url: returnUrl,
+                },
+            })
+            : await stripe.confirmPayment({
+                elements,
+                confirmParams: {
+                    return_url: returnUrl,
+                },
+            });
 
         if (error) {
             setErrorMessage(error.message || "Ein Fehler ist aufgetreten.");
