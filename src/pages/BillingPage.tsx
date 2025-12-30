@@ -43,7 +43,10 @@ export function BillingPage() {
                     });
                     if (detailsRes.ok) {
                         const details = await detailsRes.json();
+                        console.log("Stripe Details Loaded:", details); // DEBUG LOG
                         setSubDetails(details);
+                    } else {
+                        console.error("Stripe Details Fetch Failed:", detailsRes.status); // DEBUG LOG
                     }
                 }
             } catch (e) {
