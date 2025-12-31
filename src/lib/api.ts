@@ -187,3 +187,21 @@ export async function newsletterSubscribe(email: string) {
 
     return handleResponse(response);
 }
+
+export interface Invoice {
+    id: string;
+    number: string;
+    created: string;
+    amount: number;
+    status: string;
+    pdf_url: string;
+    hosted_url: string;
+}
+
+export async function fetchInvoices() {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/stripe/invoices`, {
+        headers: headers,
+    });
+    return handleResponse(response);
+}

@@ -2,18 +2,20 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { checkTenantStatus, API_BASE_URL } from '@/lib/api';
-import { CreditCard, Calendar, Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle } from 'lucide-react';
+import { checkTenantStatus, API_BASE_URL, fetchInvoices, type Invoice } from '@/lib/api';
+import { CreditCard, Calendar, Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PricingTableSection } from '@/components/pricing/PricingTableSection';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export function BillingPage() {
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState<any>(null);
     const [canceling, setCanceling] = useState(false);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+    const [invoices, setInvoices] = useState<Invoice[]>([]);
     const navigate = useNavigate();
     const { toast } = useToast();
 
@@ -25,6 +27,16 @@ export function BillingPage() {
 
             const configStatus = await checkTenantStatus(subdomain);
             setStatus(configStatus);
+
+            // Rechnungen laden, wenn Abo existiert
+            if (configStatus.has_payment_method || configStatus.stripe_subscription_status) {
+                try {
+                    const invoiceData = await fetchInvoices();
+                    setInvoices(invoiceData);
+                } catch (err) {
+                    console.error("Konnte Rechnungen nicht laden", err);
+                }
+            }
         } catch (e) {
             console.error(e);
             navigate('/anmelden');
@@ -179,93 +191,152 @@ export function BillingPage() {
                     </div>
                 ) : (
                     // --- AKTIVES ABO ANSICHT ---
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div className="space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-                        {/* Hauptkarte Abo */}
-                        <Card className="md:col-span-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 shadow-md overflow-hidden relative">
-                            <div className="absolute top-0 right-0 p-4">
-                                <Badge variant={isStripeTrial ? "secondary" : "default"} className={isStripeTrial ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-primary hover:bg-primary"}>
-                                    {isStripeTrial ? 'TESTPHASE' : 'AKTIV'}
-                                </Badge>
-                            </div>
-
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Mein Abonnement</CardTitle>
-                                <div className="flex items-center gap-3 mt-1">
-                                    <h2 className="text-4xl font-bold text-foreground">{planName}</h2>
+                            {/* Hauptkarte Abo */}
+                            <Card className="md:col-span-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 shadow-md overflow-hidden relative">
+                                <div className="absolute top-0 right-0 p-4">
+                                    <Badge variant={isStripeTrial ? "secondary" : "default"} className={isStripeTrial ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-primary hover:bg-primary"}>
+                                        {isStripeTrial ? 'TESTPHASE' : 'AKTIV'}
+                                    </Badge>
                                 </div>
-                            </CardHeader>
 
-                            <CardContent className="mt-4">
-                                {/* DETAIL BOX: Nächste Zahlung */}
-                                <div className="bg-white/80 border border-primary/10 rounded-lg p-4 mb-6">
-                                    <div className="flex items-start gap-4">
-                                        <div className="p-2 bg-green-100 rounded-full text-green-700">
-                                            <Wallet className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-medium text-muted-foreground mb-1">
-                                                {isPendingSwitch ? 'Nächste Zahlung & Wechsel' : 'Nächste Zahlung'}
-                                            </p>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Mein Abonnement</CardTitle>
+                                    <div className="flex items-center gap-3 mt-1">
+                                        <h2 className="text-4xl font-bold text-foreground">{planName}</h2>
+                                    </div>
+                                </CardHeader>
 
-                                            {status?.next_payment_date ? (
-                                                <div>
-                                                    <div className="flex items-baseline gap-2">
-                                                        <span className="text-2xl font-bold text-foreground">
-                                                            {formatCurrency(status.next_payment_amount)}
-                                                        </span>
-                                                        <span className="text-sm text-muted-foreground">
-                                                            am {formatDate(status.next_payment_date)}
-                                                        </span>
-                                                    </div>
+                                <CardContent className="mt-4">
+                                    {/* DETAIL BOX: Nächste Zahlung */}
+                                    <div className="bg-white/80 border border-primary/10 rounded-lg p-4 mb-6">
+                                        <div className="flex items-start gap-4">
+                                            <div className="p-2 bg-green-100 rounded-full text-green-700">
+                                                <Wallet className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium text-muted-foreground mb-1">
+                                                    {isPendingSwitch ? 'Nächste Zahlung & Wechsel' : 'Nächste Zahlung'}
+                                                </p>
 
-                                                    {isPendingSwitch && (
-                                                        <div className="mt-2 text-sm text-blue-600 flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded w-fit">
-                                                            <ArrowRight className="w-3.5 h-3.5" />
-                                                            Wechsel auf <strong>{upcomingPlanName}</strong>
+                                                {status?.next_payment_date ? (
+                                                    <div>
+                                                        <div className="flex items-baseline gap-2">
+                                                            <span className="text-2xl font-bold text-foreground">
+                                                                {formatCurrency(status.next_payment_amount)}
+                                                            </span>
+                                                            <span className="text-sm text-muted-foreground">
+                                                                am {formatDate(status.next_payment_date)}
+                                                            </span>
                                                         </div>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <p className="text-foreground font-medium">Wird berechnet...</p>
-                                            )}
+
+                                                        {isPendingSwitch && (
+                                                            <div className="mt-2 text-sm text-blue-600 flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded w-fit">
+                                                                <ArrowRight className="w-3.5 h-3.5" />
+                                                                Wechsel auf <strong>{upcomingPlanName}</strong>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-foreground font-medium">Wird berechnet...</p>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <ShieldCheckIcon className="w-4 h-4 text-green-600" />
-                                    <span>Zahlungsmethode sicher hinterlegt</span>
-                                </div>
-                            </CardContent>
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <ShieldCheckIcon className="w-4 h-4 text-green-600" />
+                                        <span>Zahlungsmethode sicher hinterlegt</span>
+                                    </div>
+                                </CardContent>
 
-                            <CardFooter className="gap-2 border-t pt-4 bg-muted/20">
-                                <Button variant="default" className="gap-2" onClick={openCustomerPortal}>
-                                    <ExternalLink className="w-4 h-4" /> Rechnungen
-                                </Button>
-                                <Button variant="outline" className="bg-background" onClick={() => navigate(`/preise?subdomain=${status.subdomain}`)}>
-                                    Plan ändern
-                                </Button>
-                                <Button variant="ghost" className="text-destructive hover:bg-destructive/10 ml-auto hover:text-destructive" onClick={handleCancelSubscription} disabled={canceling}>
-                                    {canceling ? <Loader2 className="animate-spin w-4 h-4" /> : 'Kündigen'}
-                                </Button>
-                            </CardFooter>
-                        </Card>
+                                <CardFooter className="gap-2 border-t pt-4 bg-muted/20">
+                                    <Button variant="default" className="gap-2" onClick={openCustomerPortal}>
+                                        <ExternalLink className="w-4 h-4" /> Rechnungen
+                                    </Button>
+                                    <Button variant="outline" className="bg-background" onClick={() => navigate(`/preise?subdomain=${status.subdomain}`)}>
+                                        Plan ändern
+                                    </Button>
+                                    <Button variant="ghost" className="text-destructive hover:bg-destructive/10 ml-auto hover:text-destructive" onClick={handleCancelSubscription} disabled={canceling}>
+                                        {canceling ? <Loader2 className="animate-spin w-4 h-4" /> : 'Kündigen'}
+                                    </Button>
+                                </CardFooter>
+                            </Card>
 
-                        {/* Hilfe Karte */}
+                            {/* Hilfe Karte */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Hilfe</CardTitle>
+                                </CardHeader>
+                                <CardContent className="text-sm text-muted-foreground space-y-4">
+                                    <p>Fragen zur Abrechnung? Wir helfen dir gerne weiter.</p>
+                                    <div className="flex items-center gap-2">
+                                        <Check className="w-4 h-4 text-green-500" />
+                                        <span>Support: <strong>{status?.plan === 'enterprise' ? 'Priority' : 'Standard'}</strong></span>
+                                    </div>
+                                </CardContent>
+                                <CardFooter>
+                                    <Button className="w-full" variant="secondary" onClick={() => navigate('/kontakt')}>Kontakt aufnehmen</Button>
+                                </CardFooter>
+                            </Card>
+                        </div>
+
+                        {/* --- RECHNUNGSHISTORIE --- */}
                         <Card>
                             <CardHeader>
-                                <CardTitle>Hilfe</CardTitle>
+                                <CardTitle className="flex items-center gap-2">
+                                    <FileText className="w-5 h-5" /> Rechnungshistorie
+                                </CardTitle>
+                                <CardDescription>Die letzten 12 Rechnungen zum Download.</CardDescription>
                             </CardHeader>
-                            <CardContent className="text-sm text-muted-foreground space-y-4">
-                                <p>Fragen zur Abrechnung? Wir helfen dir gerne weiter.</p>
-                                <div className="flex items-center gap-2">
-                                    <Check className="w-4 h-4 text-green-500" />
-                                    <span>Support: <strong>{status?.plan === 'enterprise' ? 'Priority' : 'Standard'}</strong></span>
-                                </div>
+                            <CardContent>
+                                {invoices.length > 0 ? (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Datum</TableHead>
+                                                <TableHead>Betrag</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-right">Rechnung</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {invoices.map((inv) => (
+                                                <TableRow key={inv.id}>
+                                                    <TableCell>{formatDate(inv.created)}</TableCell>
+                                                    <TableCell className="font-medium">{formatCurrency(inv.amount)}</TableCell>
+                                                    <TableCell>
+                                                        <Badge variant="outline" className={
+                                                            inv.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100'
+                                                        }>
+                                                            {inv.status === 'paid' ? 'Bezahlt' : inv.status}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        {inv.pdf_url && (
+                                                            <Button variant="ghost" size="sm" asChild>
+                                                                <a href={inv.pdf_url} target="_blank" rel="noopener noreferrer">
+                                                                    <Download className="w-4 h-4 mr-2" /> PDF
+                                                                </a>
+                                                            </Button>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                ) : (
+                                    <div className="text-center py-8 text-muted-foreground">
+                                        <p>Keine Rechnungen gefunden.</p>
+                                    </div>
+                                )}
                             </CardContent>
-                            <CardFooter>
-                                <Button className="w-full" variant="secondary" onClick={() => navigate('/kontakt')}>Kontakt aufnehmen</Button>
+                            <CardFooter className="border-t bg-muted/20 py-3">
+                                <Button variant="link" size="sm" className="ml-auto text-muted-foreground" onClick={openCustomerPortal}>
+                                    Alle Rechnungen im Stripe Portal ansehen <ExternalLink className="w-3 h-3 ml-1" />
+                                </Button>
                             </CardFooter>
                         </Card>
                     </div>
