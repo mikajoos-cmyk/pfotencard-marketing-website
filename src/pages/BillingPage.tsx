@@ -26,14 +26,13 @@ export function BillingPage() {
             const subdomain = localStorage.getItem('pfotencard_subdomain');
             if (!subdomain) throw new Error("Keine Subdomain");
 
-            // 1. Basis-Status laden
+            // 1. Basis-Status laden - JETZT MIT DB STATUS
             const configStatus = await checkTenantStatus(subdomain);
             setStatus(configStatus);
 
-            // 2. Stripe Details laden
+            // 2. Stripe Details laden (optional für Next Payment Info)
             const token = localStorage.getItem('pfotencard_token');
             if (token) {
-                // Timestamp hinzufügen um Caching zu vermeiden nach Rückkehr vom Portal
                 const detailsRes = await fetch(`${API_BASE_URL}/api/stripe/details?t=${Date.now()}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -42,10 +41,7 @@ export function BillingPage() {
                 });
                 if (detailsRes.ok) {
                     const details = await detailsRes.json();
-                    console.log("Stripe Details Loaded:", details);
                     setSubDetails(details);
-                } else {
-                    console.error("Stripe Details Fetch Failed:", detailsRes.status);
                 }
             }
         } catch (e) {
@@ -112,8 +108,9 @@ export function BillingPage() {
     const isTrial = status?.in_trial;
     const hasPayment = status?.has_payment_method;
 
-    // Prüfen ob gekündigt: Entweder Flag gesetzt ODER Status ist bereits 'canceled'
-    const isCancelled = subDetails?.cancel_at_period_end === true || subDetails?.status === 'canceled';
+    // Prüfen ob gekündigt: Jetzt direkt aus der DB-Status-Antwort!
+    // Falls status.cancel_at_period_end true ist ODER der Status 'canceled' ist.
+    const isCancelled = status?.cancel_at_period_end === true || status?.stripe_subscription_status === 'canceled';
 
     // Bedingung für Pricing Table:
     // 1. Keine Zahlungsmethode (ganz neu)
@@ -139,12 +136,12 @@ export function BillingPage() {
                 </div>
 
                 {/* Warnung bei Kündigung */}
-                {isCancelled && subDetails?.current_period_end && (
+                {isCancelled && status?.subscription_ends_at && (
                     <div className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-lg mb-6 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
                         <Info className="w-5 h-5" />
                         <div>
                             <strong>Dein Abo ist gekündigt.</strong>
-                            <p className="text-sm">Du hast noch Zugriff bis zum {new Date(subDetails.current_period_end).toLocaleDateString()}. Wähle unten einen Plan, um dein Abo unterbrechungsfrei zu reaktivieren.</p>
+                            <p className="text-sm">Du hast noch Zugriff bis zum {new Date(status.subscription_ends_at).toLocaleDateString()}. Wähle unten einen Plan, um dein Abo unterbrechungsfrei zu reaktivieren.</p>
                         </div>
                     </div>
                 )}
@@ -232,7 +229,7 @@ export function BillingPage() {
                                     <div className="flex items-center gap-2">
                                         <CreditCard className="w-4 h-4 text-muted-foreground" />
                                         <span className="text-muted-foreground">Status:</span>
-                                        <span className="font-medium">{subDetails?.status === 'active' ? 'Aktiv' : subDetails?.status}</span>
+                                        <span className="font-medium">{status?.stripe_subscription_status || 'Aktiv'}</span>
                                     </div>
                                 </div>
                             </CardContent>
