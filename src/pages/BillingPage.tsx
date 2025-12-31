@@ -3,10 +3,9 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { checkTenantStatus, API_BASE_URL } from '@/lib/api';
-import { CreditCard, Calendar, Download, FileText, Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info } from 'lucide-react';
+import { CreditCard, Calendar, Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PricingTableSection } from '@/components/pricing/PricingTableSection';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,48 +13,51 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 export function BillingPage() {
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState<any>(null);
-    const [subDetails, setSubDetails] = useState<any>(null); // <--- NEU
+    const [subDetails, setSubDetails] = useState<any>(null);
     const [canceling, setCanceling] = useState(false);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
     const navigate = useNavigate();
     const { toast } = useToast();
 
-    useEffect(() => {
-        async function loadData() {
-            try {
-                const subdomain = localStorage.getItem('pfotencard_subdomain');
-                if (!subdomain) throw new Error("Keine Subdomain");
+    // Funktion zum Laden der Daten (ausgelagert, um nach Aktionen neu zu laden)
+    const fetchBillingData = async () => {
+        try {
+            setLoading(true);
+            const subdomain = localStorage.getItem('pfotencard_subdomain');
+            if (!subdomain) throw new Error("Keine Subdomain");
 
-                const [configStatus] = await Promise.all([
-                    checkTenantStatus(subdomain)
-                ]);
+            // 1. Basis-Status laden
+            const configStatus = await checkTenantStatus(subdomain);
+            setStatus(configStatus);
 
-                setStatus(configStatus);
-
-                // 2. Stripe Details laden (NEU)
-                const token = localStorage.getItem('pfotencard_token');
-                if (token) {
-                    const detailsRes = await fetch(`${API_BASE_URL}/api/stripe/details`, {
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'x-tenant-subdomain': subdomain
-                        }
-                    });
-                    if (detailsRes.ok) {
-                        const details = await detailsRes.json();
-                        console.log("Stripe Details Loaded:", details); // DEBUG LOG
-                        setSubDetails(details);
-                    } else {
-                        console.error("Stripe Details Fetch Failed:", detailsRes.status); // DEBUG LOG
+            // 2. Stripe Details laden
+            const token = localStorage.getItem('pfotencard_token');
+            if (token) {
+                // Timestamp hinzufügen um Caching zu vermeiden nach Rückkehr vom Portal
+                const detailsRes = await fetch(`${API_BASE_URL}/api/stripe/details?t=${Date.now()}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'x-tenant-subdomain': subdomain
                     }
+                });
+                if (detailsRes.ok) {
+                    const details = await detailsRes.json();
+                    console.log("Stripe Details Loaded:", details);
+                    setSubDetails(details);
+                } else {
+                    console.error("Stripe Details Fetch Failed:", detailsRes.status);
                 }
-            } catch (e) {
-                navigate('/anmelden');
-            } finally {
-                setLoading(false);
             }
+        } catch (e) {
+            console.error(e);
+            navigate('/anmelden');
+        } finally {
+            setLoading(false);
         }
-        loadData();
+    };
+
+    useEffect(() => {
+        fetchBillingData();
     }, [navigate]);
 
     const handleCancelSubscription = async () => {
@@ -76,10 +78,9 @@ export function BillingPage() {
             if (!res.ok) throw new Error("Konnte Abo nicht kündigen");
 
             toast({ title: "Kündigung vorgemerkt", description: "Dein Abo läuft zum Ende des Zeitraums aus." });
-            // UI aktualisieren via Reload - Kleiner Timeout damit Stripe sicher fertig ist
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
+
+            // Daten neu laden, um UI zu aktualisieren
+            await fetchBillingData();
         } catch (e) {
             toast({ variant: "destructive", title: "Fehler", description: "Die Kündigung konnte nicht verarbeitet werden." });
         } finally {
@@ -92,7 +93,6 @@ export function BillingPage() {
         const subdomain = localStorage.getItem('pfotencard_subdomain');
 
         try {
-            // Wir fragen das Backend nach der Portal URL
             const res = await fetch(`${API_BASE_URL}/api/stripe/portal?return_url=${window.location.href}`, {
                 headers: { 'Authorization': `Bearer ${token}`, 'x-tenant-subdomain': subdomain || '' }
             });
@@ -111,7 +111,9 @@ export function BillingPage() {
     const nextBillingDate = subscriptionEnd.toLocaleDateString('de-DE');
     const isTrial = status?.in_trial;
     const hasPayment = status?.has_payment_method;
-    const isCancelled = subDetails?.cancel_at_period_end; // <--- Prüfen ob gekündigt (KORREKTER NAME)
+
+    // Prüfen ob gekündigt: Entweder Flag gesetzt ODER Status ist bereits 'canceled'
+    const isCancelled = subDetails?.cancel_at_period_end === true || subDetails?.status === 'canceled';
 
     // Bedingung für Pricing Table:
     // 1. Keine Zahlungsmethode (ganz neu)
@@ -182,6 +184,12 @@ export function BillingPage() {
                             isUpgradeMode={true}
                             currentPlan={status?.plan}
                         />
+
+                        <div className="flex justify-center mt-4">
+                            <Button variant="ghost" onClick={openCustomerPortal} className="text-muted-foreground hover:text-foreground">
+                                <ExternalLink className="w-4 h-4 mr-2" /> Rechnungen & Zahlungsmethoden verwalten
+                            </Button>
+                        </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -213,21 +221,18 @@ export function BillingPage() {
                                                 am {new Date(subDetails.next_payment_date).toLocaleDateString((navigator.language || 'de-DE'))}
                                             </span>
                                         </div>
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            (Der Betrag kann sich bei Plan-Wechseln ändern)
-                                        </p>
                                     </div>
                                 )}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                                     <div className="flex items-center gap-2">
                                         <Calendar className="w-4 h-4 text-muted-foreground" />
-                                        <span className="text-muted-foreground">Nächste Zahlung:</span>
+                                        <span className="text-muted-foreground">Abo gültig bis:</span>
                                         <span className="font-medium">{nextBillingDate}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <CreditCard className="w-4 h-4 text-muted-foreground" />
-                                        <span className="text-muted-foreground">Zahlart:</span>
-                                        <span className="font-medium">Verwaltung via Stripe</span>
+                                        <span className="text-muted-foreground">Status:</span>
+                                        <span className="font-medium">{subDetails?.status === 'active' ? 'Aktiv' : subDetails?.status}</span>
                                     </div>
                                 </div>
                             </CardContent>
