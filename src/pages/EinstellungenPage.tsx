@@ -155,15 +155,15 @@ const AVAILABLE_MODULES: AppModule[] = [
 const PLAN_FEATURES = {
   starter: {
     branding: false, // Kein eigenes Logo/Farben
-    modules: ['documents', 'chat'], // Erlaubte Module (News entfernt)
+    modules: [], // Erlaubte Module (News entfernt)
   },
   pro: {
     branding: true,
-    modules: ['news', 'documents', 'chat'], // News hinzugefügt, shop entfernt
+    modules: ['news', 'chat'], // News hinzugefügt, shop entfernt
   },
   enterprise: { // ehemals 'verband'
     branding: true, // Enterprise hat natürlich auch Branding
-    modules: ['news', 'documents', 'chat', 'calendar', 'marketplace'], // shop entfernt
+    modules: ['news', 'chat', 'calendar'], // shop entfernt
   }
 };
 
