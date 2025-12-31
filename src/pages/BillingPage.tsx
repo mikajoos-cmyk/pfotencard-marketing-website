@@ -1,13 +1,13 @@
-// src/pages/BillingPage.tsx
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { checkTenantStatus, API_BASE_URL } from '@/lib/api';
-import { CreditCard, Calendar, Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight } from 'lucide-react';
+import { CreditCard, Calendar, Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PricingTableSection } from '@/components/pricing/PricingTableSection';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 
 export function BillingPage() {
     const [loading, setLoading] = useState(true);
@@ -23,7 +23,6 @@ export function BillingPage() {
             const subdomain = localStorage.getItem('pfotencard_subdomain');
             if (!subdomain) throw new Error("Keine Subdomain");
 
-            // Status aus DB laden (enthält jetzt LIVE Daten nach Stripe-Update)
             const configStatus = await checkTenantStatus(subdomain);
             setStatus(configStatus);
         } catch (e) {
@@ -75,21 +74,16 @@ export function BillingPage() {
 
     if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin mr-2" /> Lade Daten...</div>;
 
-    const subscriptionEnd = status?.subscription_ends_at ? new Date(status.subscription_ends_at) : new Date();
-    const nextBillingDate = subscriptionEnd.toLocaleDateString('de-DE');
+    // Helper & Formats
+    const formatDate = (dateString?: string) => dateString ? new Date(dateString).toLocaleDateString('de-DE') : '-';
+    const formatCurrency = (amount?: number) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount || 0);
 
     // --- STATUS FLAGS ---
-    // Gekündigt: Entweder zum Periodenende vorgemerkt ODER Status ist 'canceled'
     const isCancelled = status?.cancel_at_period_end === true || status?.stripe_subscription_status === 'canceled';
-
-    // Stripe Trial: Echtes Abo, aber noch im Testzeitraum
     const isStripeTrial = status?.stripe_subscription_status === 'trialing';
-
-    // Registration Trial: Kein Stripe Abo, nur der 14-Tage Start
     const isRegistrationTrial = status?.in_trial && !status?.has_payment_method;
-
-    // Zahlungsmethode vorhanden?
     const hasPaymentMethod = status?.has_payment_method;
+    const isPendingSwitch = !!status?.upcoming_plan && status.upcoming_plan !== status.plan;
 
     // Logik: Zeige Preise (Buchen) WENN:
     // 1. Kein Zahlungsmittel (Reg Trial)
@@ -97,6 +91,7 @@ export function BillingPage() {
     const showPricing = !hasPaymentMethod || isCancelled;
 
     const planName = status?.plan ? status.plan.charAt(0).toUpperCase() + status.plan.slice(1) : 'Starter';
+    const upcomingPlanName = status?.upcoming_plan ? status.upcoming_plan.charAt(0).toUpperCase() + status.upcoming_plan.slice(1) : '';
 
     return (
         <main className="pt-24 pb-12 bg-background min-h-screen">
@@ -109,28 +104,50 @@ export function BillingPage() {
                     <Button variant="outline" onClick={() => navigate('/einstellungen')}>Zurück zu Einstellungen</Button>
                 </div>
 
-                {/* ALERTS */}
+                {/* --- INFO BANNER --- */}
+
+                {/* 1. Kündigung */}
                 {isCancelled && status?.subscription_ends_at && (
-                    <div className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-lg mb-6 flex items-center gap-3">
-                        <Info className="w-5 h-5" />
+                    <div className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                        <AlertTriangle className="w-5 h-5 mt-0.5" />
                         <div>
                             <strong>Dein Abo ist gekündigt.</strong>
-                            <p className="text-sm">Du hast noch Zugriff bis zum {new Date(status.subscription_ends_at).toLocaleDateString()}. Wähle unten einen Plan zur Reaktivierung.</p>
+                            <p className="text-sm mt-1">Du hast noch Zugriff bis zum {formatDate(status.subscription_ends_at)}. Wähle unten einen Plan, um dein Abo zu reaktivieren.</p>
                         </div>
                     </div>
                 )}
 
-                {isStripeTrial && !isCancelled && (
-                    <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-6 flex items-center gap-3">
-                        <Info className="w-5 h-5" />
+                {/* 2. Plan Wechsel */}
+                {isPendingSwitch && !isCancelled && (
+                    <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                        <Info className="w-5 h-5 mt-0.5" />
+                        <div>
+                            <strong>Plan-Wechsel vorgemerkt</strong>
+                            <div className="flex items-center gap-2 mt-1 text-sm">
+                                <span>Aktuell: <b>{planName}</b></span>
+                                <ArrowRight className="w-4 h-4" />
+                                <span>Ab {formatDate(status.next_payment_date)}: <b>{upcomingPlanName}</b></span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 3. Trial */}
+                {isStripeTrial && !isCancelled && !isPendingSwitch && (
+                    <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                        <Info className="w-5 h-5 mt-0.5" />
                         <div>
                             <strong>Kostenlose Testphase aktiv.</strong>
-                            <p className="text-sm">Erste Abbuchung ({status?.next_payment_amount?.toFixed(2)}€) erfolgt am {nextBillingDate}.</p>
+                            <p className="text-sm mt-1">
+                                Deine erste reguläre Abbuchung über <b>{formatCurrency(status?.next_payment_amount)}</b> erfolgt am <b>{formatDate(status?.next_payment_date)}</b>.
+                            </p>
                         </div>
                     </div>
                 )}
 
+
                 {showPricing ? (
+                    // --- PREISTABELLE (Neu oder Gekündigt) ---
                     <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
                         {isRegistrationTrial && (
                             <div className="text-center mb-4 p-4 bg-muted/30 rounded-lg">
@@ -142,7 +159,7 @@ export function BillingPage() {
                             <Tabs value={billingCycle} onValueChange={(v) => setBillingCycle(v as any)} className="w-full max-w-[400px]">
                                 <TabsList className="grid w-full grid-cols-2">
                                     <TabsTrigger value="monthly">Monatlich</TabsTrigger>
-                                    <TabsTrigger value="yearly">Jährlich</TabsTrigger>
+                                    <TabsTrigger value="yearly">Jährlich (-10%)</TabsTrigger>
                                 </TabsList>
                             </Tabs>
                         </div>
@@ -161,60 +178,94 @@ export function BillingPage() {
                         )}
                     </div>
                 ) : (
+                    // --- AKTIVES ABO ANSICHT ---
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <Card className="md:col-span-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 shadow-md">
+
+                        {/* Hauptkarte Abo */}
+                        <Card className="md:col-span-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 shadow-md overflow-hidden relative">
+                            <div className="absolute top-0 right-0 p-4">
+                                <Badge variant={isStripeTrial ? "secondary" : "default"} className={isStripeTrial ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-primary hover:bg-primary"}>
+                                    {isStripeTrial ? 'TESTPHASE' : 'AKTIV'}
+                                </Badge>
+                            </div>
+
                             <CardHeader className="pb-2">
-                                <div className="flex justify-between items-start">
-                                    <CardTitle>Mein Abonnement</CardTitle>
-                                    <div className="bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded uppercase tracking-wide">
-                                        {status.stripe_subscription_status === 'trialing' ? 'Testphase' : 'Aktiv'}
-                                    </div>
+                                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Mein Abonnement</CardTitle>
+                                <div className="flex items-center gap-3 mt-1">
+                                    <h2 className="text-4xl font-bold text-foreground">{planName}</h2>
                                 </div>
                             </CardHeader>
-                            <CardContent>
-                                <div className="flex items-center gap-4 mb-4">
-                                    <div className="text-4xl font-bold text-foreground">{planName}</div>
-                                </div>
 
-                                {/* NÄCHSTE ZAHLUNG INFO */}
-                                {status?.next_payment_date && (
-                                    <div className="bg-white/60 p-4 rounded border border-border mb-4">
-                                        <p className="text-sm text-muted-foreground font-medium mb-1">Nächste Abrechnung:</p>
-                                        <div className="flex items-baseline gap-2">
-                                            <span className="text-xl font-bold text-foreground">
-                                                {status.next_payment_amount?.toFixed(2)} €
-                                            </span>
-                                            <span className="text-sm text-muted-foreground">
-                                                am {new Date(status.next_payment_date).toLocaleDateString('de-DE')}
-                                            </span>
+                            <CardContent className="mt-4">
+                                {/* DETAIL BOX: Nächste Zahlung */}
+                                <div className="bg-white/80 border border-primary/10 rounded-lg p-4 mb-6">
+                                    <div className="flex items-start gap-4">
+                                        <div className="p-2 bg-green-100 rounded-full text-green-700">
+                                            <Wallet className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium text-muted-foreground mb-1">
+                                                {isPendingSwitch ? 'Nächste Zahlung & Wechsel' : 'Nächste Zahlung'}
+                                            </p>
+
+                                            {status?.next_payment_date ? (
+                                                <div>
+                                                    <div className="flex items-baseline gap-2">
+                                                        <span className="text-2xl font-bold text-foreground">
+                                                            {formatCurrency(status.next_payment_amount)}
+                                                        </span>
+                                                        <span className="text-sm text-muted-foreground">
+                                                            am {formatDate(status.next_payment_date)}
+                                                        </span>
+                                                    </div>
+
+                                                    {isPendingSwitch && (
+                                                        <div className="mt-2 text-sm text-blue-600 flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded w-fit">
+                                                            <ArrowRight className="w-3.5 h-3.5" />
+                                                            Wechsel auf <strong>{upcomingPlanName}</strong>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <p className="text-foreground font-medium">Wird berechnet...</p>
+                                            )}
                                         </div>
                                     </div>
-                                )}
+                                </div>
 
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <CreditCard className="w-4 h-4" />
-                                    <span>Zahlungsmethode hinterlegt</span>
+                                    <ShieldCheckIcon className="w-4 h-4 text-green-600" />
+                                    <span>Zahlungsmethode sicher hinterlegt</span>
                                 </div>
                             </CardContent>
-                            <CardFooter className="gap-2 border-t pt-4">
+
+                            <CardFooter className="gap-2 border-t pt-4 bg-muted/20">
                                 <Button variant="default" className="gap-2" onClick={openCustomerPortal}>
                                     <ExternalLink className="w-4 h-4" /> Rechnungen
                                 </Button>
-                                <Button variant="outline" onClick={() => navigate(`/preise?subdomain=${status.subdomain}`)}>Plan ändern</Button>
-                                <Button variant="ghost" className="text-destructive hover:bg-destructive/10 ml-auto" onClick={handleCancelSubscription} disabled={canceling}>
-                                    {canceling ? <Loader2 className="animate-spin" /> : 'Kündigen'}
+                                <Button variant="outline" className="bg-background" onClick={() => navigate(`/preise?subdomain=${status.subdomain}`)}>
+                                    Plan ändern
+                                </Button>
+                                <Button variant="ghost" className="text-destructive hover:bg-destructive/10 ml-auto hover:text-destructive" onClick={handleCancelSubscription} disabled={canceling}>
+                                    {canceling ? <Loader2 className="animate-spin w-4 h-4" /> : 'Kündigen'}
                                 </Button>
                             </CardFooter>
                         </Card>
 
+                        {/* Hilfe Karte */}
                         <Card>
-                            <CardHeader><CardTitle>Hilfe</CardTitle></CardHeader>
+                            <CardHeader>
+                                <CardTitle>Hilfe</CardTitle>
+                            </CardHeader>
                             <CardContent className="text-sm text-muted-foreground space-y-4">
-                                <p>Fragen zur Abrechnung? Wir helfen dir gerne.</p>
-                                <div className="flex items-center gap-2"><Check className="w-4 h-4 text-green-500" /> Support: {status?.plan === 'enterprise' ? 'Priority' : 'Standard'}</div>
+                                <p>Fragen zur Abrechnung? Wir helfen dir gerne weiter.</p>
+                                <div className="flex items-center gap-2">
+                                    <Check className="w-4 h-4 text-green-500" />
+                                    <span>Support: <strong>{status?.plan === 'enterprise' ? 'Priority' : 'Standard'}</strong></span>
+                                </div>
                             </CardContent>
                             <CardFooter>
-                                <Button className="w-full" variant="secondary" onClick={() => navigate('/kontakt')}>Kontakt</Button>
+                                <Button className="w-full" variant="secondary" onClick={() => navigate('/kontakt')}>Kontakt aufnehmen</Button>
                             </CardFooter>
                         </Card>
                     </div>
