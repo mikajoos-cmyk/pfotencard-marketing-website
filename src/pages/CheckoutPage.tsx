@@ -1,10 +1,12 @@
+// src/pages/CheckoutPage.tsx
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { API_BASE_URL } from '@/lib/api';
-import { Loader2, ShieldCheck } from 'lucide-react';
+import { Loader2, ShieldCheck, CheckCircle2, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
@@ -17,28 +19,17 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
         if (!stripe || !elements) return;
 
         setIsProcessing(true);
+        const returnUrl = `${window.location.origin}/einstellungen?subscription_success=true`;
 
-        const returnUrl = `https://pfotencard.de/settings`;
-
-        const isSetupIntent = clientSecret.startsWith('seti_');
-
-        const { error } = isSetupIntent
-            ? await stripe.confirmSetup({
-                elements,
-                confirmParams: {
-                    return_url: returnUrl,
-                },
-            })
-            : await stripe.confirmPayment({
-                elements,
-                confirmParams: {
-                    return_url: returnUrl,
-                },
-            });
+        const { error } = await stripe.confirmPayment({
+            elements,
+            confirmParams: {
+                return_url: returnUrl,
+            },
+        });
 
         if (error) {
             setErrorMessage(error.message || "Ein Fehler ist aufgetreten.");
@@ -54,16 +45,16 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
                     {errorMessage}
                 </div>
             )}
-            <button
+            <Button
                 disabled={isProcessing || !stripe || !elements}
-                className="w-full bg-primary text-primary-foreground py-3 rounded-lg font-bold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg"
+                className="w-full h-12 text-base shadow-lg"
             >
                 {isProcessing ? (
-                    <><Loader2 className="h-5 w-5 animate-spin" /> Verarbeitung...</>
+                    <><Loader2 className="h-5 w-5 animate-spin mr-2" /> Verarbeitung...</>
                 ) : (
-                    "Abonnement starten"
+                    "Zahlung bestätigen"
                 )}
-            </button>
+            </Button>
         </form>
     );
 }
@@ -76,7 +67,8 @@ export function CheckoutPage() {
     const subdomain = localStorage.getItem('pfotencard_subdomain');
 
     const [clientSecret, setClientSecret] = useState<string | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'payment_needed'>('loading');
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     useEffect(() => {
         if (!subdomain) {
@@ -104,17 +96,22 @@ export function CheckoutPage() {
                 }
 
                 const data = await res.json();
+
+                // Fall 1: Zahlung erforderlich (Client Secret vorhanden)
                 if (data.clientSecret) {
                     setClientSecret(data.clientSecret);
-                } else if (data.status === 'updated') {
-                    // Sofortiger Erfolg bei Plan-Wechsel ohne direkte Kosten
-                    navigate('/settings?subscription_success=true');
+                    setStatus('payment_needed');
+                }
+                // Fall 2: Keine Zahlung erforderlich (z.B. hinterlegte Karte erfolgreich belastet oder 0€)
+                else if (data.status === 'updated' || data.status === 'created') {
+                    setStatus('success');
                 } else {
-                    throw new Error("Kein Client Secret erhalten");
+                    throw new Error("Unerwarteter Status von Stripe");
                 }
             } catch (e: any) {
                 console.error(e);
-                setError(e.message || "Ein Fehler ist aufgetreten.");
+                setStatus('error');
+                setErrorMsg(e.message || "Ein Fehler ist aufgetreten.");
             }
         }
         initPayment();
@@ -122,9 +119,7 @@ export function CheckoutPage() {
 
     const appearance = {
         theme: 'stripe' as const,
-        variables: {
-            colorPrimary: '#22c55e',
-        },
+        variables: { colorPrimary: '#22c55e' },
     };
 
     return (
@@ -136,43 +131,68 @@ export function CheckoutPage() {
                 >
                     <Card className="border-2 border-primary/20 shadow-xl overflow-hidden">
                         <CardHeader className="bg-muted/30 border-b text-center">
-                            <CardTitle>Zahlungsinformationen</CardTitle>
+                            <CardTitle>
+                                {status === 'success' ? "Erfolgreich!" : "Checkout"}
+                            </CardTitle>
                             <CardDescription>
-                                {clientSecret ? "Sicherer Checkout via Stripe" : "Lade Checkout..."}
+                                {status === 'success'
+                                    ? "Dein Abo wurde aktualisiert."
+                                    : `Pfotencard ${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`}
                             </CardDescription>
                         </CardHeader>
+
                         <CardContent className="pt-8 pb-8">
-                            {error ? (
-                                <div className="text-center space-y-4">
-                                    <p className="text-red-500 font-medium">{error}</p>
-                                    <button
-                                        onClick={() => window.location.reload()}
-                                        className="text-primary underline text-sm"
-                                    >
-                                        Erneut versuchen
-                                    </button>
-                                </div>
-                            ) : clientSecret ? (
-                                <Elements
-                                    stripe={stripePromise}
-                                    options={{
-                                        clientSecret,
-                                        appearance,
-                                        locale: 'de'
-                                    }}
-                                >
-                                    <CheckoutForm clientSecret={clientSecret} />
-                                </Elements>
-                            ) : (
+                            {status === 'loading' && (
                                 <div className="flex flex-col items-center justify-center gap-6 py-8">
                                     <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                        <ShieldCheck className="w-5 h-5 text-green-600" />
-                                        <span>Sichere SSL-Verschlüsselung via Stripe.</span>
-                                    </div>
+                                    <p className="text-muted-foreground text-sm">Verbindung zu Stripe...</p>
                                 </div>
                             )}
+
+                            {status === 'error' && (
+                                <div className="text-center space-y-4">
+                                    <p className="text-red-500 font-medium">{errorMsg}</p>
+                                    <Button variant="outline" onClick={() => window.location.reload()}>
+                                        Erneut versuchen
+                                    </Button>
+                                </div>
+                            )}
+
+                            {status === 'success' && (
+                                <div className="text-center space-y-6 animate-in zoom-in-95 duration-300">
+                                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                                        <CheckCircle2 className="w-10 h-10 text-green-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-lg text-foreground">Alles erledigt!</h3>
+                                        <p className="text-muted-foreground text-sm mt-2">
+                                            Vielen Dank. Dein Abo ist jetzt aktiv.
+                                        </p>
+                                    </div>
+                                    <Button
+                                        className="w-full gap-2"
+                                        onClick={() => navigate('/einstellungen')}
+                                    >
+                                        Zu den Einstellungen <ArrowRight className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            )}
+
+                            {status === 'payment_needed' && clientSecret && (
+                                <Elements stripe={stripePromise} options={{ clientSecret, appearance, locale: 'de' }}>
+                                    <CheckoutForm clientSecret={clientSecret} />
+                                </Elements>
+                            )}
                         </CardContent>
+
+                        {status === 'payment_needed' && (
+                            <CardFooter className="bg-muted/10 border-t py-4 justify-center">
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <ShieldCheck className="w-4 h-4 text-green-600" />
+                                    <span>Verschlüsselte Zahlung via Stripe</span>
+                                </div>
+                            </CardFooter>
+                        )}
                     </Card>
                 </motion.div>
             </div>

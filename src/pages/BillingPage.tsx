@@ -1,11 +1,10 @@
 // src/pages/BillingPage.tsx
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { checkTenantStatus, API_BASE_URL } from '@/lib/api';
-import { CreditCard, Calendar, Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info } from 'lucide-react';
+import { CreditCard, Calendar, Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PricingTableSection } from '@/components/pricing/PricingTableSection';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,37 +12,20 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 export function BillingPage() {
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState<any>(null);
-    const [subDetails, setSubDetails] = useState<any>(null);
     const [canceling, setCanceling] = useState(false);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
     const navigate = useNavigate();
     const { toast } = useToast();
 
-    // Funktion zum Laden der Daten (ausgelagert, um nach Aktionen neu zu laden)
     const fetchBillingData = async () => {
         try {
             setLoading(true);
             const subdomain = localStorage.getItem('pfotencard_subdomain');
             if (!subdomain) throw new Error("Keine Subdomain");
 
-            // 1. Basis-Status laden - JETZT MIT DB STATUS
+            // Wir holen ALLES aus dem Status-Endpoint (Single Source of Truth aus DB)
             const configStatus = await checkTenantStatus(subdomain);
             setStatus(configStatus);
-
-            // 2. Stripe Details laden (optional für Next Payment Info)
-            const token = localStorage.getItem('pfotencard_token');
-            if (token) {
-                const detailsRes = await fetch(`${API_BASE_URL}/api/stripe/details?t=${Date.now()}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'x-tenant-subdomain': subdomain
-                    }
-                });
-                if (detailsRes.ok) {
-                    const details = await detailsRes.json();
-                    setSubDetails(details);
-                }
-            }
         } catch (e) {
             console.error(e);
             navigate('/anmelden');
@@ -57,28 +39,20 @@ export function BillingPage() {
     }, [navigate]);
 
     const handleCancelSubscription = async () => {
-        if (!confirm("Möchtest du dein Abo wirklich zum Laufzeitende kündigen? Dein Zugang bleibt bis zum Ende des Zeitraums erhalten.")) return;
-
+        if (!confirm("Möchtest du dein Abo wirklich zum Laufzeitende kündigen?")) return;
         setCanceling(true);
-        const token = localStorage.getItem('pfotencard_token');
-        const subdomain = localStorage.getItem('pfotencard_subdomain');
-
         try {
+            const token = localStorage.getItem('pfotencard_token');
+            const subdomain = localStorage.getItem('pfotencard_subdomain');
             const res = await fetch(`${API_BASE_URL}/api/stripe/cancel`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'x-tenant-subdomain': subdomain || ''
-                }
+                headers: { 'Authorization': `Bearer ${token}`, 'x-tenant-subdomain': subdomain || '' }
             });
-            if (!res.ok) throw new Error("Konnte Abo nicht kündigen");
-
-            toast({ title: "Kündigung vorgemerkt", description: "Dein Abo läuft zum Ende des Zeitraums aus." });
-
-            // Daten neu laden, um UI zu aktualisieren
-            await fetchBillingData();
+            if (!res.ok) throw new Error("Fehler");
+            toast({ title: "Gekündigt", description: "Dein Abo läuft zum Ende des Zeitraums aus." });
+            await fetchBillingData(); // Neu laden um Status zu aktualisieren
         } catch (e) {
-            toast({ variant: "destructive", title: "Fehler", description: "Die Kündigung konnte nicht verarbeitet werden." });
+            toast({ variant: "destructive", title: "Fehler", description: "Konnte nicht kündigen." });
         } finally {
             setCanceling(false);
         }
@@ -87,17 +61,15 @@ export function BillingPage() {
     const openCustomerPortal = async () => {
         const token = localStorage.getItem('pfotencard_token');
         const subdomain = localStorage.getItem('pfotencard_subdomain');
-
         try {
             const res = await fetch(`${API_BASE_URL}/api/stripe/portal?return_url=${window.location.href}`, {
                 headers: { 'Authorization': `Bearer ${token}`, 'x-tenant-subdomain': subdomain || '' }
             });
-            if (!res.ok) throw new Error("Portal konnte nicht geladen werden");
-
+            if (!res.ok) throw new Error("Portal Fehler");
             const data = await res.json();
             if (data.url) window.location.href = data.url;
         } catch (e) {
-            toast({ variant: "destructive", title: "Fehler", description: "Kundenportal konnte nicht geöffnet werden." });
+            toast({ variant: "destructive", title: "Fehler", description: "Portal konnte nicht geöffnet werden." });
         }
     };
 
@@ -105,24 +77,14 @@ export function BillingPage() {
 
     const subscriptionEnd = status?.subscription_ends_at ? new Date(status.subscription_ends_at) : new Date();
     const nextBillingDate = subscriptionEnd.toLocaleDateString('de-DE');
-    const isTrial = status?.in_trial;
-    const hasPayment = status?.has_payment_method;
 
-    // Prüfen ob gekündigt: Jetzt direkt aus der DB-Status-Antwort!
-    // Falls status.cancel_at_period_end true ist ODER der Status 'canceled' ist.
+    // Status Flags
     const isCancelled = status?.cancel_at_period_end === true || status?.stripe_subscription_status === 'canceled';
-
-    // Bedingung für Pricing Table:
-    // 1. Keine Zahlungsmethode (ganz neu)
-    // 2. Im Trial (noch nicht gezahlt)
-    // 3. Gekündigt (läuft aus -> muss neu wählen um zu bleiben)
-    const showPricing = !hasPayment || isTrial || isCancelled;
+    const isPendingSwitch = !!status?.upcoming_plan && status.upcoming_plan !== status.plan;
+    const showPricing = !status?.has_payment_method || status?.in_trial || isCancelled;
 
     const planName = status?.plan ? status.plan.charAt(0).toUpperCase() + status.plan.slice(1) : 'Starter';
-
-    const handleSelectPlan = (plan: string) => {
-        navigate(`/checkout?plan=${plan.toLowerCase()}&cycle=${billingCycle}`);
-    };
+    const upcomingPlanName = status?.upcoming_plan ? status.upcoming_plan.charAt(0).toUpperCase() + status.upcoming_plan.slice(1) : '';
 
     return (
         <main className="pt-24 pb-12 bg-background min-h-screen">
@@ -130,67 +92,61 @@ export function BillingPage() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                     <div>
                         <h1 className="text-3xl font-sans font-bold text-foreground mb-2">Abo & Zahlungen</h1>
-                        <p className="text-muted-foreground">Verwalte dein Abonnement und lade Rechnungen direkt via Stripe herunter.</p>
+                        <p className="text-muted-foreground">Verwalte dein Abonnement und lade Rechnungen herunter.</p>
                     </div>
                     <Button variant="outline" onClick={() => navigate('/einstellungen')}>Zurück zu Einstellungen</Button>
                 </div>
 
-                {/* Warnung bei Kündigung */}
+                {/* 1. Kündigungs-Warnung */}
                 {isCancelled && status?.subscription_ends_at && (
-                    <div className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-lg mb-6 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                    <div className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-lg mb-6 flex items-center gap-3">
                         <Info className="w-5 h-5" />
                         <div>
                             <strong>Dein Abo ist gekündigt.</strong>
-                            <p className="text-sm">Du hast noch Zugriff bis zum {new Date(status.subscription_ends_at).toLocaleDateString()}. Wähle unten einen Plan, um dein Abo unterbrechungsfrei zu reaktivieren.</p>
+                            <p className="text-sm">Zugriff bis {nextBillingDate}. Wähle unten einen Plan zur Reaktivierung.</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* 2. Wechsel-Info (Downgrade/Upgrade pending) */}
+                {isPendingSwitch && !isCancelled && (
+                    <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-6 flex items-center gap-3">
+                        <Info className="w-5 h-5" />
+                        <div>
+                            <strong>Plan-Wechsel vorgemerkt</strong>
+                            <div className="flex items-center gap-2 mt-1 text-sm">
+                                <span>Aktuell: <b>{planName}</b></span>
+                                <ArrowRight className="w-4 h-4" />
+                                <span>Ab {nextBillingDate}: <b>{upcomingPlanName}</b></span>
+                            </div>
                         </div>
                     </div>
                 )}
 
                 {showPricing ? (
                     <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
-                        {isTrial && (
-                            <Card className="border-blue-200 bg-blue-50/50">
-                                <CardHeader className="py-4">
-                                    <div className="flex items-center gap-3 text-blue-800">
-                                        <div className="bg-blue-100 p-2 rounded-full">
-                                            <Info className="w-5 h-5" />
-                                        </div>
-                                        <div>
-                                            <CardTitle className="text-lg">Kostenlose Testphase aktiv</CardTitle>
-                                            <CardDescription className="text-blue-700/80">
-                                                Du nutzt aktuell alle Enterprise-Features kostenlos. Hinterlege eine Zahlungsmethode, um PfotenCard nach dem {nextBillingDate} unterbrechungsfrei weiterzunutzen.
-                                            </CardDescription>
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                            </Card>
-                        )}
-
                         <div className="flex justify-center">
                             <Tabs value={billingCycle} onValueChange={(v) => setBillingCycle(v as any)} className="w-full max-w-[400px]">
                                 <TabsList className="grid w-full grid-cols-2">
                                     <TabsTrigger value="monthly">Monatlich</TabsTrigger>
-                                    <TabsTrigger value="yearly">Jährlich (-10%)</TabsTrigger>
+                                    <TabsTrigger value="yearly">Jährlich</TabsTrigger>
                                 </TabsList>
                             </Tabs>
                         </div>
-
                         <PricingTableSection
                             billingCycle={billingCycle}
-                            onSelectPlan={handleSelectPlan}
+                            onSelectPlan={(p) => navigate(`/checkout?plan=${p.toLowerCase()}&cycle=${billingCycle}`)}
                             isUpgradeMode={true}
                             currentPlan={status?.plan}
                         />
-
                         <div className="flex justify-center mt-4">
-                            <Button variant="ghost" onClick={openCustomerPortal} className="text-muted-foreground hover:text-foreground">
-                                <ExternalLink className="w-4 h-4 mr-2" /> Rechnungen & Zahlungsmethoden verwalten
+                            <Button variant="ghost" onClick={openCustomerPortal}>
+                                <ExternalLink className="w-4 h-4 mr-2" /> Rechnungen verwalten
                             </Button>
                         </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        {/* Aktueller Plan */}
                         <Card className="md:col-span-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 shadow-md">
                             <CardHeader className="pb-2">
                                 <div className="flex justify-between items-start">
@@ -199,7 +155,6 @@ export function BillingPage() {
                                         Aktiv
                                     </div>
                                 </div>
-                                <CardDescription>Aktueller Plan und Laufzeit</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <div className="flex items-center gap-4 mb-4">
@@ -207,30 +162,28 @@ export function BillingPage() {
                                 </div>
 
                                 {/* NÄCHSTE ZAHLUNG INFO */}
-                                {subDetails?.next_payment_date && (
-                                    <div className="bg-white/50 p-3 rounded border border-primary/10 mb-4">
-                                        <p className="text-sm text-muted-foreground font-medium">Nächste Zahlung:</p>
-                                        <div className="flex items-baseline gap-2 mt-1">
-                                            <span className="text-lg font-bold text-primary">
-                                                {subDetails.next_payment_amount?.toFixed(2)} €
+                                {status?.next_payment_date && (
+                                    <div className="bg-white/60 p-4 rounded border border-border mb-4">
+                                        <p className="text-sm text-muted-foreground font-medium mb-1">Nächste Abrechnung:</p>
+                                        <div className="flex items-baseline gap-2">
+                                            <span className="text-xl font-bold text-foreground">
+                                                {status.next_payment_amount?.toFixed(2)} €
                                             </span>
-                                            <span className="text-sm">
-                                                am {new Date(subDetails.next_payment_date).toLocaleDateString((navigator.language || 'de-DE'))}
+                                            <span className="text-sm text-muted-foreground">
+                                                am {new Date(status.next_payment_date).toLocaleDateString('de-DE')}
                                             </span>
                                         </div>
+                                        {isPendingSwitch && (
+                                            <p className="text-xs text-blue-600 mt-1">
+                                                (inkl. Wechsel zu {upcomingPlanName})
+                                            </p>
+                                        )}
                                     </div>
                                 )}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                                    <div className="flex items-center gap-2">
-                                        <Calendar className="w-4 h-4 text-muted-foreground" />
-                                        <span className="text-muted-foreground">Abo gültig bis:</span>
-                                        <span className="font-medium">{nextBillingDate}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <CreditCard className="w-4 h-4 text-muted-foreground" />
-                                        <span className="text-muted-foreground">Status:</span>
-                                        <span className="font-medium">{status?.stripe_subscription_status || 'Aktiv'}</span>
-                                    </div>
+
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <CreditCard className="w-4 h-4" />
+                                    <span>Zahlungsmethode hinterlegt</span>
                                 </div>
                             </CardContent>
                             <CardFooter className="gap-2 border-t pt-4">
@@ -238,46 +191,24 @@ export function BillingPage() {
                                     <ExternalLink className="w-4 h-4" /> Rechnungen
                                 </Button>
                                 <Button variant="outline" onClick={() => navigate(`/preise?subdomain=${status.subdomain}`)}>Plan ändern</Button>
-                                <Button
-                                    variant="ghost"
-                                    className="text-destructive hover:bg-destructive/10 hover:text-destructive ml-auto"
-                                    onClick={handleCancelSubscription}
-                                    disabled={canceling}
-                                >
-                                    {canceling ? <Loader2 className="animate-spin mr-2" /> : 'Abo kündigen'}
+                                <Button variant="ghost" className="text-destructive hover:bg-destructive/10 ml-auto" onClick={handleCancelSubscription} disabled={canceling}>
+                                    {canceling ? <Loader2 className="animate-spin" /> : 'Kündigen'}
                                 </Button>
                             </CardFooter>
                         </Card>
 
-                        {/* Support Card */}
                         <Card>
-                            <CardHeader>
-                                <CardTitle>Hilfe & Support</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <p className="text-sm text-muted-foreground">Fragen zur Abrechnung? Unser Team hilft dir gerne weiter.</p>
-                                <div className="flex items-center gap-2 text-sm">
-                                    <Check className="w-4 h-4 text-green-500" />
-                                    <span>Support-Level: {status?.plan === 'enterprise' ? 'Priority' : 'Standard'}</span>
-                                </div>
+                            <CardHeader><CardTitle>Hilfe</CardTitle></CardHeader>
+                            <CardContent className="text-sm text-muted-foreground space-y-4">
+                                <p>Fragen zur Abrechnung? Wir helfen dir gerne.</p>
+                                <div className="flex items-center gap-2"><Check className="w-4 h-4 text-green-500" /> Support: {status?.plan === 'enterprise' ? 'Priority' : 'Standard'}</div>
                             </CardContent>
                             <CardFooter>
-                                <Button className="w-full" variant="secondary" onClick={() => navigate('/kontakt')}>Support kontaktieren</Button>
+                                <Button className="w-full" variant="secondary" onClick={() => navigate('/kontakt')}>Kontakt</Button>
                             </CardFooter>
                         </Card>
                     </div>
                 )}
-
-                {/* Hinweis auf Stripe */}
-                <Card className="bg-muted/30 border-dashed">
-                    <CardContent className="py-6 flex flex-col items-center text-center gap-2">
-                        <ShieldCheckIcon className="w-10 h-10 text-primary/40" />
-                        <h3 className="font-bold">Sicher & PCI-konform</h3>
-                        <p className="text-sm text-muted-foreground max-w-lg">
-                            Deine Zahlungsinformationen werden niemals auf unseren Servern gespeichert. Wir nutzen Stripe für die höchste Sicherheit deiner Daten.
-                        </p>
-                    </CardContent>
-                </Card>
             </div>
         </main>
     );
