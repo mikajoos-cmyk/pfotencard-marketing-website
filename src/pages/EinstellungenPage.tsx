@@ -26,12 +26,9 @@ import {
   Sun,
   Moon,
   Calendar,
-  ShoppingBag,
   Newspaper,
   MessageCircle,
-  FileText,
   Layers,
-  Store,
   Lock, // <-- Hinzufügen
 } from 'lucide-react';
 import React from 'react';
@@ -116,13 +113,13 @@ const AVAILABLE_MODULES: AppModule[] = [
     premiumOnly: true,
     icon: Calendar
   },
-  {
-    id: 'shop',
-    name: 'Online-Shop',
-    description: 'Verkaufe Produkte, Gutscheine und 10er-Karten direkt in der App.',
-    premiumOnly: true,
-    icon: ShoppingBag
-  },
+  // {
+  //   id: 'shop',
+  //   name: 'Online-Shop',
+  //   description: 'Verkaufe Produkte, Gutscheine und 10er-Karten direkt in der App.',
+  //   premiumOnly: true,
+  //   icon: ShoppingBag
+  // },
   {
     id: 'news',
     name: 'News & Updates',
@@ -137,21 +134,21 @@ const AVAILABLE_MODULES: AppModule[] = [
     premiumOnly: true,
     icon: MessageCircle
   },
-  {
-    id: 'documents',
-    name: 'Dokumenten-Center',
-    description: 'Stelle wichtige Unterlagen (AGB, Impfpass-Upload) bereit.',
-    premiumOnly: false,
-    icon: FileText
-  },
-  {
-    id: 'marketplace',
-    name: 'Partner-Marktplatz',
-    description: 'Empfehle Futter & Zubehör und verdiene Provisionen.',
-    premiumOnly: false, // Maybe open for all
-    comingSoon: true,
-    icon: Store
-  }
+  // {
+  //   id: 'documents',
+  //   name: 'Dokumenten-Center',
+  //   description: 'Stelle wichtige Unterlagen (AGB, Impfpass-Upload) bereit.',
+  //   premiumOnly: false,
+  //   icon: FileText
+  // },
+  // {
+  //   id: 'marketplace',
+  //   name: 'Partner-Marktplatz',
+  //   description: 'Empfehle Futter & Zubehör und verdiene Provisionen.',
+  //   premiumOnly: false, // Maybe open for all
+  //   comingSoon: true,
+  //   icon: Store
+  // }
 ];
 
 // Feature Matrix definieren
@@ -933,6 +930,18 @@ export function EinstellungenPage() {
                             </div>
                           );
                         })}
+                      </div>
+
+                      {/* Kontakt Button für weitere Module */}
+                      <div className="mt-8 p-6 border-2 border-dashed border-border rounded-lg bg-muted/30 text-center">
+                        <h3 className="text-lg font-semibold mb-2">Sie brauchen ein anderes Modul?</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Kontaktieren Sie uns für individuelle Lösungen und maßgeschneiderte Module.</p>
+                        <Button
+                          onClick={() => window.location.href = '/kontakt'}
+                          className="bg-primary text-primary-foreground hover:bg-primary/90"
+                        >
+                          Kontaktieren Sie uns
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>

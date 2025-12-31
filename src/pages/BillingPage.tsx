@@ -78,7 +78,7 @@ export function BillingPage() {
             });
             if (!res.ok) throw new Error("Portal Fehler");
             const data = await res.json();
-            if (data.url) window.location.href = data.url;
+            if (data.url) window.open(data.url, '_blank');
         } catch (e) {
             toast({ variant: "destructive", title: "Fehler", description: "Portal konnte nicht geöffnet werden." });
         }
