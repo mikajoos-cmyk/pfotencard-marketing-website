@@ -1,13 +1,7 @@
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Check, X, Info } from 'lucide-react'; // Info Icon hinzugefügt
+import { Check, X, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"; // Tooltip für Details
 
 const plans = [
   {
@@ -18,12 +12,13 @@ const plans = [
     additionalCost: '0,50€ pro weiterem Kunden/Monat',
     features: [
       { name: 'Bis zu 50 aktive Kunden', included: true },
-      { name: 'News & Dokumente Modul', included: true },
+      { name: 'Dokumente Modul', included: true },
       { name: 'Digitale Wertkarten', included: true },
       { name: 'Standard "Pfotencard" Design', included: true },
       { name: 'E-Mail Support', included: true },
       { name: 'White-Label (Dein Branding)', included: false },
-      { name: 'Chat & Shop System', included: false },
+      { name: 'Chat-System', included: false },
+      { name: 'News & Updates', included: false },
       { name: 'Terminbuchung & Kalender', included: false },
     ],
   },
@@ -39,10 +34,9 @@ const plans = [
       { name: 'Alle Starter-Funktionen', included: true },
       { name: 'White-Label (Dein Logo & Farben)', included: true },
       { name: 'Chat-System mit Kunden', included: true },
-      { name: 'Online-Shop Modul', included: true },
+      { name: 'News & Updates Modul', included: true },
       { name: 'Prioritäts-Support', included: true },
       { name: 'Terminbuchung & Kalender', included: false },
-      { name: 'API-Zugang', included: false },
     ],
   },
   {
@@ -56,7 +50,6 @@ const plans = [
       { name: 'Alle Pro-Funktionen', included: true },
       { name: 'Terminbuchung & Kalender', included: true },
       { name: 'Wartelisten-Funktion', included: true },
-      { name: 'API-Zugang & Webhooks', included: true },
       { name: 'Dedizierter Ansprechpartner', included: true },
       { name: 'Individuelle Vertragsanpassung', included: true },
       { name: 'Multi-Standort fähig', included: true },
