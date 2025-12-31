@@ -23,7 +23,7 @@ export function BillingPage() {
             const subdomain = localStorage.getItem('pfotencard_subdomain');
             if (!subdomain) throw new Error("Keine Subdomain");
 
-            // Wir holen ALLES aus dem Status-Endpoint (Single Source of Truth aus DB)
+            // Status aus DB laden (enthält jetzt LIVE Daten nach Stripe-Update)
             const configStatus = await checkTenantStatus(subdomain);
             setStatus(configStatus);
         } catch (e) {
@@ -50,7 +50,7 @@ export function BillingPage() {
             });
             if (!res.ok) throw new Error("Fehler");
             toast({ title: "Gekündigt", description: "Dein Abo läuft zum Ende des Zeitraums aus." });
-            await fetchBillingData(); // Neu laden um Status zu aktualisieren
+            await fetchBillingData();
         } catch (e) {
             toast({ variant: "destructive", title: "Fehler", description: "Konnte nicht kündigen." });
         } finally {
@@ -78,13 +78,25 @@ export function BillingPage() {
     const subscriptionEnd = status?.subscription_ends_at ? new Date(status.subscription_ends_at) : new Date();
     const nextBillingDate = subscriptionEnd.toLocaleDateString('de-DE');
 
-    // Status Flags
+    // --- STATUS FLAGS ---
+    // Gekündigt: Entweder zum Periodenende vorgemerkt ODER Status ist 'canceled'
     const isCancelled = status?.cancel_at_period_end === true || status?.stripe_subscription_status === 'canceled';
-    const isPendingSwitch = !!status?.upcoming_plan && status.upcoming_plan !== status.plan;
-    const showPricing = !status?.has_payment_method || status?.in_trial || isCancelled;
+
+    // Stripe Trial: Echtes Abo, aber noch im Testzeitraum
+    const isStripeTrial = status?.stripe_subscription_status === 'trialing';
+
+    // Registration Trial: Kein Stripe Abo, nur der 14-Tage Start
+    const isRegistrationTrial = status?.in_trial && !status?.has_payment_method;
+
+    // Zahlungsmethode vorhanden?
+    const hasPaymentMethod = status?.has_payment_method;
+
+    // Logik: Zeige Preise (Buchen) WENN:
+    // 1. Kein Zahlungsmittel (Reg Trial)
+    // 2. Gekündigt (Um Reaktivierung zu ermöglichen)
+    const showPricing = !hasPaymentMethod || isCancelled;
 
     const planName = status?.plan ? status.plan.charAt(0).toUpperCase() + status.plan.slice(1) : 'Starter';
-    const upcomingPlanName = status?.upcoming_plan ? status.upcoming_plan.charAt(0).toUpperCase() + status.upcoming_plan.slice(1) : '';
 
     return (
         <main className="pt-24 pb-12 bg-background min-h-screen">
@@ -97,34 +109,35 @@ export function BillingPage() {
                     <Button variant="outline" onClick={() => navigate('/einstellungen')}>Zurück zu Einstellungen</Button>
                 </div>
 
-                {/* 1. Kündigungs-Warnung */}
+                {/* ALERTS */}
                 {isCancelled && status?.subscription_ends_at && (
                     <div className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-lg mb-6 flex items-center gap-3">
                         <Info className="w-5 h-5" />
                         <div>
                             <strong>Dein Abo ist gekündigt.</strong>
-                            <p className="text-sm">Zugriff bis {nextBillingDate}. Wähle unten einen Plan zur Reaktivierung.</p>
+                            <p className="text-sm">Du hast noch Zugriff bis zum {new Date(status.subscription_ends_at).toLocaleDateString()}. Wähle unten einen Plan zur Reaktivierung.</p>
                         </div>
                     </div>
                 )}
 
-                {/* 2. Wechsel-Info (Downgrade/Upgrade pending) */}
-                {isPendingSwitch && !isCancelled && (
+                {isStripeTrial && !isCancelled && (
                     <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-6 flex items-center gap-3">
                         <Info className="w-5 h-5" />
                         <div>
-                            <strong>Plan-Wechsel vorgemerkt</strong>
-                            <div className="flex items-center gap-2 mt-1 text-sm">
-                                <span>Aktuell: <b>{planName}</b></span>
-                                <ArrowRight className="w-4 h-4" />
-                                <span>Ab {nextBillingDate}: <b>{upcomingPlanName}</b></span>
-                            </div>
+                            <strong>Kostenlose Testphase aktiv.</strong>
+                            <p className="text-sm">Erste Abbuchung ({status?.next_payment_amount?.toFixed(2)}€) erfolgt am {nextBillingDate}.</p>
                         </div>
                     </div>
                 )}
 
                 {showPricing ? (
                     <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                        {isRegistrationTrial && (
+                            <div className="text-center mb-4 p-4 bg-muted/30 rounded-lg">
+                                <p className="font-medium">Deine 14-tägige Testphase läuft.</p>
+                                <p className="text-sm text-muted-foreground">Wähle jetzt einen Plan, um Pfotencard danach weiterzunutzen.</p>
+                            </div>
+                        )}
                         <div className="flex justify-center">
                             <Tabs value={billingCycle} onValueChange={(v) => setBillingCycle(v as any)} className="w-full max-w-[400px]">
                                 <TabsList className="grid w-full grid-cols-2">
@@ -139,11 +152,13 @@ export function BillingPage() {
                             isUpgradeMode={true}
                             currentPlan={status?.plan}
                         />
-                        <div className="flex justify-center mt-4">
-                            <Button variant="ghost" onClick={openCustomerPortal}>
-                                <ExternalLink className="w-4 h-4 mr-2" /> Rechnungen verwalten
-                            </Button>
-                        </div>
+                        {hasPaymentMethod && (
+                            <div className="flex justify-center mt-4">
+                                <Button variant="ghost" onClick={openCustomerPortal}>
+                                    <ExternalLink className="w-4 h-4 mr-2" /> Rechnungen verwalten
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -152,7 +167,7 @@ export function BillingPage() {
                                 <div className="flex justify-between items-start">
                                     <CardTitle>Mein Abonnement</CardTitle>
                                     <div className="bg-primary text-primary-foreground text-xs font-bold px-2 py-1 rounded uppercase tracking-wide">
-                                        Aktiv
+                                        {status.stripe_subscription_status === 'trialing' ? 'Testphase' : 'Aktiv'}
                                     </div>
                                 </div>
                             </CardHeader>
@@ -173,11 +188,6 @@ export function BillingPage() {
                                                 am {new Date(status.next_payment_date).toLocaleDateString('de-DE')}
                                             </span>
                                         </div>
-                                        {isPendingSwitch && (
-                                            <p className="text-xs text-blue-600 mt-1">
-                                                (inkl. Wechsel zu {upcomingPlanName})
-                                            </p>
-                                        )}
                                     </div>
                                 )}
 
