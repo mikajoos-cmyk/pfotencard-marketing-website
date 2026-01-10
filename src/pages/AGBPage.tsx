@@ -79,6 +79,8 @@ export function AGBPage() {
                 (2) Bei leichter Fahrlässigkeit haftet der Anbieter nur bei Verletzung wesentlicher Vertragspflichten (Kardinalpflichten), begrenzt auf den vertragstypischen Schaden.
                 <br />
                 (3) Für den Verlust von Daten haftet der Anbieter nur, soweit der Schaden auch bei ordnungsgemäßer Datensicherung durch den Kunden (Export-Funktion) entstanden wäre.
+                <br />
+                (4) Die verschuldensunabhängige Haftung des Anbieters auf Schadensersatz für bei Vertragsschluss vorhandene Mängel gemäß § 536a Abs. 1 Alt. 1 BGB wird ausgeschlossen.
               </p>
             </section>
 
