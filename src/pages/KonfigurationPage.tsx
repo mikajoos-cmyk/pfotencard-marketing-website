@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,11 +30,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { 
-  Save, 
-  Upload, 
-  Plus, 
-  Pencil, 
+import {
+  Save,
+  Upload,
+  Plus,
+  Pencil,
   Trash2,
   ExternalLink,
   Smartphone,
@@ -252,11 +253,11 @@ export function KonfigurationPage() {
       levels: config.levels.map((l) =>
         l.id === levelId
           ? {
-              ...l,
-              requirements: l.requirements.map((r) =>
-                r.id === requirementId ? { ...r, quantity } : r
-              ),
-            }
+            ...l,
+            requirements: l.requirements.map((r) =>
+              r.id === requirementId ? { ...r, quantity } : r
+            ),
+          }
           : l
       ),
     });
@@ -308,7 +309,7 @@ export function KonfigurationPage() {
               </div>
               <div className="space-y-3">
                 <Input placeholder="E-Mail" className="h-12" />
-                <Input type="password" placeholder="Passwort" className="h-12" />
+                <PasswordInput placeholder="Passwort" className="h-12" />
                 <Button
                   className="w-full h-12 text-base"
                   style={{ backgroundColor: config.primaryColor, color: 'white' }}
@@ -453,13 +454,12 @@ export function KonfigurationPage() {
                 return (
                   <Card
                     key={level.id}
-                    className={`${
-                      isCurrent
+                    className={`${isCurrent
                         ? 'border-2'
                         : isLocked
-                        ? 'opacity-60'
-                        : ''
-                    }`}
+                          ? 'opacity-60'
+                          : ''
+                      }`}
                     style={isCurrent ? { borderColor: config.primaryColor } : {}}
                   >
                     <CardContent className="p-4">
@@ -638,11 +638,10 @@ export function KonfigurationPage() {
                       <Label>Logo</Label>
                       <div
                         onClick={handleLogoUpload}
-                        className={`mt-2 border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-                          hasLogo
+                        className={`mt-2 border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${hasLogo
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:border-primary hover:bg-muted'
-                        }`}
+                          }`}
                       >
                         {hasLogo ? (
                           <div className="flex flex-col items-center gap-2">
@@ -869,11 +868,10 @@ export function KonfigurationPage() {
                         </Label>
                         <div
                           onClick={() => handleUploadBadge(level.id)}
-                          className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
-                            level.badgeImage
+                          className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${level.badgeImage
                               ? 'border-primary bg-primary/5'
                               : 'border-border hover:border-primary hover:bg-muted'
-                          }`}
+                            }`}
                         >
                           {level.badgeImage ? (
                             <div className="flex items-center justify-center gap-2">

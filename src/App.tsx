@@ -19,6 +19,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from './components/ui/toaster';
 import { checkTenantStatus } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
+import { CookieBanner } from '@/components/ui/CookieBanner';
 
 // Erweiterte ProtectedRoute mit Abo-Check
 function ProtectedRoute({ children }: { children: JSX.Element }) {
@@ -134,6 +135,7 @@ function AppContent() {
       </div>
       <Footer />
       <Toaster />
+      <CookieBanner />
     </div>
   );
 }

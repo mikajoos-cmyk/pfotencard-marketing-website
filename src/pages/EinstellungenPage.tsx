@@ -178,6 +178,7 @@ export function EinstellungenPage() {
   const [currentPlan, setCurrentPlan] = useState<PlanType>('starter'); // Default
 
   const [schoolName, setSchoolName] = useState('');
+  const [supportEmail, setSupportEmail] = useState('');
   const [subdomain, setSubdomain] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#22C55E'); // Button Farbe
   const [secondaryColor, setSecondaryColor] = useState('#3B82F6');
@@ -331,6 +332,7 @@ export function EinstellungenPage() {
         const t = config.tenant;
 
         setSchoolName(t.name);
+        setSupportEmail(t.support_email || '');
         setSubdomain(t.subdomain);
 
         // Plan setzen (Fallback auf 'starter' wenn leer, 'verband' mappen auf enterprise falls nötig)
@@ -410,6 +412,7 @@ export function EinstellungenPage() {
 
       const payload = {
         school_name: schoolName,
+        support_email: supportEmail,
         subdomain: subdomain,
         primary_color: customPrimaryColor || primaryColor,
         secondary_color: customSecondaryColor || secondaryColor,
@@ -694,6 +697,23 @@ export function EinstellungenPage() {
                     <CardHeader><CardTitle>Basis-Daten</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
                       <div><Label>Name der Hundeschule</Label><Input value={schoolName} onChange={(e) => setSchoolName(e.target.value)} className="mt-2" /></div>
+
+                      <div className="space-y-2 py-4 border-t border-border mt-4">
+                        <h3 className="text-sm font-semibold text-foreground">Support-Einstellungen</h3>
+                        <div className="grid gap-1.5">
+                          <Label htmlFor="support_email">Support-E-Mail für deine Kunden</Label>
+                          <Input
+                            id="support_email"
+                            type="email"
+                            placeholder="support@deine-hundeschule.de"
+                            value={supportEmail}
+                            onChange={(e) => setSupportEmail(e.target.value)}
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            Diese Adresse wird deinen Kunden in der App angezeigt, wenn sie Hilfe benötigen.
+                          </p>
+                        </div>
+                      </div>
                       <div><Label>Subdomain</Label><div className="flex items-center gap-2 mt-2"><Input value={subdomain} disabled className="bg-muted text-muted-foreground" /><span className="text-muted-foreground text-sm">.pfotencard.de</span></div></div>
                     </CardContent>
                   </Card>

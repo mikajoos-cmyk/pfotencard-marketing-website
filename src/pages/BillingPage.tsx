@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { checkTenantStatus, API_BASE_URL, fetchInvoices, type Invoice } from '@/lib/api';
-import { CreditCard, Calendar, Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText } from 'lucide-react';
+import { Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText, FileCheck, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PricingTableSection } from '@/components/pricing/PricingTableSection';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,8 +16,50 @@ export function BillingPage() {
     const [canceling, setCanceling] = useState(false);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
     const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [acceptingAvv, setAcceptingAvv] = useState(false);
+    const [latestAvvVersion, setLatestAvvVersion] = useState("1.0");
     const navigate = useNavigate();
     const { toast } = useToast();
+
+    const getAvvFilename = (version: string) => {
+        if (!version || typeof version !== 'string') return '/AVV_Pfotencard_v1_0.pdf';
+        // Formatiert "1.0" zu "1_0" für den Dateinamen
+        const vPart = version.replace('.', '_');
+        return `/AVV_Pfotencard_v${vPart}.pdf`;
+    };
+
+    // Sucht automatisch nach der neuesten Version (probt v1.0, v1.1, v1.2...)
+    const detectLatestAvv = async () => {
+        let major = 1;
+        let minor = 0;
+        let lastValid = "1.0";
+
+        // Wir proben bis zu 10 Minor-Versionen in die Zukunft
+        try {
+            for (let i = 0; i < 10; i++) {
+                const version = `${major}.${minor + i}`;
+                console.log("Checking version", version);
+                const url = getAvvFilename(version);
+                console.log("Checking URL", url);
+                const res = await fetch(url, { method: 'HEAD' });
+                console.log("Response", res);
+
+                // WICHTIG: Prüfen ob es wirklich ein PDF ist (und nicht die index.html vom SPA Fallback)
+                const contentType = res.headers.get('content-type');
+                const isPdf = contentType && contentType.includes('application/pdf');
+
+                if (res.ok && isPdf) {
+                    lastValid = version;
+                } else if (i > 0) {
+                    // Wenn wir eine Lücke finden, hören wir auf (v1.0 exists, v1.1 exists, v1.2 doesn't -> 1.1 is latest)
+                    break;
+                }
+            }
+            setLatestAvvVersion(lastValid);
+        } catch (e) {
+            console.error("Fehler bei AVV Erkennung", e);
+        }
+    };
 
     const fetchBillingData = async () => {
         try {
@@ -25,10 +67,14 @@ export function BillingPage() {
             const subdomain = localStorage.getItem('pfotencard_subdomain');
             if (!subdomain) throw new Error("Keine Subdomain");
 
-            const configStatus = await checkTenantStatus(subdomain);
+            // AVV Check parallel starten, damit latestAvvVersion frühzeitig gesetzt wird
+            const avvPromise = detectLatestAvv();
+            const statusPromise = checkTenantStatus(subdomain);
+
+            const [_, configStatus] = await Promise.all([avvPromise, statusPromise]);
             setStatus(configStatus);
 
-            // Rechnungen laden, wenn Abo existiert
+            // Rechnungen laden...
             if (configStatus.has_payment_method || configStatus.stripe_subscription_status) {
                 try {
                     const invoiceData = await fetchInvoices();
@@ -81,6 +127,32 @@ export function BillingPage() {
             if (data.url) window.open(data.url, '_blank');
         } catch (e) {
             toast({ variant: "destructive", title: "Fehler", description: "Portal konnte nicht geöffnet werden." });
+        }
+    };
+
+    const handleAcceptAVV = async () => {
+        if (!confirm("Hiermit schließen Sie den Vertrag zur Auftragsverarbeitung (AVV) verbindlich ab.")) return;
+        setAcceptingAvv(true);
+        try {
+            const token = localStorage.getItem('pfotencard_token');
+            const subdomain = localStorage.getItem('pfotencard_subdomain');
+            const res = await fetch(`${API_BASE_URL}/api/legal/avv/accept`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'x-tenant-subdomain': subdomain || '',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ version: latestAvvVersion })
+            });
+            if (!res.ok) throw new Error("Fehler beim Speichern");
+
+            toast({ title: "AVV unterzeichnet", description: "Der Status wurde erfolgreich gespeichert." });
+            await fetchBillingData(); // Status neu laden
+        } catch (e) {
+            toast({ variant: "destructive", title: "Fehler", description: "Konnte AVV nicht speichern." });
+        } finally {
+            setAcceptingAvv(false);
         }
     };
 
@@ -282,6 +354,53 @@ export function BillingPage() {
                                 </CardFooter>
                             </Card>
                         </div>
+
+                        {/* --- AVV / DATENSCHUTZ KARTE --- */}
+                        <Card className="mb-8 border-blue-100 bg-blue-50/50">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-blue-900">
+                                    <Shield className="w-5 h-5" /> Auftragsverarbeitung (AVV)
+                                </CardTitle>
+                                <CardDescription>
+                                    Als Hundeschule verarbeitest du personenbezogene Daten. Nach Art. 28 DSGVO benötigst du hierfür einen Vertrag mit uns.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {status?.avv_accepted_at ? (
+                                    <div className="flex items-center gap-3 text-green-700 bg-green-50 p-3 rounded-md border border-green-200">
+                                        <FileCheck className="w-5 h-5" />
+                                        <div>
+                                            <strong>Vertrag aktiv</strong>
+                                            <p className="text-sm">Akzeptiert am {new Date(status.avv_accepted_at).toLocaleDateString()} (Version {status.avv_version})</p>
+                                        </div>
+                                        <Button variant="ghost" size="sm" className="ml-auto text-green-800 hover:text-green-900 hover:bg-green-100" asChild>
+                                            <a href={getAvvFilename(status.avv_version || "1.0")} target="_blank">Auftragsverarbeitungsvertrag (AVV) v{status.avv_version || "1.0"} ansehen</a>
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div className="bg-white p-4 rounded border text-sm">
+                                            <p className="mb-2">Bitte lade den Vertrag herunter, lies ihn durch und bestätige ihn hier digital.</p>
+                                            <a href={getAvvFilename(latestAvvVersion)} target="_blank" className="text-primary hover:underline font-medium flex items-center gap-1">
+                                                <Download className="w-4 h-4" /> Auftragsverarbeitungsvertrag (AVV) v{latestAvvVersion} herunterladen
+                                            </a>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <p className="text-xs text-muted-foreground italic">
+                                                Durch Klick auf den Button erklärst du dich mit dem oben verlinkten AVV einverstanden.
+                                                Wir protokollieren diesen Klick mit Zeitstempel als rechtlichen Nachweis.
+                                            </p>
+                                            <div className="flex items-center gap-4">
+                                                <Button onClick={handleAcceptAVV} disabled={acceptingAvv}>
+                                                    {acceptingAvv ? <Loader2 className="animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                                                    AVV jetzt digital abschließen
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
 
                         {/* --- RECHNUNGSHISTORIE --- */}
                         <Card>

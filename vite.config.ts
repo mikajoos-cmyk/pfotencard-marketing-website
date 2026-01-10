@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 import path from "path";
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   publicDir: "public",
   base: "./",
@@ -18,4 +18,8 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
-});
+  esbuild: {
+    drop: mode === 'production' ? ["console", "debugger"] : [],
+  },
+}));
+

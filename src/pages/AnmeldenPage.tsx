@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
@@ -262,7 +263,7 @@ export function AnmeldenPage() {
                   </div>
                   <div>
                     <Label>Passwort</Label>
-                    <Input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required />
+                    <PasswordInput value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required />
                   </div>
                   <div className="flex gap-3 pt-2">
                     <Button type="button" variant="outline" onClick={() => setLoginStep(1)}><ArrowLeft className="h-4 w-4" /></Button>
@@ -288,7 +289,7 @@ export function AnmeldenPage() {
                 </div>
                 <Separator />
                 <div><Label>E-Mail</Label><Input type="email" name="email" required value={regData.email} onChange={handleRegChange} /></div>
-                <div><Label>Passwort</Label><Input type="password" name="password" required value={regData.password} onChange={handleRegChange} /></div>
+                <div><Label>Passwort</Label><PasswordInput name="password" required value={regData.password} onChange={handleRegChange} /></div>
                 <Button type="submit" className="w-full" disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Kostenlos registrieren'}</Button>
               </form>
             )}
