@@ -35,7 +35,7 @@ const plans = [
       { name: 'White-Label (Dein Logo & Farben)', included: true },
       { name: 'Chat-System mit Kunden', included: true },
       { name: 'News & Updates Modul', included: true },
-      { name: 'Prioritäts-Support', included: true },
+
       { name: 'Terminbuchung & Kalender', included: false },
     ],
   },
@@ -50,9 +50,7 @@ const plans = [
       { name: 'Alle Pro-Funktionen', included: true },
       { name: 'Terminbuchung & Kalender', included: true },
       { name: 'Wartelisten-Funktion', included: true },
-      { name: 'Dedizierter Ansprechpartner', included: true },
-      { name: 'Individuelle Vertragsanpassung', included: true },
-      { name: 'Multi-Standort fähig', included: true },
+      { name: 'Prioritäts-Support', included: true },
     ],
   },
 ];

@@ -38,11 +38,8 @@ export function BillingPage() {
         try {
             for (let i = 0; i < 10; i++) {
                 const version = `${major}.${minor + i}`;
-                console.log("Checking version", version);
                 const url = getAvvFilename(version);
-                console.log("Checking URL", url);
                 const res = await fetch(url, { method: 'HEAD' });
-                console.log("Response", res);
 
                 // WICHTIG: Prüfen ob es wirklich ein PDF ist (und nicht die index.html vom SPA Fallback)
                 const contentType = res.headers.get('content-type');
@@ -163,16 +160,21 @@ export function BillingPage() {
     const formatCurrency = (amount?: number) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount || 0);
 
     // --- STATUS FLAGS ---
+    const isExpired = status && !status.subscription_valid;
     const isCancelled = status?.cancel_at_period_end === true || status?.stripe_subscription_status === 'canceled';
     const isStripeTrial = status?.stripe_subscription_status === 'trialing';
-    const isRegistrationTrial = status?.in_trial && !status?.has_payment_method;
     const hasPaymentMethod = status?.has_payment_method;
+    // Wenn abgelaufen und KEIN Zahlungsmittel hinterlegt ist, war es wohl das 14-Tage Testabo
+    const isTrialExpired = isExpired && !hasPaymentMethod;
+    const isRegistrationTrial = status?.in_trial && !hasPaymentMethod;
+
     const isPendingSwitch = !!status?.upcoming_plan && status.upcoming_plan !== status.plan;
 
     // Logik: Zeige Preise (Buchen) WENN:
     // 1. Kein Zahlungsmittel (Reg Trial)
     // 2. Gekündigt (Um Reaktivierung zu ermöglichen)
-    const showPricing = !hasPaymentMethod || isCancelled;
+    // 3. ODER Abgelaufen (isExpired)
+    const showPricing = !hasPaymentMethod || isCancelled || isExpired;
 
     const planName = status?.plan ? status.plan.charAt(0).toUpperCase() + status.plan.slice(1) : 'Starter';
     const upcomingPlanName = status?.upcoming_plan ? status.upcoming_plan.charAt(0).toUpperCase() + status.upcoming_plan.slice(1) : '';
@@ -190,8 +192,19 @@ export function BillingPage() {
 
                 {/* --- INFO BANNER --- */}
 
-                {/* 1. Kündigung */}
-                {isCancelled && status?.subscription_ends_at && (
+                {/* 0. Abgelaufen (Höchste Priorität) */}
+                {isExpired && (
+                    <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                        <AlertTriangle className="w-5 h-5 mt-0.5" />
+                        <div>
+                            <strong>{isTrialExpired ? "Test-Abo abgelaufen" : "Abo abgelaufen"}</strong>
+                            <p className="text-sm mt-1">Bitte wähle unten einen Plan, um Pfotencard weiterhin zu nutzen.</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* 1. Kündigung (Nur anzeigen, wenn NICHT abgelaufen) */}
+                {isCancelled && status?.subscription_ends_at && !isExpired && (
                     <div className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                         <AlertTriangle className="w-5 h-5 mt-0.5" />
                         <div>
@@ -201,8 +214,8 @@ export function BillingPage() {
                     </div>
                 )}
 
-                {/* 2. Plan Wechsel */}
-                {isPendingSwitch && !isCancelled && (
+                {/* 2. Plan Wechsel (Nur wenn nicht abgelaufen) */}
+                {isPendingSwitch && !isCancelled && !isExpired && (
                     <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                         <Info className="w-5 h-5 mt-0.5" />
                         <div>
@@ -216,8 +229,8 @@ export function BillingPage() {
                     </div>
                 )}
 
-                {/* 3. Trial */}
-                {isStripeTrial && !isCancelled && !isPendingSwitch && (
+                {/* 3. Trial (Stripe) (Nur wenn nicht abgelaufen) */}
+                {isStripeTrial && !isCancelled && !isPendingSwitch && !isExpired && (
                     <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                         <Info className="w-5 h-5 mt-0.5" />
                         <div>
@@ -231,9 +244,9 @@ export function BillingPage() {
 
 
                 {showPricing ? (
-                    // --- PREISTABELLE (Neu oder Gekündigt) ---
+                    // --- PREISTABELLE (Neu, Gekündigt oder Abgelaufen) ---
                     <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
-                        {isRegistrationTrial && (
+                        {isRegistrationTrial && !isExpired && (
                             <div className="text-center mb-4 p-4 bg-muted/30 rounded-lg">
                                 <p className="font-medium">Deine 14-tägige Testphase läuft.</p>
                                 <p className="text-sm text-muted-foreground">Wähle jetzt einen Plan, um Pfotencard danach weiterzunutzen.</p>
@@ -251,7 +264,8 @@ export function BillingPage() {
                             billingCycle={billingCycle}
                             onSelectPlan={(p) => navigate(`/checkout?plan=${p.toLowerCase()}&cycle=${billingCycle}`)}
                             isUpgradeMode={true}
-                            currentPlan={status?.plan}
+                            // WICHTIG: Wenn abgelaufen, keinen aktuellen Plan anzeigen
+                            currentPlan={isExpired ? null : status?.plan}
                         />
                         {hasPaymentMethod && (
                             <div className="flex justify-center mt-4">

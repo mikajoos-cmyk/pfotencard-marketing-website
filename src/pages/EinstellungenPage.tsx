@@ -29,7 +29,8 @@ import {
   Newspaper,
   MessageCircle,
   Layers,
-  Lock, // <-- Hinzufügen
+  Lock,
+  Users // <-- NEU: Für das Wartelisten-Icon
 } from 'lucide-react';
 import React from 'react';
 import {
@@ -109,7 +110,7 @@ const AVAILABLE_MODULES: AppModule[] = [
   {
     id: 'calendar',
     name: 'Kalender & Terminbuchung',
-    description: 'Ermöglicht Kunden die direkte Buchung von Terminen inkl. Warteliste.',
+    description: 'Ermöglicht Kunden die direkte Buchung von Terminen.',
     premiumOnly: true,
     icon: Calendar
   },
@@ -210,6 +211,14 @@ export function EinstellungenPage() {
   const [previewRole, setPreviewRole] = useState<'customer' | 'admin'>('customer');
   const [syncTrigger, setSyncTrigger] = useState(0);
 
+  // --- NEU: Automatische Bereinigung abhängiger Module ---
+  useEffect(() => {
+    if (!activeModules.includes('calendar') && activeModules.includes('waitlist')) {
+      setActiveModules(prev => prev.filter(id => id !== 'waitlist'));
+    }
+  }, [activeModules]);
+
+
   // --- SYNC TO PREVIEW (IFRAME) ---
   useEffect(() => {
     if (!showPreview || !iframeRef.current) return;
@@ -244,7 +253,6 @@ export function EinstellungenPage() {
       role: previewRole,
       active_modules: activeModules,
 
-      // !!! DIESE BEIDEN ZEILEN HINZUFÜGEN !!!
       level_term: levelTerm,
       vip_term: vipTerm
     };
@@ -262,9 +270,7 @@ export function EinstellungenPage() {
   }, [showPreview, primaryColor, secondaryColor, backgroundColor, sidebarColor, customPrimaryColor, customSecondaryColor, customBackgroundColor, customSidebarColor, schoolName, levelTerm, vipTerm, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp, activeModules]);
 
   const isFeatureAllowed = (feature: 'branding' | string, type: 'module' | 'setting' = 'module') => {
-    // Normalisierung für alten 'verband' plan
     const planKey = currentPlan === 'verband' ? 'enterprise' : currentPlan;
-    // Fallback auf starter, falls planKey unbekannt
     const rules = PLAN_FEATURES[planKey as keyof typeof PLAN_FEATURES] || PLAN_FEATURES.starter;
 
     if (type === 'setting' && feature === 'branding') {
@@ -275,7 +281,7 @@ export function EinstellungenPage() {
     }
     return false;
   };
-  // Funktion für "In neuem Tab öffnen"
+
   const getPreviewUrl = () => {
     const mappedLevels = levels.map((l, index) => ({
       ...l,
@@ -335,7 +341,6 @@ export function EinstellungenPage() {
         setSupportEmail(t.support_email || '');
         setSubdomain(t.subdomain);
 
-        // Plan setzen (Fallback auf 'starter' wenn leer, 'verband' mappen auf enterprise falls nötig)
         let plan = (t.plan || 'starter').toLowerCase();
         if (plan === 'verband') plan = 'enterprise';
         setCurrentPlan(plan as PlanType);
@@ -549,9 +554,6 @@ export function EinstellungenPage() {
   const handleToggleAdditional = (index: number, val: boolean) => {
     const newLevels = [...levels];
     newLevels[index].has_additional_requirements = val;
-    // Wenn deaktiviert, alle zusätzlichen Anforderungen löschen? 
-    // Wahrscheinlich besser sie zu behalten falls man es sich anders überlegt,
-    // aber die UI filtert sie dann eh aus.
     setLevels(newLevels);
   };
 
@@ -678,7 +680,6 @@ export function EinstellungenPage() {
               </TabsList>
 
               <TabsContent value="branding" className="space-y-6">
-                {/* HINWEIS WENN BRANDING GESPERRT */}
                 {!isFeatureAllowed('branding', 'setting') && (
                   <div className="bg-muted border border-border rounded-lg p-4 flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -916,43 +917,63 @@ export function EinstellungenPage() {
                         {AVAILABLE_MODULES.map((module) => {
                           const isActive = activeModules.includes(module.id);
                           const Icon = module.icon;
-                          // Prüfen ob im Plan enthalten
                           const isAllowed = isFeatureAllowed(module.id, 'module');
 
                           return (
-                            <div key={module.id} className={`flex items-start justify-between p-4 border rounded-lg transition-all ${isActive ? 'bg-primary/5 border-primary/20' : 'bg-card border-border'}`}>
-                              <div className="flex items-start gap-4">
-                                <div className={`p-2 rounded-md ${isActive ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                                  <Icon size={24} />
-                                </div>
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <h3 className="font-semibold text-foreground">{module.name}</h3>
-                                    {/* Badges anpassen */}
-                                    {!isAllowed && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 font-bold uppercase tracking-wider flex items-center gap-1"><Lock size={8} /> Upgrade</span>}
-                                    {module.comingSoon && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold uppercase tracking-wider">Bald verfügbar</span>}
+                            <React.Fragment key={module.id}>
+                              <div className={`flex items-start justify-between p-4 border rounded-lg transition-all ${isActive ? 'bg-primary/5 border-primary/20' : 'bg-card border-border'}`}>
+                                <div className="flex items-start gap-4">
+                                  <div className={`p-2 rounded-md ${isActive ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                                    <Icon size={24} />
                                   </div>
-                                  <p className="text-sm text-muted-foreground mt-1 max-w-lg">{module.description}</p>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h3 className="font-semibold text-foreground">{module.name}</h3>
+                                      {!isAllowed && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 font-bold uppercase tracking-wider flex items-center gap-1"><Lock size={8} /> Upgrade</span>}
+                                      {module.comingSoon && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold uppercase tracking-wider">Bald verfügbar</span>}
+                                    </div>
+                                    <p className="text-sm text-muted-foreground mt-1 max-w-lg">{module.description}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                  {!isAllowed ? (
+                                    <Button size="sm" variant="outline" onClick={() => window.open(`/preise?subdomain=${subdomain}`, '_self')}>Upgrade</Button>
+                                  ) : module.comingSoon ? (
+                                    <Button size="sm" variant="ghost" disabled>Nicht verfügbar</Button>
+                                  ) : (
+                                    <Switch
+                                      checked={isActive}
+                                      onCheckedChange={(val) => handleToggleModule(module.id, val)}
+                                    />
+                                  )}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-4">
-                                {!isAllowed ? (
-                                  <Button size="sm" variant="outline" onClick={() => window.open(`/preise?subdomain=${subdomain}`, '_self')}>Upgrade</Button>
-                                ) : module.comingSoon ? (
-                                  <Button size="sm" variant="ghost" disabled>Nicht verfügbar</Button>
-                                ) : (
-                                  <Switch
-                                    checked={isActive}
-                                    onCheckedChange={(val) => handleToggleModule(module.id, val)}
-                                  />
-                                )}
-                              </div>
-                            </div>
+
+                              {/* NEU: Wartelisten-Konfiguration, wenn Kalender aktiv ist */}
+                              {module.id === 'calendar' && isActive && (
+                                <div className="ml-8 mt-2 p-4 border-l-2 border-l-primary/20 pl-6 animate-in slide-in-from-top-2">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="p-2 bg-muted rounded-md text-muted-foreground">
+                                        <Users size={20} />
+                                      </div>
+                                      <div>
+                                        <h4 className="font-medium text-sm">Warteliste aktivieren</h4>
+                                        <p className="text-xs text-muted-foreground">Kunden können sich auf eine Warteliste setzen, wenn ein Termin voll ist.</p>
+                                      </div>
+                                    </div>
+                                    <Switch
+                                      checked={activeModules.includes('waitlist')}
+                                      onCheckedChange={(val) => handleToggleModule('waitlist', val)}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </React.Fragment>
                           );
                         })}
                       </div>
 
-                      {/* Kontakt Button für weitere Module */}
                       <div className="mt-8 p-6 border-2 border-dashed border-border rounded-lg bg-muted/30 text-center">
                         <h3 className="text-lg font-semibold mb-2">Sie brauchen ein anderes Modul?</h3>
                         <p className="text-sm text-muted-foreground mb-4">Kontaktieren Sie uns für individuelle Lösungen und maßgeschneiderte Module.</p>
