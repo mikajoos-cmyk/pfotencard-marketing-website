@@ -342,7 +342,7 @@ export function BillingPage() {
                                     <Button variant="default" className="gap-2" onClick={openCustomerPortal}>
                                         <ExternalLink className="w-4 h-4" /> Rechnungen
                                     </Button>
-                                    <Button variant="outline" className="bg-background" onClick={() => navigate(`/preise?subdomain=${status.subdomain}`)}>
+                                    <Button variant="outline" className="bg-background" onClick={() => navigate('/preise')}>
                                         Plan ändern
                                     </Button>
                                     <Button variant="ghost" className="text-destructive hover:bg-destructive/10 ml-auto hover:text-destructive" onClick={handleCancelSubscription} disabled={canceling}>
