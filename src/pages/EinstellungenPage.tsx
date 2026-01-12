@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,6 +63,7 @@ interface Service {
   name: string;
   category: string;
   price: number;
+  rank_order: number;
 }
 
 interface TopUpOption {
@@ -321,7 +322,7 @@ export function EinstellungenPage() {
 
   const [isServiceDialogOpen, setIsServiceDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
-  const [serviceForm, setServiceForm] = useState({ name: '', category: 'training', price: 0 });
+  const [serviceForm, setServiceForm] = useState({ name: '', category: 'training', price: 0, rank_order: 0 });
 
   const [isRequirementDialogOpen, setIsRequirementDialogOpen] = useState(false);
   const [isAdditionalDialogOpen, setIsAdditionalDialogOpen] = useState(false);
@@ -371,7 +372,8 @@ export function EinstellungenPage() {
           id: tt.id,
           name: tt.name,
           category: tt.category,
-          price: tt.default_price
+          price: tt.default_price,
+          rank_order: tt.rank_order || 0
         }));
         setServices(mappedServices);
 
@@ -428,7 +430,7 @@ export function EinstellungenPage() {
         vip_term: vipTerm,
         allow_custom_top_up: allowCustomTopUp,
         top_up_options: topUpOptions,
-        services: services,
+        services: services.map((s, index) => ({ ...s, rank_order: index + 1 })),
         levels: normalizedLevels,
         active_modules: activeModules
       };
@@ -498,16 +500,16 @@ export function EinstellungenPage() {
     if (editingService) {
       setServices(services.map((s) => s === editingService ? { ...editingService, ...serviceForm } : s));
     } else {
-      setServices([...services, { ...serviceForm, id: -Date.now() }]);
+      setServices([...services, { ...serviceForm, id: -Date.now(), rank_order: services.length + 1 }]);
     }
     setIsServiceDialogOpen(false);
     setEditingService(null);
-    setServiceForm({ name: '', category: 'training', price: 0 });
+    setServiceForm({ name: '', category: 'training', price: 0, rank_order: 0 });
   };
 
   const handleEditService = (service: Service) => {
     setEditingService(service);
-    setServiceForm({ name: service.name, category: service.category, price: service.price });
+    setServiceForm({ name: service.name, category: service.category, price: service.price, rank_order: service.rank_order });
     setIsServiceDialogOpen(true);
   };
 
@@ -867,7 +869,7 @@ export function EinstellungenPage() {
                     <CardHeader>
                       <div className="flex justify-between items-center"><CardTitle>Leistungen & Preise</CardTitle>
                         <Dialog open={isServiceDialogOpen} onOpenChange={setIsServiceDialogOpen}>
-                          <DialogTrigger asChild><Button onClick={() => { setEditingService(null); setServiceForm({ name: '', category: 'training', price: 0 }); }}><Plus size={20} className="mr-2" />Neue Leistung</Button></DialogTrigger>
+                          <DialogTrigger asChild><Button onClick={() => { setEditingService(null); setServiceForm({ name: '', category: 'training', price: 0, rank_order: services.length + 1 }); }}><Plus size={20} className="mr-2" />Neue Leistung</Button></DialogTrigger>
                           <DialogContent>
                             <DialogHeader><DialogTitle>{editingService ? 'Leistung bearbeiten' : 'Neue Leistung'}</DialogTitle></DialogHeader>
                             <div className="space-y-4 py-4">
@@ -882,17 +884,25 @@ export function EinstellungenPage() {
                     </CardHeader>
                     <CardContent>
                       <Table>
-                        <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Kategorie</TableHead><TableHead>Preis</TableHead><TableHead className="text-right">Aktionen</TableHead></TableRow></TableHeader>
-                        <TableBody>
+                        <TableHeader><TableRow><TableHead className="w-[50px]"></TableHead><TableHead>Name</TableHead><TableHead>Kategorie</TableHead><TableHead>Preis</TableHead><TableHead className="text-right">Aktionen</TableHead></TableRow></TableHeader>
+                        <Reorder.Group axis="y" values={services} onReorder={setServices} as="tbody" className="relative">
                           {services.map((service, index) => (
-                            <TableRow key={service.id || index}>
+                            <Reorder.Item
+                              key={service.id || `temp-${index}`}
+                              value={service}
+                              as="tr"
+                              className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+                            >
+                              <TableCell>
+                                <GripVertical className="w-5 h-5 text-muted-foreground cursor-grab active:cursor-grabbing" />
+                              </TableCell>
                               <TableCell className="font-medium">{service.name}</TableCell>
                               <TableCell><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">{getCategoryLabel(service.category)}</span></TableCell>
                               <TableCell>{service.price.toFixed(2)} €</TableCell>
                               <TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="ghost" size="sm" onClick={() => handleEditService(service)}><Pencil size={16} /></Button><Button variant="ghost" size="sm" onClick={() => handleDeleteService(index)}><Trash2 size={16} /></Button></div></TableCell>
-                            </TableRow>
+                            </Reorder.Item>
                           ))}
-                        </TableBody>
+                        </Reorder.Group>
                       </Table>
                     </CardContent>
                   </Card>
