@@ -1,6 +1,7 @@
+// src/components/pricing/PricingTableSection.tsx
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Check, X, Info } from 'lucide-react';
+import { Check, X, Info, ArrowRight, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const plans = [
@@ -60,13 +61,15 @@ interface PricingTableSectionProps {
   onSelectPlan?: (planName: string) => void;
   isUpgradeMode?: boolean;
   currentPlan?: string | null;
+  upcomingPlan?: string | null;
 }
 
 export function PricingTableSection({
   billingCycle,
   onSelectPlan,
   isUpgradeMode = false,
-  currentPlan
+  currentPlan,
+  upcomingPlan
 }: PricingTableSectionProps) {
 
   const navigate = useNavigate();
@@ -84,7 +87,42 @@ export function PricingTableSection({
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
           {plans.map((plan, index) => {
+            // Status-Checks
             const isCurrentPlan = currentPlan && plan.name.toLowerCase() === currentPlan.toLowerCase();
+            const isUpcomingPlan = upcomingPlan && plan.name.toLowerCase() === upcomingPlan.toLowerCase();
+
+            // Ein Wechsel steht an, wenn ein Upcoming Plan existiert und dieser NICHT der aktuelle Plan ist
+            const isSwitchPending = !!upcomingPlan && (upcomingPlan.toLowerCase() !== (currentPlan || '').toLowerCase());
+
+            // Button Text Logik
+            let buttonText = 'Jetzt starten';
+            let buttonDisabled = false;
+            let buttonVariant = 'default'; // 'default' | 'outline' | 'secondary'
+
+            if (isCurrentPlan) {
+              if (isSwitchPending) {
+                // Wenn wir hier sind, ist dies der "alte" Plan, der ausläuft.
+                // Der User soll klicken können, um den Wechsel abzubrechen (wieder diesen Plan wählen).
+                buttonText = 'Wechsel abbrechen (Behalten)';
+                buttonVariant = 'outline';
+              } else if (isUpgradeMode) {
+                buttonText = 'Aktives Abo';
+                buttonDisabled = true;
+                buttonVariant = 'secondary';
+              } else {
+                buttonText = 'Aktives Abo';
+                buttonDisabled = true;
+              }
+            } else if (isUpcomingPlan) {
+              buttonText = 'Wechsel vorgemerkt';
+              buttonDisabled = true; // Man kann nicht "nochmal" hinwechseln
+              buttonVariant = 'secondary';
+            } else {
+              // Fremder Plan
+              if (isUpgradeMode) {
+                buttonText = 'Jetzt wechseln';
+              }
+            }
 
             return (
               <motion.div
@@ -94,21 +132,35 @@ export function PricingTableSection({
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, delay: index * 0.1 }}
                 className={`relative bg-card rounded-lg border p-8 flex flex-col ${isCurrentPlan
-                  ? 'border-primary ring-2 ring-primary/20 shadow-lg'
-                  : plan.featured
-                    ? 'border-primary shadow-lg scale-105 md:scale-110 z-10'
-                    : 'border-border'
+                    ? 'border-primary ring-2 ring-primary/20 shadow-lg'
+                    : isUpcomingPlan
+                      ? 'border-blue-400 ring-2 ring-blue-100 shadow-md bg-blue-50/10' // Style für Upcoming
+                      : plan.featured
+                        ? 'border-primary shadow-lg scale-105 md:scale-110 z-10'
+                        : 'border-border'
                   }`}
               >
-                {plan.featured && !isCurrentPlan && (
+                {/* --- BADGES --- */}
+
+                {/* Empfohlen Badge (nur wenn kein Status) */}
+                {plan.featured && !isCurrentPlan && !isUpcomingPlan && (
                   <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-primary text-primary-foreground px-4 py-1 rounded-full text-sm font-body font-medium">
                     Empfohlen
                   </div>
                 )}
 
+                {/* Aktuelles Abo Badge */}
                 {isCurrentPlan && (
-                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-4 py-1 rounded-full text-sm font-body font-medium shadow-md flex items-center gap-2">
-                    <Check size={14} /> Aktuelles Abo
+                  <div className={`absolute -top-4 left-1/2 transform -translate-x-1/2 px-4 py-1 rounded-full text-sm font-body font-medium shadow-md flex items-center gap-2 ${isSwitchPending ? 'bg-orange-100 text-orange-700 border border-orange-200' : 'bg-green-600 text-white'
+                    }`}>
+                    {isSwitchPending ? <><Clock size={14} /> Läuft aus</> : <><Check size={14} /> Aktuelles Abo</>}
+                  </div>
+                )}
+
+                {/* Upcoming Abo Badge - Nur anzeigen, wenn NICHT aktuell */}
+                {isUpcomingPlan && !isCurrentPlan && (
+                  <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-1 rounded-full text-sm font-body font-medium shadow-md flex items-center gap-2">
+                    <ArrowRight size={14} /> Kommt bald
                   </div>
                 )}
 
@@ -120,6 +172,8 @@ export function PricingTableSection({
                     {plan.description}
                   </p>
                 </div>
+
+                {/* Preis Anzeige */}
                 <div className="mb-2">
                   <div className="flex items-baseline">
                     <span className="text-4xl font-sans font-bold text-foreground">
@@ -131,27 +185,18 @@ export function PricingTableSection({
                   </div>
                 </div>
 
-                {/* Zusatzkosten Hinweis */}
                 <div className="mb-6 text-xs text-muted-foreground bg-muted/50 p-2 rounded flex items-center gap-2">
                   <Info size={14} />
                   {plan.additionalCost}
                 </div>
 
                 <Button
-                  disabled={!!isCurrentPlan && !isUpgradeMode}
-                  className={`w-full mb-6 font-normal ${isCurrentPlan
-                    ? isUpgradeMode
-                      ? 'bg-primary text-primary-foreground hover:bg-secondary'
-                      : 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
-                    : plan.featured
-                      ? 'bg-primary text-primary-foreground hover:bg-secondary'
-                      : 'bg-background text-foreground border border-border hover:bg-muted'
-                    }`}
+                  disabled={buttonDisabled}
+                  variant={buttonVariant as any}
+                  className="w-full mb-6 font-normal"
                   onClick={() => handleAction(plan.name)}
                 >
-                  {isCurrentPlan
-                    ? (isUpgradeMode ? 'Jetzt verlängern' : 'Aktives Abo')
-                    : (isUpgradeMode ? 'Jetzt wechseln' : 'Jetzt starten')}
+                  {buttonText}
                 </Button>
 
                 <div className="space-y-3 flex-grow">

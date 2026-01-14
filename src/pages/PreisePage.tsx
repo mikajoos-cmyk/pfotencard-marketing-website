@@ -1,3 +1,4 @@
+// src/pages/PreisePage.tsx
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { PricingHeaderSection } from '../components/pricing/PricingHeaderSection';
@@ -9,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 export function PreisePage() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [currentPlan, setCurrentPlan] = useState<string | null>(null);
+  const [upcomingPlan, setUpcomingPlan] = useState<string | null>(null); // NEU
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -24,6 +26,7 @@ export function PreisePage() {
       checkTenantStatus(activeSubdomain).then((status) => {
         if (status && status.exists) {
           setCurrentPlan(status.plan || 'starter');
+          setUpcomingPlan(status.upcoming_plan); // NEU: Upcoming Plan setzen
         }
       }).catch(console.error);
     }
@@ -38,12 +41,9 @@ export function PreisePage() {
 
   const handleSelectPlan = async (planName: string) => {
     if (!activeSubdomain) {
-      // Normaler Modus: Zur Registrierung MIT Parametern
       navigate(`/anmelden?register=true&plan=${planName.toLowerCase()}&cycle=${billingCycle}`);
       return;
     }
-
-    // ÄNDERUNG: Statt direkter API Call -> Weiterleitung zum Checkout
     navigate(`/checkout?plan=${planName.toLowerCase()}&cycle=${billingCycle}`);
   };
 
@@ -56,6 +56,7 @@ export function PreisePage() {
         onSelectPlan={handleSelectPlan}
         isUpgradeMode={!!activeSubdomain}
         currentPlan={currentPlan}
+        upcomingPlan={upcomingPlan} // NEU: Prop übergeben
       />
 
       {!activeSubdomain && <TrialReminderSection />}

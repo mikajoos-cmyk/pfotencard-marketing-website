@@ -448,12 +448,21 @@ export function BillingPage() {
                                                         </Badge>
                                                     </TableCell>
                                                     <TableCell className="text-right">
-                                                        {inv.pdf_url && (
+                                                        {/* Bevorzugt Hosted URL nutzen, da diese den aktuellen Status "Bezahlt" zeigt */}
+                                                        {inv.hosted_url ? (
                                                             <Button variant="ghost" size="sm" asChild>
-                                                                <a href={inv.pdf_url} target="_blank" rel="noopener noreferrer">
-                                                                    <Download className="w-4 h-4 mr-2" /> PDF
+                                                                <a href={inv.hosted_url} target="_blank" rel="noopener noreferrer">
+                                                                    <ExternalLink className="w-4 h-4 mr-2" /> Ansehen
                                                                 </a>
                                                             </Button>
+                                                        ) : (
+                                                            inv.pdf_url && (
+                                                                <Button variant="ghost" size="sm" asChild>
+                                                                    <a href={inv.pdf_url} target="_blank" rel="noopener noreferrer">
+                                                                        <Download className="w-4 h-4 mr-2" /> PDF
+                                                                    </a>
+                                                                </Button>
+                                                            )
                                                         )}
                                                     </TableCell>
                                                 </TableRow>

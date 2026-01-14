@@ -103,10 +103,12 @@ export function CheckoutPage() {
                     setStatus('payment_needed');
                 }
                 // Fall 2: Keine Zahlung erforderlich (z.B. hinterlegte Karte erfolgreich belastet oder 0€)
-                else if (data.status === 'updated' || data.status === 'created') {
+                // UPDATE: Auch 'success' zulassen (für Downgrades/Schedules)
+                else if (data.status === 'updated' || data.status === 'created' || data.status === 'success') {
                     setStatus('success');
                 } else {
-                    throw new Error("Unerwarteter Status von Stripe");
+                    console.error("Unknown status:", data.status); // Debugging
+                    throw new Error(`Unerwarteter Status von Stripe: ${data.status}`);
                 }
             } catch (e: any) {
                 console.error(e);
