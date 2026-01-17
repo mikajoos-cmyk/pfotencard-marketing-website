@@ -83,6 +83,7 @@ interface Level {
   name: string;
   rank_order: number;
   badgeImage?: string;
+  color?: string;
   has_additional_requirements?: boolean;
   requirements: LevelRequirement[];
 }
@@ -154,7 +155,7 @@ const AVAILABLE_MODULES: AppModule[] = [
 ];
 
 // Feature Matrix definieren
-const PLAN_FEATURES = {
+const PLAN_FEATURES: Record<string, { branding: boolean; modules: string[] }> = {
   starter: {
     branding: false, // Kein eigenes Logo/Farben
     modules: [], // Erlaubte Module (News entfernt)
@@ -186,8 +187,9 @@ export function EinstellungenPage() {
   const [secondaryColor, setSecondaryColor] = useState('#3B82F6');
   const [backgroundColor, setBackgroundColor] = useState('#F8FAFC'); // App Hintergrund
   const [sidebarColor, setSidebarColor] = useState('#1E293B'); // Seitenleiste
+  const [openForAllColor, setOpenForAllColor] = useState('#10b981');
   const [customPrimaryColor, setCustomPrimaryColor] = useState('');
-  const [customSecondaryColor, setCustomSecondaryColor] = useState('');
+  const [customSecondaryColor, _setCustomSecondaryColor] = useState('');
   const [customBackgroundColor, setCustomBackgroundColor] = useState('');
   const [customSidebarColor, setCustomSidebarColor] = useState('');
   const [levelTerm, setLevelTerm] = useState('Level');
@@ -354,6 +356,7 @@ export function EinstellungenPage() {
         setSecondaryColor(branding.secondary_color || '#3B82F6');
         setBackgroundColor(branding.background_color || '#F8FAFC');
         setSidebarColor(branding.sidebar_color || '#1E293B');
+        setOpenForAllColor(branding.open_for_all_color || '#10b981');
         setLevelTerm(wording.level || 'Level');
         setVipTerm(wording.vip || 'VIP');
         setTopUpOptions(balance.top_up_options || []);
@@ -382,6 +385,7 @@ export function EinstellungenPage() {
           name: l.name,
           rank_order: l.rank_order,
           badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BASE_URL}${l.icon_url}`) : undefined,
+          color: l.color,
           has_additional_requirements: l.has_additional_requirements || false,
           requirements: l.requirements.map((r: any) => ({
             id: r.id,
@@ -414,6 +418,7 @@ export function EinstellungenPage() {
         ...l,
         rank_order: index + 1,
         badge_image: l.badgeImage,
+        color: l.color,
         has_additional_requirements: l.has_additional_requirements
       }));
 
@@ -425,6 +430,7 @@ export function EinstellungenPage() {
         secondary_color: customSecondaryColor || secondaryColor,
         background_color: customBackgroundColor || backgroundColor,
         sidebar_color: customSidebarColor || sidebarColor,
+        open_for_all_color: openForAllColor,
         logo_url: previewLogo,
         level_term: levelTerm,
         vip_term: vipTerm,
@@ -1089,6 +1095,24 @@ export function EinstellungenPage() {
                     <CardHeader><CardTitle>Level-System</CardTitle><CardDescription>Definiere die Aufstiegsleiter</CardDescription></CardHeader>
                     <CardContent>
                       <div className="space-y-6">
+
+                        <div className="bg-card p-6 rounded-lg border border-border mb-6">
+                          <h4 className="font-semibold mb-4">Farbe für "Alle Level"</h4>
+                          <p className="text-sm text-text-secondary mb-4">Wähle eine Farbe für Termine, die für alle offen sind.</p>
+                          <div className="flex items-center gap-4">
+                            <div
+                              className="w-10 h-10 rounded-full border border-border"
+                              style={{ backgroundColor: openForAllColor }}
+                            ></div>
+                            <input
+                              type="color"
+                              value={openForAllColor}
+                              onChange={(e) => setOpenForAllColor(e.target.value)}
+                              className="h-10 w-24 p-1 border border-border rounded cursor-pointer"
+                            />
+                          </div>
+                        </div>
+
                         {levels.map((level, index) => (
                           <div key={level.id || index} className="relative">
                             {index < levels.length - 1 && <div className="absolute left-6 top-full h-6 w-0.5 bg-border" />}
@@ -1110,6 +1134,40 @@ export function EinstellungenPage() {
                                       {level.badgeImage ? <div className="flex items-center justify-center gap-2"><Award size={24} className="text-primary" /><span className="text-sm font-medium">Abzeichen hochgeladen</span></div> : <div className="flex items-center justify-center gap-2"><Upload size={20} className="text-muted-foreground" /><span className="text-sm text-muted-foreground">Abzeichen hochladen</span></div>}
                                     </div>
                                   </div>
+
+                                  <div>
+                                    <div className="space-y-0.5">
+                                      <Label className="text-base font-medium">Farbe</Label>
+                                      <p className="text-sm text-muted-foreground">Farbe für die Darstellung in Kalender & App.</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      {colorPresets.map((preset) => (
+                                        <button
+                                          key={preset.value}
+                                          type="button"
+                                          onClick={() => {
+                                            const newLevels = [...levels];
+                                            newLevels[index].color = preset.value;
+                                            setLevels(newLevels);
+                                          }}
+                                          className={`w-8 h-8 rounded-full border-2 transition-all ${level.color === preset.value ? 'border-primary ring-2 ring-primary/20 scale-110' : 'border-transparent'}`}
+                                          style={{ backgroundColor: preset.value }}
+                                          title={preset.name}
+                                        />
+                                      ))}
+                                      <input
+                                        type="color"
+                                        value={level.color || '#22C55E'}
+                                        onChange={(e) => {
+                                          const newLevels = [...levels];
+                                          newLevels[index].color = e.target.value;
+                                          setLevels(newLevels);
+                                        }}
+                                        className="w-8 h-8 rounded-full border-2 border-transparent cursor-pointer"
+                                      />
+                                    </div>
+                                  </div>
+
                                   <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
                                     <div className="space-y-0.5">
                                       <Label className="text-base font-medium">Zusatzleistungen</Label>
@@ -1199,6 +1257,6 @@ export function EinstellungenPage() {
           </div>
         </div>
       </div>
-    </main>
+    </main >
   );
 }
