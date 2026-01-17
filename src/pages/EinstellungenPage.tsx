@@ -200,6 +200,8 @@ export function EinstellungenPage() {
 
   const [services, setServices] = useState<Service[]>([]);
   const [levels, setLevels] = useState<Level[]>([]);
+  const [autoBillingEnabled, setAutoBillingEnabled] = useState(false);
+  const [autoProgressEnabled, setAutoProgressEnabled] = useState(false);
 
   // State für Zusatz-Module (nur IDs speichern)
   const [activeModules, setActiveModules] = useState<string[]>(['news', 'documents']); // Default an
@@ -362,6 +364,8 @@ export function EinstellungenPage() {
         setTopUpOptions(balance.top_up_options || []);
         setAllowCustomTopUp(balance.allow_custom_top_up !== undefined ? balance.allow_custom_top_up : true);
         setActiveModules(t.config?.active_modules || ['news', 'documents']);
+        setAutoBillingEnabled(t.config?.auto_billing_enabled || false);
+        setAutoProgressEnabled(t.config?.auto_progress_enabled || false);
 
         if (branding.logo_url) {
           const logoUrl = branding.logo_url.startsWith('http')
@@ -438,7 +442,9 @@ export function EinstellungenPage() {
         top_up_options: topUpOptions,
         services: services.map((s, index) => ({ ...s, rank_order: index + 1 })),
         levels: normalizedLevels,
-        active_modules: activeModules
+        active_modules: activeModules,
+        auto_billing_enabled: autoBillingEnabled,
+        auto_progress_enabled: autoProgressEnabled
       };
 
       await saveSettings(payload);
@@ -988,6 +994,39 @@ export function EinstellungenPage() {
                             </React.Fragment>
                           );
                         })}
+                      </div>
+
+                      <div className="pt-6 border-t space-y-4">
+                        <h3 className="font-semibold text-foreground flex items-center gap-2">
+                          <Save className="w-5 h-5" /> Automatisierung
+                        </h3>
+                        <div className="space-y-4">
+                          <div className="flex items-start justify-between p-4 border rounded-lg bg-card border-border">
+                            <div className="flex items-start gap-4">
+                              <div className="p-2 rounded-md bg-muted text-muted-foreground">
+                                <Plus size={24} />
+                              </div>
+                              <div>
+                                <h3 className="font-semibold text-foreground">Automatisches Abrechnen</h3>
+                                <p className="text-sm text-muted-foreground mt-1 max-w-lg">Zieht beim Abstempeln (Anwesenheit markieren) automatisch die Kursgebühr vom Kundenguthaben ab.</p>
+                              </div>
+                            </div>
+                            <Switch checked={autoBillingEnabled} onCheckedChange={setAutoBillingEnabled} />
+                          </div>
+
+                          <div className="flex items-start justify-between p-4 border rounded-lg bg-card border-border">
+                            <div className="flex items-start gap-4">
+                              <div className="p-2 rounded-md bg-muted text-muted-foreground">
+                                <Award size={24} />
+                              </div>
+                              <div>
+                                <h3 className="font-semibold text-foreground">Automatischer Lernfortschritt</h3>
+                                <p className="text-sm text-muted-foreground mt-1 max-w-lg">Erfasst automatisch einen Lernfortschritt (Achievement), wenn ein Kunde als anwesend markiert wird.</p>
+                              </div>
+                            </div>
+                            <Switch checked={autoProgressEnabled} onCheckedChange={setAutoProgressEnabled} />
+                          </div>
+                        </div>
                       </div>
 
                       <div className="mt-8 p-6 border-2 border-dashed border-border rounded-lg bg-muted/30 text-center">
