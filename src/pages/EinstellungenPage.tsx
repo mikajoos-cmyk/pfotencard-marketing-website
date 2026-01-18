@@ -30,7 +30,8 @@ import {
   MessageCircle,
   Layers,
   Lock,
-  Users // <-- NEU: Für das Wartelisten-Icon
+  Users, // <-- NEU: Für das Wartelisten-Icon
+  Wallet // <-- NEU: Für das Guthaben-Icon
 } from 'lucide-react';
 import React from 'react';
 import {
@@ -138,12 +139,18 @@ const AVAILABLE_MODULES: AppModule[] = [
     icon: MessageCircle
   },
   // {
-  //   id: 'documents',
   //   name: 'Dokumenten-Center',
   //   description: 'Stelle wichtige Unterlagen (AGB, Impfpass-Upload) bereit.',
   //   premiumOnly: false,
   //   icon: FileText
   // },
+  {
+    id: 'balance_topup',
+    name: 'Guthaben-Aufladung',
+    description: 'Ermöglicht Kunden, ihr Guthaben selbstständig aufzuladen. Hinweis: Es fallen Stripe-Gebühren an.',
+    premiumOnly: true,
+    icon: Wallet
+  },
   // {
   //   id: 'marketplace',
   //   name: 'Partner-Marktplatz',
@@ -162,11 +169,11 @@ const PLAN_FEATURES: Record<string, { branding: boolean; modules: string[] }> = 
   },
   pro: {
     branding: true,
-    modules: ['news', 'chat'], // News hinzugefügt, shop entfernt
+    modules: ['news', 'chat', 'balance_topup'], // News hinzugefügt, shop entfernt
   },
   enterprise: { // ehemals 'verband'
     branding: true, // Enterprise hat natürlich auch Branding
-    modules: ['news', 'chat', 'calendar'], // shop entfernt
+    modules: ['news', 'chat', 'calendar', 'balance_topup'], // shop entfernt
   }
 };
 

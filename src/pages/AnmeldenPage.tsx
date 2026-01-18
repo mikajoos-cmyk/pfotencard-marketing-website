@@ -8,7 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { ArrowRight, Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { registerTenant, checkTenantStatus, loginUser } from '@/lib/api';
+import { registerTenant, checkTenantStatus, loginUser, forgotPassword, resetPassword } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext'; // NEU
 
 export function AnmeldenPage() {
@@ -40,12 +40,52 @@ export function AnmeldenPage() {
   const [isLogin, setIsLogin] = useState(!shouldRegister);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Recovery State
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+  const [recoveryToken, setRecoveryToken] = useState<string | null>(null);
+
   // Login State
   const [loginStep, setLoginStep] = useState<1 | 2>(1);
   const [loginSubdomain, setLoginSubdomain] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [verifiedTenant, setVerifiedTenant] = useState<{ name: string, subscription_valid: boolean } | null>(null);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+  useEffect(() => {
+    const handleHashCheck = () => {
+      const hash = window.location.hash;
+      console.log('DEBUG: Hash check triggered:', hash);
+
+      if (hash && (hash.includes('type=recovery') || hash.includes('type=invite') || hash.includes('access_token='))) {
+        console.log('DEBUG: Recovery/Invite hash detected!');
+        const params = new URLSearchParams(hash.replace('#', '?'));
+        const token = params.get('access_token');
+        const type = params.get('type');
+
+        if (token && (type === 'recovery' || type === 'invite' || hash.includes('type=recovery'))) {
+          console.log('DEBUG: Setting recovery mode with token');
+          setRecoveryToken(token);
+          setIsRecoveryMode(true);
+          setIsLogin(true);
+          // Clean hash from URL but keep history
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      }
+    };
+
+    // 1. Direkt beim Mounten prüfen
+    handleHashCheck();
+
+    // 2. Auf Hash-Änderungen reagieren (falls man schon auf der Seite ist)
+    window.addEventListener('hashchange', handleHashCheck);
+    window.addEventListener('popstate', handleHashCheck);
+
+    return () => {
+      window.removeEventListener('hashchange', handleHashCheck);
+      window.removeEventListener('popstate', handleHashCheck);
+    };
+  }, []);
 
   // Register Form Data
   const [regData, setRegData] = useState({
@@ -143,6 +183,32 @@ export function AnmeldenPage() {
         title: "Anmeldung fehlgeschlagen",
         description: error.message || "E-Mail oder Passwort falsch.",
       });
+      // FIX: Keine Status-Änderung hier, damit wir auf Step 2 bleiben!
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryToken) return;
+    setIsLoading(true);
+
+    try {
+      await resetPassword(loginPassword, recoveryToken);
+      toast({
+        title: "Passwort geändert",
+        description: "Dein Passwort wurde erfolgreich aktualisiert. Du kannst dich jetzt anmelden.",
+      });
+      setIsRecoveryMode(false);
+      setRecoveryToken(null);
+      setLoginPassword('');
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Fehler",
+        description: error.message,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -178,6 +244,28 @@ export function AnmeldenPage() {
       toast({
         variant: "destructive",
         title: "Fehler bei der Registrierung",
+        description: error.message,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      const response = await forgotPassword(loginEmail, loginSubdomain);
+      toast({
+        title: "Checke deine E-Mails",
+        description: response.message || "Wir haben dir einen Link zum Zurücksetzen deines Passworts gesendet.",
+      });
+      setShowForgotPassword(false);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Fehler",
         description: error.message,
       });
     } finally {
@@ -223,11 +311,23 @@ export function AnmeldenPage() {
 
             <div className="mb-6">
               <h1 className="text-2xl font-sans font-bold text-foreground mb-2">
-                {isLogin ? (loginStep === 1 ? 'Schule finden' : verifiedTenant?.name) : 'Kostenlos starten'}
+                {isLogin ? (
+                  isRecoveryMode
+                    ? 'Neues Passwort'
+                    : (showForgotPassword
+                      ? 'Passwort vergessen'
+                      : (loginStep === 1 ? 'Schule finden' : verifiedTenant?.name))
+                ) : 'Kostenlos starten'}
               </h1>
               <p className="text-muted-foreground font-body text-sm">
                 {isLogin
-                  ? (loginStep === 1 ? 'Gib deine Subdomain ein.' : 'Melde dich mit deinem Admin-Konto an.')
+                  ? (
+                    isRecoveryMode
+                      ? 'Gliedere dein neues Passwort ein.'
+                      : (showForgotPassword
+                        ? 'Gib deine E-Mail ein, um einen Reset-Link zu erhalten.'
+                        : (loginStep === 1 ? 'Gib deine Subdomain ein.' : 'Melde dich mit deinem Admin-Konto an.'))
+                  )
                   : '14 Tage kostenlos testen.'}
               </p>
             </div>
@@ -256,22 +356,84 @@ export function AnmeldenPage() {
                   </Button>
                 </form>
               ) : (
-                <form onSubmit={handleLoginSubmit} className="space-y-4">
-                  <div>
-                    <Label>E-Mail</Label>
-                    <Input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required autoFocus />
-                  </div>
-                  <div>
-                    <Label>Passwort</Label>
-                    <PasswordInput value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required />
-                  </div>
-                  <div className="flex gap-3 pt-2">
-                    <Button type="button" variant="outline" onClick={() => setLoginStep(1)}><ArrowLeft className="h-4 w-4" /></Button>
-                    <Button type="submit" className="flex-1" disabled={isLoading}>
-                      {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Anmelden'}
-                    </Button>
-                  </div>
-                </form>
+                showForgotPassword ? (
+                  <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+                    <div>
+                      <Label>E-Mail Adresse</Label>
+                      <Input
+                        type="email"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        placeholder="deine@email.de"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setShowForgotPassword(false)}
+                      >
+                        Abbrechen
+                      </Button>
+                      <Button type="submit" className="flex-1" disabled={isLoading}>
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Link senden'}
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  isRecoveryMode ? (
+                    <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+                      <div>
+                        <Label>Neues Passwort</Label>
+                        <PasswordInput
+                          value={loginPassword}
+                          onChange={(e) => setLoginPassword(e.target.value)}
+                          required
+                          autoFocus
+                        />
+                      </div>
+                      <Button type="submit" className="w-full" disabled={isLoading}>
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Passwort speichern'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-full"
+                        onClick={() => { setIsRecoveryMode(false); setRecoveryToken(null); }}
+                      >
+                        Abbrechen
+                      </Button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleLoginSubmit} className="space-y-4">
+                      <div>
+                        <Label>E-Mail</Label>
+                        <Input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required autoFocus />
+                      </div>
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <Label>Passwort</Label>
+                          <button
+                            type="button"
+                            onClick={() => setShowForgotPassword(true)}
+                            className="text-xs text-primary hover:underline font-medium"
+                          >
+                            Passwort vergessen?
+                          </button>
+                        </div>
+                        <PasswordInput value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required />
+                      </div>
+                      <div className="flex gap-3 pt-2">
+                        <Button type="button" variant="outline" onClick={() => setLoginStep(1)}><ArrowLeft className="h-4 w-4" /></Button>
+                        <Button type="submit" className="flex-1" disabled={isLoading}>
+                          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Anmelden'}
+                        </Button>
+                      </div>
+                    </form>
+                  )
+                )
               )
             ) : (
               <form onSubmit={handleRegisterSubmit} className="space-y-4">

@@ -164,6 +164,31 @@ export async function uploadImage(file: File) {
     return handleResponse(response);
 }
 
+export async function forgotPassword(email: string, subdomain: string) {
+    const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, subdomain }),
+    });
+
+    return handleResponse(response);
+}
+
+export async function resetPassword(password: string, accessToken: string) {
+    const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ password }),
+    });
+
+    return handleResponse(response);
+}
+
 export async function resendVerificationEmail(email: string) {
     const response = await fetch(`${API_BASE_URL}/api/auth/resend-verification`, {
         method: 'POST',
