@@ -230,3 +230,21 @@ export async function fetchInvoices() {
     });
     return handleResponse(response);
 }
+
+export async function fetchUsers() {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/users`, {
+        headers: headers,
+    });
+    return handleResponse(response);
+}
+
+export async function updateUser(userId: number, data: any) {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
+        method: 'PUT',
+        headers: headers,
+        body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+}

@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { API_BASE_URL, fetchAppConfig, saveSettings, uploadImage } from '@/lib/api';
+import { API_BASE_URL, fetchAppConfig, saveSettings, uploadImage, fetchUsers, updateUser } from '@/lib/api';
 import {
   Save,
   Upload,
@@ -31,7 +31,9 @@ import {
   Layers,
   Lock,
   Users, // <-- NEU: Für das Wartelisten-Icon
-  Wallet // <-- NEU: Für das Guthaben-Icon
+  Wallet, // <-- NEU: Für das Guthaben-Icon
+  ShieldCheck,
+  UserCog
 } from 'lucide-react';
 import React from 'react';
 import {
@@ -87,6 +89,21 @@ interface Level {
   color?: string;
   has_additional_requirements?: boolean;
   requirements: LevelRequirement[];
+}
+
+interface UserPermission {
+  can_create_courses: boolean;
+  can_edit_status: boolean;
+  can_delete_customers: boolean;
+  can_create_messages: boolean;
+}
+
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  permissions: UserPermission;
 }
 
 // Preview URL - Nutzt die Env-Variable oder Fallback auf deine echte App-URL
@@ -209,6 +226,10 @@ export function EinstellungenPage() {
   const [levels, setLevels] = useState<Level[]>([]);
   const [autoBillingEnabled, setAutoBillingEnabled] = useState(false);
   const [autoProgressEnabled, setAutoProgressEnabled] = useState(false);
+
+  // --- NEU: Mitarbeiter-Rechte ---
+  const [staff, setStaff] = useState<User[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
 
   // State für Zusatz-Module (nur IDs speichern)
   const [activeModules, setActiveModules] = useState<string[]>(['news', 'documents']); // Default an
@@ -621,6 +642,66 @@ export function EinstellungenPage() {
     });
   }, []);
 
+  const loadStaff = useCallback(async () => {
+    setLoadingStaff(true);
+    try {
+      const users = await fetchUsers();
+      // Filtere nur Mitarbeiter und Admins (oder alle, je nach Wunsch, aber hier Fokus auf Rechte)
+      setStaff(users.filter((u: User) => u.role === 'admin' || u.role === 'mitarbeiter'));
+    } catch (e) {
+      console.error(e);
+      toast({
+        variant: "destructive",
+        title: "Fehler",
+        description: "Mitarbeiter konnten nicht geladen werden."
+      });
+    } finally {
+      setLoadingStaff(false);
+    }
+  }, [toast]);
+
+  const handlePermissionChange = async (userId: number, field: keyof UserPermission, value: boolean) => {
+    // Optimistisches Update
+    setStaff(prev => prev.map(u => {
+      if (u.id === userId) {
+        return {
+          ...u,
+          permissions: {
+            ...u.permissions,
+            [field]: value
+          }
+        };
+      }
+      return u;
+    }));
+
+    try {
+      const userToUpdate = staff.find(u => u.id === userId);
+      if (!userToUpdate) return;
+
+      const newPermissions = {
+        ...userToUpdate.permissions,
+        [field]: value
+      };
+
+      await updateUser(userId, { permissions: newPermissions });
+
+      toast({
+        title: "Rechte aktualisiert",
+        description: "Die Änderungen wurden gespeichert."
+      });
+    } catch (e) {
+      console.error(e);
+      toast({
+        variant: "destructive",
+        title: "Fehler",
+        description: "Rechte konnten nicht gespeichert werden."
+      });
+      // Rollback bei Fehler
+      loadStaff();
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
@@ -698,6 +779,7 @@ export function EinstellungenPage() {
                 <TabsTrigger value="modules">Zusatz-Module</TabsTrigger>
                 <TabsTrigger value="balance">Guthaben</TabsTrigger>
                 <TabsTrigger value="levels">Level-System</TabsTrigger>
+                <TabsTrigger value="rights" onClick={loadStaff}>Rechte</TabsTrigger>
               </TabsList>
 
               <TabsContent value="branding" className="space-y-6">
@@ -1295,6 +1377,95 @@ export function EinstellungenPage() {
                         ))}
                         <Button variant="outline" size="lg" className="w-full border-2 border-dashed" onClick={handleAddLevel}><Plus size={20} className="mr-2" />Neues {levelTerm} hinzufügen</Button>
                       </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </TabsContent>
+
+              <TabsContent value="rights">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <ShieldCheck className="w-5 h-5 text-primary" />
+                        Mitarbeiter-Rechte
+                      </CardTitle>
+                      <CardDescription>
+                        Lege fest, welche Aktionen deine Mitarbeiter in der App durchführen dürfen.
+                        Admins haben standardmäßig vollen Zugriff.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {loadingStaff ? (
+                        <div className="py-12 flex flex-col items-center justify-center gap-4">
+                          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                          <p className="text-muted-foreground text-sm">Lade Mitarbeiter...</p>
+                        </div>
+                      ) : staff.length === 0 ? (
+                        <div className="py-12 text-center border-2 border-dashed rounded-lg">
+                          <UserCog className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                          <p className="text-muted-foreground italic">Keine Mitarbeiter gefunden.</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Name / E-Mail</TableHead>
+                                <TableHead className="text-center">Termine erstellen</TableHead>
+                                <TableHead className="text-center">Status bearbeiten</TableHead>
+                                <TableHead className="text-center">Kunden löschen</TableHead>
+                                <TableHead className="text-center">News erstellen</TableHead>
+                                <TableHead className="text-right">Rolle</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {staff.map((member) => (
+                                <TableRow key={member.id}>
+                                  <TableCell>
+                                    <div className="font-medium">{member.name}</div>
+                                    <div className="text-xs text-muted-foreground">{member.email}</div>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Switch
+                                      checked={member.role === 'admin' ? true : (member.permissions?.can_create_courses || false)}
+                                      onCheckedChange={(val) => handlePermissionChange(member.id, 'can_create_courses', val)}
+                                      disabled={member.role === 'admin'}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Switch
+                                      checked={member.role === 'admin' ? true : (member.permissions?.can_edit_status || false)}
+                                      onCheckedChange={(val) => handlePermissionChange(member.id, 'can_edit_status', val)}
+                                      disabled={member.role === 'admin'}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Switch
+                                      checked={member.role === 'admin' ? true : (member.permissions?.can_delete_customers || false)}
+                                      onCheckedChange={(val) => handlePermissionChange(member.id, 'can_delete_customers', val)}
+                                      disabled={member.role === 'admin'}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Switch
+                                      checked={member.role === 'admin' ? true : (member.permissions?.can_create_messages || false)}
+                                      onCheckedChange={(val) => handlePermissionChange(member.id, 'can_create_messages', val)}
+                                      disabled={member.role === 'admin'}
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${member.role === 'admin' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                                      }`}>
+                                      {member.role === 'admin' ? 'Admin' : 'Mitarbeiter'}
+                                    </span>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </motion.div>
