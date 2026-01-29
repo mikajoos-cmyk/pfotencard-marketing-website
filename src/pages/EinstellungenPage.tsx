@@ -33,7 +33,8 @@ import {
   Users, // <-- NEU: Für das Wartelisten-Icon
   Wallet, // <-- NEU: Für das Guthaben-Icon
   ShieldCheck,
-  UserCog
+  UserCog,
+  Settings // <-- NEU: Für die Standardwerte
 } from 'lucide-react';
 import React from 'react';
 import {
@@ -212,6 +213,7 @@ export function EinstellungenPage() {
   const [backgroundColor, setBackgroundColor] = useState('#F8FAFC'); // App Hintergrund
   const [sidebarColor, setSidebarColor] = useState('#1E293B'); // Seitenleiste
   const [openForAllColor, setOpenForAllColor] = useState('#10b981');
+  const [workshopLectureColor, setWorkshopLectureColor] = useState('#F97316');
   const [customPrimaryColor, setCustomPrimaryColor] = useState('');
   const [customSecondaryColor, _setCustomSecondaryColor] = useState('');
   const [customBackgroundColor, setCustomBackgroundColor] = useState('');
@@ -226,6 +228,10 @@ export function EinstellungenPage() {
   const [levels, setLevels] = useState<Level[]>([]);
   const [autoBillingEnabled, setAutoBillingEnabled] = useState(false);
   const [autoProgressEnabled, setAutoProgressEnabled] = useState(false);
+
+  // --- NEU: Standardwerte für Termine ---
+  const [defaultDuration, setDefaultDuration] = useState(60);
+  const [defaultMaxParticipants, setDefaultMaxParticipants] = useState(10);
 
   // --- NEU: Mitarbeiter-Rechte ---
   const [staff, setStaff] = useState<User[]>([]);
@@ -274,6 +280,8 @@ export function EinstellungenPage() {
       secondary_color: customSecondaryColor || secondaryColor,
       background_color: customBackgroundColor || backgroundColor,
       sidebar_color: customSidebarColor || sidebarColor,
+      open_for_all_color: openForAllColor,
+      workshop_lecture_color: workshopLectureColor,
       school_name: schoolName,
       logo: previewLogo || (hasLogo ? '/paw.png' : undefined),
       levels: mappedLevels,
@@ -333,6 +341,8 @@ export function EinstellungenPage() {
       secondary_color: customSecondaryColor || secondaryColor,
       background_color: customBackgroundColor || backgroundColor,
       sidebar_color: customSidebarColor || sidebarColor,
+      open_for_all_color: openForAllColor,
+      workshop_lecture_color: workshopLectureColor,
       school_name: schoolName,
       logo: previewLogo || (hasLogo ? '/paw.png' : undefined),
       levels: mappedLevels,
@@ -387,6 +397,7 @@ export function EinstellungenPage() {
         setBackgroundColor(branding.background_color || '#F8FAFC');
         setSidebarColor(branding.sidebar_color || '#1E293B');
         setOpenForAllColor(branding.open_for_all_color || '#10b981');
+        setWorkshopLectureColor(branding.workshop_lecture_color || '#F97316');
         setLevelTerm(wording.level || 'Level');
         setVipTerm(wording.vip || 'VIP');
         setTopUpOptions(balance.top_up_options || []);
@@ -394,6 +405,10 @@ export function EinstellungenPage() {
         setActiveModules(t.config?.active_modules || ['news', 'documents']);
         setAutoBillingEnabled(t.config?.auto_billing_enabled || false);
         setAutoProgressEnabled(t.config?.auto_progress_enabled || false);
+
+        const appointmentsConfig = t.config?.appointments || {};
+        setDefaultDuration(appointmentsConfig.default_duration || 60);
+        setDefaultMaxParticipants(appointmentsConfig.max_participants || 10);
 
         if (branding.logo_url) {
           const logoUrl = branding.logo_url.startsWith('http')
@@ -463,6 +478,7 @@ export function EinstellungenPage() {
         background_color: customBackgroundColor || backgroundColor,
         sidebar_color: customSidebarColor || sidebarColor,
         open_for_all_color: openForAllColor,
+        workshop_lecture_color: workshopLectureColor,
         logo_url: previewLogo,
         level_term: levelTerm,
         vip_term: vipTerm,
@@ -472,7 +488,11 @@ export function EinstellungenPage() {
         levels: normalizedLevels,
         active_modules: activeModules,
         auto_billing_enabled: autoBillingEnabled,
-        auto_progress_enabled: autoProgressEnabled
+        auto_progress_enabled: autoProgressEnabled,
+        appointments: {
+          default_duration: defaultDuration,
+          max_participants: defaultMaxParticipants
+        }
       };
 
       await saveSettings(payload);
@@ -775,6 +795,7 @@ export function EinstellungenPage() {
             <Tabs defaultValue="branding" className="w-full">
               <TabsList className={`grid w-full gap-2 mb-8 h-auto p-2 sticky top-24 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 ${showPreview ? 'grid-cols-1 xl:grid-cols-4' : 'grid-cols-1 md:grid-cols-4'}`}>
                 <TabsTrigger value="branding">Branding</TabsTrigger>
+                <TabsTrigger value="standards">Standardwerte</TabsTrigger>
                 <TabsTrigger value="services">Leistungen</TabsTrigger>
                 <TabsTrigger value="modules">Zusatz-Module</TabsTrigger>
                 <TabsTrigger value="balance">Guthaben</TabsTrigger>
@@ -959,6 +980,44 @@ export function EinstellungenPage() {
                     <CardContent className="space-y-4">
                       <div><Label>Begriff für "Level"</Label><Input value={levelTerm} onChange={(e) => setLevelTerm(e.target.value)} placeholder="z.B. Klasse" className="mt-2" /></div>
                       <div><Label>Begriff für "VIP"</Label><Input value={vipTerm} onChange={(e) => setVipTerm(e.target.value)} placeholder="z.B. Profi" className="mt-2" /></div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </TabsContent>
+
+              <TabsContent value="standards">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Settings className="w-5 h-5" />
+                        Standardwerte für Termine
+                      </CardTitle>
+                      <CardDescription>Definiere Standardwerte, die beim Erstellen neuer Termine vorausgefüllt werden.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label>Standard-Dauer (Minuten)</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={defaultDuration}
+                          onChange={(e) => setDefaultDuration(parseInt(e.target.value) || 60)}
+                          className="mt-2"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Wie lange dauert ein Termin im Durchschnitt?</p>
+                      </div>
+                      <div>
+                        <Label>Standard-Teilnehmerzahl</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={defaultMaxParticipants}
+                          onChange={(e) => setDefaultMaxParticipants(parseInt(e.target.value) || 10)}
+                          className="mt-2"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Maximale Teilnehmerzahl, die standardmäßig vorgeschlagen wird.</p>
+                      </div>
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -1241,6 +1300,23 @@ export function EinstellungenPage() {
                           </div>
                         </div>
 
+                        <div className="bg-card p-6 rounded-lg border border-border mb-6">
+                          <h4 className="font-semibold mb-4">Farbe für Workshops & Vorträge</h4>
+                          <p className="text-sm text-text-secondary mb-4">Wähle eine Farbe für Termine, die als Workshop oder Vortrag markiert sind.</p>
+                          <div className="flex items-center gap-4">
+                            <div
+                              className="w-10 h-10 rounded-full border border-border"
+                              style={{ backgroundColor: workshopLectureColor }}
+                            ></div>
+                            <input
+                              type="color"
+                              value={workshopLectureColor}
+                              onChange={(e) => setWorkshopLectureColor(e.target.value)}
+                              className="h-10 w-24 p-1 border border-border rounded cursor-pointer"
+                            />
+                          </div>
+                        </div>
+
                         {levels.map((level, index) => (
                           <div key={level.id || index} className="relative">
                             {index < levels.length - 1 && <div className="absolute left-6 top-full h-6 w-0.5 bg-border" />}
@@ -1306,18 +1382,41 @@ export function EinstellungenPage() {
                                   <div>
                                     <Label className="text-sm font-medium mb-3 block">Anforderungen</Label>
                                     {level.requirements.filter(r => !r.is_additional).length === 0 ? <p className="text-sm text-muted-foreground italic">Noch keine Anforderungen definiert</p> : (
-                                      <div className="space-y-2">{level.requirements.filter(r => !r.is_additional).map((req) => {
-                                        // Original index finden für update/delete
-                                        const originalIdx = level.requirements.indexOf(req);
-                                        return (
-                                          <div key={req.id || originalIdx} className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                                            <GripVertical size={16} className="text-muted-foreground" />
-                                            <Input type="number" min="1" value={req.required_count} onChange={(e) => handleUpdateRequirement(index, originalIdx, parseInt(e.target.value) || 1)} className="w-16 h-8 text-center" />
-                                            <span className="text-sm flex-1">x {getServiceName(req.training_type_id)}</span>
-                                            <Button variant="ghost" size="sm" onClick={() => handleDeleteRequirement(index, originalIdx)}><Trash2 size={14} /></Button>
-                                          </div>
-                                        );
-                                      })}</div>
+                                      <Reorder.Group
+                                        axis="y"
+                                        values={level.requirements.filter(r => !r.is_additional)}
+                                        onReorder={(newOrder) => {
+                                          const newLevels = [...levels];
+                                          // Holen der existierenden Zusatz-Requirements
+                                          const additionalReqs = newLevels[index].requirements.filter(r => r.is_additional);
+                                          // Zusammenführen: Neue Ordnung der "Normalen" + unveränderte "Zusätzliche"
+                                          newLevels[index].requirements = [...newOrder, ...additionalReqs];
+                                          setLevels(newLevels);
+                                        }}
+                                        className="space-y-2"
+                                      >
+                                        {level.requirements.filter(r => !r.is_additional).map((req) => {
+                                          // Original index finden für update/delete - wichtig, da wir filtern
+                                          // Aber wir können req direkt nutzen, da es Referenz ist? Nein, wir brauchen den Index im Gesamtarray für update/delete helper
+                                          // Besser: Wir bauen die Helper um oder suchen das Objekt
+                                          // Da wir oben das Array neu bauen, ist die Referenz vllt ok, aber die alten Helper nutzen Indizes.
+                                          // Workaround: Find index in the COMPLETE array.
+                                          const originalIdx = level.requirements.findIndex(r => r === req);
+
+                                          return (
+                                            <Reorder.Item
+                                              key={req.id || `req-${req.training_type_id}-${originalIdx}`} // Stable key needed
+                                              value={req}
+                                              className="flex items-center gap-2 p-3 bg-muted rounded-lg"
+                                            >
+                                              <GripVertical size={16} className="text-muted-foreground cursor-grab active:cursor-grabbing" />
+                                              <Input type="number" min="1" value={req.required_count} onChange={(e) => handleUpdateRequirement(index, originalIdx, parseInt(e.target.value) || 1)} className="w-16 h-8 text-center" />
+                                              <span className="text-sm flex-1">x {getServiceName(req.training_type_id)}</span>
+                                              <Button variant="ghost" size="sm" onClick={() => handleDeleteRequirement(index, originalIdx)}><Trash2 size={14} /></Button>
+                                            </Reorder.Item>
+                                          );
+                                        })}
+                                      </Reorder.Group>
                                     )}
                                   </div>
                                   <Dialog open={isRequirementDialogOpen && currentLevelIndex === index} onOpenChange={(open) => { setIsRequirementDialogOpen(open); if (open) setCurrentLevelIndex(index); }}>
@@ -1336,15 +1435,34 @@ export function EinstellungenPage() {
                                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-4 pt-4 border-t">
                                       <Label className="text-sm font-medium mb-3 block">Zusatzleistungen (nur Vorträge & Workshops)</Label>
                                       {level.requirements.filter(r => r.is_additional).length === 0 ? <p className="text-sm text-muted-foreground italic">Noch keine Zusatzleistungen definiert</p> : (
-                                        <div className="space-y-2">{level.requirements.filter(r => r.is_additional).map((req) => {
-                                          const originalIdx = level.requirements.indexOf(req);
-                                          return (
-                                            <div key={req.id || originalIdx} className="flex items-center gap-2 p-3 bg-primary/5 border border-primary/10 rounded-lg">
-                                              <span className="text-sm flex-1">{getServiceName(req.training_type_id)}</span>
-                                              <Button variant="ghost" size="sm" onClick={() => handleDeleteRequirement(index, originalIdx)}><Trash2 size={14} /></Button>
-                                            </div>
-                                          );
-                                        })}</div>
+                                        <Reorder.Group
+                                          axis="y"
+                                          values={level.requirements.filter(r => r.is_additional)}
+                                          onReorder={(newOrder) => {
+                                            const newLevels = [...levels];
+                                            // Holen der existierenden normalen Requirements
+                                            const normalReqs = newLevels[index].requirements.filter(r => !r.is_additional);
+                                            // Zusammenführen: Unveränderte "Normale" + Neue Ordnung der "Zusätzlichen"
+                                            newLevels[index].requirements = [...normalReqs, ...newOrder];
+                                            setLevels(newLevels);
+                                          }}
+                                          className="space-y-2"
+                                        >
+                                          {level.requirements.filter(r => r.is_additional).map((req) => {
+                                            const originalIdx = level.requirements.findIndex(r => r === req);
+                                            return (
+                                              <Reorder.Item
+                                                key={req.id || `add-req-${req.training_type_id}-${originalIdx}`}
+                                                value={req}
+                                                className="flex items-center gap-2 p-3 bg-primary/5 border border-primary/10 rounded-lg"
+                                              >
+                                                <GripVertical size={16} className="text-muted-foreground cursor-grab active:cursor-grabbing mr-2" />
+                                                <span className="text-sm flex-1">{getServiceName(req.training_type_id)}</span>
+                                                <Button variant="ghost" size="sm" onClick={() => handleDeleteRequirement(index, originalIdx)}><Trash2 size={14} /></Button>
+                                              </Reorder.Item>
+                                            );
+                                          })}
+                                        </Reorder.Group>
                                       )}
                                       <Dialog open={isAdditionalDialogOpen && currentLevelIndex === index} onOpenChange={(open) => { setIsAdditionalDialogOpen(open); if (open) setCurrentLevelIndex(index); }}>
                                         <DialogTrigger asChild><Button variant="outline" size="sm" className="w-full border-primary/20 hover:bg-primary/5 text-primary" onClick={() => { setCurrentLevelIndex(index); setRequirementForm({ serviceId: '', quantity: 1 }); }}><Plus size={16} className="mr-2" />Zusatzleistung hinzufügen</Button></DialogTrigger>
