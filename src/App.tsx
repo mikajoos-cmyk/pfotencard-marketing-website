@@ -107,7 +107,7 @@ function AppContent() {
 
           {/* Geschützte Routen */}
           <Route
-            path="/einstellungen"
+            path="/einstellungen/:section?"
             element={
               <ProtectedRoute>
                 <EinstellungenPage />
