@@ -376,7 +376,8 @@ export function EinstellungenPage() {
       active_modules: activeModules,
 
       level_term: levelTerm,
-      vip_term: vipTerm
+      vip_term: vipTerm,
+      color_rules: colorRules
     };
 
     const message = {
@@ -436,7 +437,8 @@ export function EinstellungenPage() {
       role: previewRole,
       active_modules: activeModules,
       level_term: levelTerm,
-      vip_term: vipTerm
+      vip_term: vipTerm,
+      color_rules: colorRules
     };
 
     const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(config))));
