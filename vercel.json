@@ -2,10 +2,11 @@
     "regions": [
         "fra1"
     ],
-    "rewrites": [
+    "routes": [
         {
-            "source": "/(.*)",
-            "destination": "/index.html"
+            "src": "/[^.]+",
+            "dest": "/",
+            "status": 200
         }
     ]
 }
