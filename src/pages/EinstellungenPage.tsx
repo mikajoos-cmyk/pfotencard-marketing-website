@@ -765,6 +765,13 @@ export function EinstellungenPage() {
     }
   }, [toast]);
 
+  // --- MITARBEITER LADEN ---
+  useEffect(() => {
+    if (activeSection === 'rights') {
+      loadStaff();
+    }
+  }, [activeSection, loadStaff]);
+
   const handlePermissionChange = async (userId: number, field: keyof UserPermission, value: boolean) => {
     // Optimistisches Update
     setStaff(prev => prev.map(u => {

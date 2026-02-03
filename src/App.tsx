@@ -38,7 +38,7 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 
       try {
         const status = await checkTenantStatus(subdomain);
-        // Wir lassen den User rein, wenn:
+        // Wir lassen den User rein, wenn:uhuhuhu
         // 1. Das Abo gültig ist (subscription_valid)
         // 2. ODER wenn er gerade auf dem Weg zum Checkout oder zur Billing Page ist (um das Problem zu lösen)
         setSubscriptionValid(status.subscription_valid);
