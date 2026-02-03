@@ -131,6 +131,7 @@ interface ColorRule {
   type: 'level' | 'service';
   target_ids: number[];
   color: string;
+  match_all?: boolean;
 }
 
 // Preview URL - Nutzt die Env-Variable oder Fallback auf deine echte App-URL
@@ -1239,24 +1240,10 @@ export function EinstellungenPage() {
                     <Card>
                       <CardHeader><CardTitle>Level-System</CardTitle><CardDescription>Definiere die Aufstiegsleiter. Klicke auf "Bearbeiten" für Details.</CardDescription></CardHeader>
                       <CardContent className="space-y-4">
-                        {/* Global Level Colors */}
-                        <div className="bg-card p-4 rounded-lg border border-border">
-                          <h4 className="font-semibold mb-3">Farbe für "Alle Level"</h4>
-                          <div className="flex items-center gap-4">
-                            <div className="w-8 h-8 rounded-full border border-border" style={{ backgroundColor: openForAllColor }}></div>
-                            <input type="color" value={openForAllColor} onChange={(e) => setOpenForAllColor(e.target.value)} className="h-8 w-20 p-1 border border-border rounded cursor-pointer" />
-                          </div>
-                        </div>
-                        <div className="bg-card p-4 rounded-lg border border-border">
-                          <h4 className="font-semibold mb-3">Farbe für Workshops & Vorträge</h4>
-                          <div className="flex items-center gap-4">
-                            <div className="w-8 h-8 rounded-full border border-border" style={{ backgroundColor: workshopLectureColor }}></div>
-                            <input type="color" value={workshopLectureColor} onChange={(e) => setWorkshopLectureColor(e.target.value)} className="h-8 w-20 p-1 border border-border rounded cursor-pointer" />
-                          </div>
-                        </div>
+                        {/* Global Level Colors removed as per request */}
 
                         {/* Master List - Reorderable */}
-                        <div className="border-t pt-4 mt-4">
+                        <div>
                           <h4 className="font-semibold mb-3">{levelTerm}-Übersicht</h4>
                           <Reorder.Group axis="y" values={levels} onReorder={setLevels} className="space-y-2">
                             {levels.map((level, index) => (
@@ -1302,7 +1289,7 @@ export function EinstellungenPage() {
                             {/* Color */}
                             <div>
                               <Label className="text-base font-medium">Farbe</Label>
-                              <p className="text-sm text-muted-foreground mb-2">Farbe für die Darstellung in Kalender & App.</p>
+                              <p className="text-sm text-muted-foreground mb-2">Farbe für die Anzeige im Level-System.</p>
                               <div className="flex gap-2">
                                 {colorPresets.map((preset) => (
                                   <button
@@ -1711,18 +1698,19 @@ export function EinstellungenPage() {
                                             />
                                           </div>
                                           <div className="flex items-center gap-2">
-                                            <div
-                                              className="w-10 h-10 rounded border cursor-pointer flex-shrink-0"
-                                              style={{ backgroundColor: rule.color }}
-                                              onClick={() => {
-                                                const newColor = prompt('Farbe wählen (Hex):', rule.color);
-                                                if (newColor && /^#[0-9A-F]{6}$/i.test(newColor)) {
+                                            <div className="relative w-10 h-10 rounded border flex-shrink-0 overflow-hidden">
+                                              <input
+                                                type="color"
+                                                value={rule.color}
+                                                onChange={(e) => {
                                                   const newRules = [...colorRules];
-                                                  newRules[idx].color = newColor;
+                                                  newRules[idx].color = e.target.value;
                                                   setColorRules(newRules);
-                                                }
-                                              }}
-                                            />
+                                                }}
+                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                              />
+                                              <div className="w-full h-full" style={{ backgroundColor: rule.color }} />
+                                            </div>
                                             <Button
                                               variant="ghost"
                                               size="icon"
@@ -1781,8 +1769,27 @@ export function EinstellungenPage() {
                                               })}
                                             </div>
                                           </div>
+                                          {rule.type === 'level' && (
+                                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-dashed">
+                                              <Switch
+                                                id={`match-all-${rule.id}`}
+                                                checked={!!rule.match_all}
+                                                onCheckedChange={(checked) => {
+                                                  const newRules = [...colorRules];
+                                                  newRules[idx].match_all = checked;
+                                                  setColorRules(newRules);
+                                                }}
+                                              />
+                                              <Label htmlFor={`match-all-${rule.id}`} className="text-sm cursor-pointer text-muted-foreground">
+                                                {rule.match_all
+                                                  ? "Alle gewählten Level müssen zutreffen (UND-Verknüpfung)"
+                                                  : "Eines der Level genügt (ODER-Verknüpfung)"}
+                                              </Label>
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
+
                                     ))}
                                   </div>
                                 )}
