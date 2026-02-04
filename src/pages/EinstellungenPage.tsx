@@ -15,7 +15,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { API_BASE_URL, fetchAppConfig, saveSettings, uploadImage, fetchUsers, updateUser } from '@/lib/api';
+import { API_BASE_URL, fetchAppConfig, saveSettings, uploadImage, fetchUsers, updateUser, getInvoicePreview } from '@/lib/api';
 import {
   Save,
   Upload,
@@ -134,6 +134,24 @@ interface ColorRule {
   match_all?: boolean;
 }
 
+interface InvoiceSettings {
+  company_name: string;
+  address_line1: string;
+  address_line2: string;
+  tax_number: string;
+  vat_id: string;
+  bank_name: string;
+  iban: string;
+  bic: string;
+  account_holder: string;
+  footer_text: string;
+  logo_url: string;
+  vat_rate: number;
+  is_small_business: boolean;
+  small_business_text: string;
+}
+
+
 // Preview URL - Nutzt die Env-Variable oder Fallback auf deine echte App-URL
 const PREVIEW_APP_URL = (import.meta as any).env.VITE_PREVIEW_APP_URL || 'https://preview.pfotencard.de/?mode=preview';
 
@@ -203,14 +221,13 @@ const AVAILABLE_MODULES: AppModule[] = [
     premiumOnly: true,
     icon: Wallet
   },
-  // {
-  //   id: 'marketplace',
-  //   name: 'Partner-Marktplatz',
-  //   description: 'Empfehle Futter & Zubehör und verdiene Provisionen.',
-  //   premiumOnly: false, // Maybe open for all
-  //   comingSoon: true,
-  //   icon: Store
-  // }
+  {
+    id: 'invoice_download',
+    name: 'Rechnungs-Download',
+    description: 'Ermöglicht Kunden den automatischen Download von Rechnungen für ihre Aufladungen.',
+    premiumOnly: true,
+    icon: Activity
+  }
 ];
 
 // --- NAVIGATION CONFIG ---
@@ -307,6 +324,36 @@ export function EinstellungenPage() {
 
   // State für Zusatz-Module (nur IDs speichern)
   const [activeModules, setActiveModules] = useState<string[]>(['news', 'documents']); // Default an
+
+  const [invoiceSettings, setInvoiceSettings] = useState<InvoiceSettings>({
+    company_name: '',
+    address_line1: '',
+    address_line2: '',
+    tax_number: '',
+    vat_id: '',
+    bank_name: '',
+    iban: '',
+    bic: '',
+    account_holder: '',
+    footer_text: '',
+    logo_url: '',
+    vat_rate: 19.0,
+    is_small_business: false,
+    small_business_text: 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.'
+  });
+
+  const [showInvoicePreview, setShowInvoicePreview] = useState(false);
+  const [invoicePreviewUrl, setInvoicePreviewUrl] = useState<string | null>(null);
+  const [generatingPreview, setGeneratingPreview] = useState(false);
+
+  const isInvoiceDataComplete = () => {
+    return !!(
+      invoiceSettings.company_name &&
+      invoiceSettings.address_line1 &&
+      invoiceSettings.address_line2 &&
+      invoiceSettings.iban
+    );
+  };
 
   const [hasLogo, setHasLogo] = useState(false);
   const [previewLogo, setPreviewLogo] = useState<string | undefined>(undefined);
@@ -528,6 +575,25 @@ export function EinstellungenPage() {
         }));
         setLevels(mappedLevels);
 
+        if (t.config?.invoice_settings) {
+          setInvoiceSettings({
+            company_name: t.config.invoice_settings.company_name || '',
+            address_line1: t.config.invoice_settings.address_line1 || '',
+            address_line2: t.config.invoice_settings.address_line2 || '',
+            tax_number: t.config.invoice_settings.tax_number || '',
+            vat_id: t.config.invoice_settings.vat_id || '',
+            bank_name: t.config.invoice_settings.bank_name || '',
+            iban: t.config.invoice_settings.iban || '',
+            bic: t.config.invoice_settings.bic || '',
+            account_holder: t.config.invoice_settings.account_holder || '',
+            footer_text: t.config.invoice_settings.footer_text || '',
+            logo_url: t.config.invoice_settings.logo_url || '',
+            vat_rate: t.config.invoice_settings.vat_rate || 19.0,
+            is_small_business: t.config.invoice_settings.is_small_business || false,
+            small_business_text: t.config.invoice_settings.small_business_text || 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.'
+          });
+        }
+
       } catch (e) {
         console.error(e);
         toast({
@@ -578,7 +644,8 @@ export function EinstellungenPage() {
           default_duration: defaultDuration,
           max_participants: defaultMaxParticipants,
           color_rules: colorRules
-        }
+        },
+        invoice_settings: invoiceSettings
       };
 
       await saveSettings(payload);
@@ -621,6 +688,49 @@ export function EinstellungenPage() {
   const handleLogoUpload = () => {
     document.getElementById('logo-upload-input')?.click();
   };
+
+  const handleInvoiceLogoUpload = () => {
+    document.getElementById('invoice-logo-upload-input')?.click();
+  };
+
+  const handleInvoiceLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      try {
+        const { url } = await uploadImage(file);
+        const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+        setInvoiceSettings({ ...invoiceSettings, logo_url: fullUrl });
+        toast({ title: "Logo hochgeladen", description: "Das Rechnungslogo wurde erfolgreich hochgeladen." });
+      } catch (err) {
+        console.error("Upload failed", err);
+        toast({ variant: "destructive", title: "Upload fehlgeschlagen" });
+      }
+    }
+  };
+
+  const handleShowInvoicePreview = async () => {
+    setGeneratingPreview(true);
+    try {
+      const blob = await getInvoicePreview(invoiceSettings);
+      const url = URL.createObjectURL(blob);
+      setInvoicePreviewUrl(url);
+      setShowInvoicePreview(true);
+    } catch (error) {
+      console.error('Preview error:', error);
+      toast({ variant: "destructive", title: "Vorschau fehlgeschlagen", description: "Die Vorschau konnte nicht generiert werden." });
+    } finally {
+      setGeneratingPreview(false);
+    }
+  };
+
+  // Add cleanup for preview URL
+  useEffect(() => {
+    return () => {
+      if (invoicePreviewUrl) {
+        URL.revokeObjectURL(invoicePreviewUrl);
+      }
+    };
+  }, [invoicePreviewUrl]);
 
   // --- BADGE UPLOAD ---
   const handleLevelBadgeFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1517,6 +1627,7 @@ export function EinstellungenPage() {
                   </motion.div>
                 )}
 
+
                 {/* Module Hub - Master-Detail View */}
                 {activeSection === 'modules' && (
                   <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
@@ -1544,13 +1655,20 @@ export function EinstellungenPage() {
                                     <div className="flex flex-col items-end gap-2">
                                       <Switch
                                         checked={isActive}
-                                        disabled={module.premiumOnly && !isAllowed || module.comingSoon}
+                                        disabled={
+                                          (module.premiumOnly && !isAllowed) ||
+                                          module.comingSoon ||
+                                          (module.id === 'invoice_download' && !isInvoiceDataComplete())
+                                        }
                                         onCheckedChange={(val) => {
                                           if (val) setActiveModules([...activeModules, module.id]);
                                           else setActiveModules(activeModules.filter(id => id !== module.id));
                                         }}
                                       />
                                       {module.comingSoon && <span className="text-[10px] bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Coming Soon</span>}
+                                      {module.id === 'invoice_download' && !isInvoiceDataComplete() && !isActive && (
+                                        <span className="text-[10px] text-destructive font-medium">Daten unvollständig</span>
+                                      )}
                                     </div>
                                   </div>
                                   <div className="mt-3">
@@ -1559,7 +1677,7 @@ export function EinstellungenPage() {
                                   </div>
                                 </CardHeader>
                                 <CardContent className="p-4 pt-0">
-                                  {isActive && (
+                                  {(isActive || module.id === 'invoice_download') && (
                                     <Button
                                       variant="outline"
                                       size="sm"
@@ -1597,6 +1715,160 @@ export function EinstellungenPage() {
                             <p className="text-xs text-muted-foreground">Konfiguriere die Modul-Einstellungen</p>
                           </div>
                         </div>
+
+                        {/* Invoice Details */}
+                        {selectedModuleId === 'invoice_download' && (
+                          <div className="grid gap-6">
+                            <Card>
+                              <CardHeader>
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <CardTitle className="flex items-center gap-2">
+                                      <Activity size={20} />
+                                      Rechnungs-Daten
+                                    </CardTitle>
+                                    <CardDescription>Diese Daten sind zwingend erforderlich, um das Modul zu aktivieren.</CardDescription>
+                                  </div>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleShowInvoicePreview}
+                                    disabled={generatingPreview}
+                                  >
+                                    {generatingPreview ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Eye size={16} className="mr-2" />}
+                                    Vorschau
+                                  </Button>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  <div className="space-y-4">
+                                    <h3 className="text-sm font-semibold border-b pb-2">Unternehmensdaten</h3>
+                                    <div className="space-y-2">
+                                      <Label>Firmenname / Inhaber</Label>
+                                      <Input value={invoiceSettings.company_name} onChange={e => setInvoiceSettings({ ...invoiceSettings, company_name: e.target.value })} placeholder="Max Mustermann Hundeschule" />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label>Straße & Hausnummer</Label>
+                                      <Input value={invoiceSettings.address_line1} onChange={e => setInvoiceSettings({ ...invoiceSettings, address_line1: e.target.value })} placeholder="Hauptstraße 1" />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label>PLZ & Ort</Label>
+                                      <Input value={invoiceSettings.address_line2} onChange={e => setInvoiceSettings({ ...invoiceSettings, address_line2: e.target.value })} placeholder="12345 Musterstadt" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 pt-2">
+                                      <div className="space-y-2">
+                                        <Label>Steuernummer</Label>
+                                        <Input value={invoiceSettings.tax_number} onChange={e => setInvoiceSettings({ ...invoiceSettings, tax_number: e.target.value })} placeholder="12/345/67890" />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <Label>USt-ID (Optional)</Label>
+                                        <Input value={invoiceSettings.vat_id} onChange={e => setInvoiceSettings({ ...invoiceSettings, vat_id: e.target.value })} placeholder="DE123456789" />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <h3 className="text-sm font-semibold border-b pb-2">Bankverbindung</h3>
+                                    <div className="space-y-2">
+                                      <Label>Kontoinhaber</Label>
+                                      <Input value={invoiceSettings.account_holder} onChange={e => setInvoiceSettings({ ...invoiceSettings, account_holder: e.target.value })} placeholder="Max Mustermann" />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label>Bankname</Label>
+                                      <Input value={invoiceSettings.bank_name} onChange={e => setInvoiceSettings({ ...invoiceSettings, bank_name: e.target.value })} placeholder="Musterbank" />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label>IBAN</Label>
+                                      <Input value={invoiceSettings.iban} onChange={e => setInvoiceSettings({ ...invoiceSettings, iban: e.target.value })} placeholder="DE00 0000 0000 0000 0000 00" />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label>BIC</Label>
+                                      <Input value={invoiceSettings.bic} onChange={e => setInvoiceSettings({ ...invoiceSettings, bic: e.target.value })} placeholder="ABCDEFGHXXX" />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-4 pt-4 border-t">
+                                  <div className="space-y-2">
+                                    <Label>Fußzeilen-Text (Optional)</Label>
+                                    <Input value={invoiceSettings.footer_text} onChange={e => setInvoiceSettings({ ...invoiceSettings, footer_text: e.target.value })} placeholder="Registergericht..." />
+                                  </div>
+
+                                  <div className="space-y-2 py-2">
+                                    <Label>Rechnungs-Logo (Optional)</Label>
+                                    <p className="text-xs text-muted-foreground mb-2">Falls leer, wird dein normales Schul-Logo verwendet.</p>
+                                    <input type="file" id="invoice-logo-upload-input" className="hidden" accept="image/*" onChange={handleInvoiceLogoFileChange} />
+                                    <div
+                                      onClick={handleInvoiceLogoUpload}
+                                      className={`relative border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${invoiceSettings.logo_url ? 'border-primary bg-primary/5' : 'border-border hover:border-primary hover:bg-muted'}`}
+                                    >
+                                      {invoiceSettings.logo_url ? (
+                                        <div className="flex items-center justify-center gap-4">
+                                          <div className="w-16 h-16 bg-white rounded border flex items-center justify-center overflow-hidden">
+                                            <img src={invoiceSettings.logo_url} alt="Invoice Logo" className="w-full h-full object-contain" />
+                                          </div>
+                                          <div className="text-left">
+                                            <p className="text-sm font-medium">Eigenes Rechnungslogo aktiv</p>
+                                            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs mt-1" onClick={(e) => {
+                                              e.stopPropagation();
+                                              setInvoiceSettings({ ...invoiceSettings, logo_url: '' });
+                                            }}>
+                                              <Trash2 size={12} className="mr-1" /> Entfernen (Branding-Logo nutzen)
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="flex flex-col items-center gap-2">
+                                          <Upload size={24} className="text-muted-foreground" />
+                                          <p className="text-xs font-medium">Klicke zum Hochladen eines speziellen Rechnungs-Logos</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-4 pt-4 border-t">
+                                    <div className="flex items-center justify-between">
+                                      <div className="space-y-0.5">
+                                        <Label>Kleinunternehmer-Regelung</Label>
+                                        <p className="text-xs text-muted-foreground">Keine MwSt. Ausweisung gemäß § 19 UStG</p>
+                                      </div>
+                                      <Switch
+                                        checked={invoiceSettings.is_small_business}
+                                        onCheckedChange={val => setInvoiceSettings({ ...invoiceSettings, is_small_business: val })}
+                                      />
+                                    </div>
+
+                                    {!invoiceSettings.is_small_business && (
+                                      <div className="space-y-2 max-w-[200px]">
+                                        <Label>Umsatzsteuersatz (%)</Label>
+                                        <div className="flex items-center gap-2">
+                                          <Input
+                                            type="number"
+                                            value={invoiceSettings.vat_rate}
+                                            onChange={e => setInvoiceSettings({ ...invoiceSettings, vat_rate: parseFloat(e.target.value) || 0 })}
+                                          />
+                                          <span className="text-sm font-medium">%</span>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {invoiceSettings.is_small_business && (
+                                      <div className="space-y-2">
+                                        <Label>Rechtshinweis für Kleinunternehmer</Label>
+                                        <Input
+                                          value={invoiceSettings.small_business_text}
+                                          onChange={e => setInvoiceSettings({ ...invoiceSettings, small_business_text: e.target.value })}
+                                        />
+                                        <p className="text-[11px] text-muted-foreground italic">Dieser Text erscheint auf der Rechnung anstelle der MwSt-Aufschlüsselung.</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </div>
+                        )}
 
                         {/* Calendar Details */}
                         {selectedModuleId === 'calendar' && (
@@ -1800,7 +2072,7 @@ export function EinstellungenPage() {
 
 
                         {/* Generic Placeholder for other modules */}
-                        {!['calendar'].includes(selectedModuleId || '') && (
+                        {!['calendar', 'invoice_download'].includes(selectedModuleId || '') && (
                           <Card className="border-dashed">
                             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                               <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-4">
@@ -1991,7 +2263,7 @@ export function EinstellungenPage() {
       </Button >
 
       {/* --- MOBILE PREVIEW SHEET --- */}
-      < Sheet open={isPreviewMobileOpen} onOpenChange={setIsPreviewMobileOpen} >
+      <Sheet open={isPreviewMobileOpen} onOpenChange={setIsPreviewMobileOpen} >
         <SheetContent side="bottom" className="p-0 h-[85vh] rounded-t-2xl overflow-hidden">
           <SheetHeader className="hidden">
             <SheetTitle>Live-Vorschau</SheetTitle>
@@ -2038,6 +2310,32 @@ export function EinstellungenPage() {
           </div>
         </SheetContent>
       </Sheet >
+
+      <Dialog open={showInvoicePreview} onOpenChange={setShowInvoicePreview}>
+        <DialogContent className="max-w-4xl h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Rechnungsvorschau</DialogTitle>
+            <DialogDescription>So sieht deine Rechnung aktuell aus.</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-[500px] border rounded-md overflow-hidden bg-muted/10">
+            {invoicePreviewUrl ? (
+              <iframe
+                src={invoicePreviewUrl}
+                className="w-full h-full border-0"
+                title="Rechnungsvorschau"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground italic">
+                Wird generiert...
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowInvoicePreview(false)}>Schließen</Button>
+            <Button onClick={() => { setShowInvoicePreview(false); handleSaveSettings(); }}>Speichern & Übernehmen</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div >
   );
 }

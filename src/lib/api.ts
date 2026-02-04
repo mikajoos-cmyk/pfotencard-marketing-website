@@ -231,6 +231,22 @@ export async function fetchInvoices() {
     return handleResponse(response);
 }
 
+export async function getInvoicePreview(settings: any) {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/settings/invoice-preview`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(settings),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Vorschau fehlgeschlagen (${response.status})`);
+    }
+
+    return response.blob();
+}
+
 export async function fetchUsers() {
     const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/api/users`, {
