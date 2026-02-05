@@ -269,11 +269,11 @@ const PLAN_FEATURES: Record<string, { branding: boolean; modules: string[] }> = 
   },
   pro: {
     branding: true,
-    modules: ['news', 'chat', 'balance_topup'],
+    modules: ['news', 'chat', 'balance_topup', 'invoice_download'],
   },
   enterprise: {
     branding: true,
-    modules: ['news', 'chat', 'calendar', 'balance_topup'],
+    modules: ['news', 'chat', 'calendar', 'balance_topup', 'invoice_download'],
   }
 };
 
