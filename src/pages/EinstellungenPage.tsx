@@ -112,7 +112,6 @@ interface UserPermission {
   can_edit_status: boolean;
   can_delete_customers: boolean;
   can_create_messages: boolean;
-  can_manage_appointments: boolean;
 }
 
 interface User {
@@ -2117,7 +2116,8 @@ export function EinstellungenPage() {
                               <TableHeader>
                                 <TableRow className="bg-muted/50">
                                   <TableHead>Mitarbeiter</TableHead>
-                                  <TableHead className="text-center">Termine</TableHead>
+                                  <TableHead className="text-center">Kurse anlegen</TableHead>
+                                  <TableHead className="text-center">Status bearbeiten</TableHead>
                                   <TableHead className="text-center">Kunden löschen</TableHead>
                                   <TableHead className="text-center">Nachrichten</TableHead>
                                   <TableHead className="text-right">Rolle</TableHead>
@@ -2131,8 +2131,15 @@ export function EinstellungenPage() {
                                     </TableCell>
                                     <TableCell className="text-center">
                                       <Switch
-                                        checked={member.role === 'admin' || (member.permissions?.can_manage_appointments || false)}
-                                        onCheckedChange={(val) => handlePermissionChange(member.id, 'can_manage_appointments', val)}
+                                        checked={member.role === 'admin' || (member.permissions?.can_create_courses || false)}
+                                        onCheckedChange={(val) => handlePermissionChange(member.id, 'can_create_courses', val)}
+                                        disabled={member.role === 'admin'}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                      <Switch
+                                        checked={member.role === 'admin' || (member.permissions?.can_edit_status || false)}
+                                        onCheckedChange={(val) => handlePermissionChange(member.id, 'can_edit_status', val)}
                                         disabled={member.role === 'admin'}
                                       />
                                     </TableCell>
