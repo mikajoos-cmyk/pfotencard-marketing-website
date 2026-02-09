@@ -2139,18 +2139,22 @@ export function EinstellungenPage() {
                               <TableHeader>
                                 <TableRow className="bg-muted/50">
                                   <TableHead>Mitarbeiter</TableHead>
-                                  <TableHead className="text-center">
-                                    <div className="flex items-center justify-center">
-                                      Kurse anlegen
-                                      <PermissionInfo description="Mitarbeiter kann neue Kurse/Termine im Kalender erstellen und verwalten." />
-                                    </div>
-                                  </TableHead>
-                                  <TableHead className="text-center">
-                                    <div className="flex items-center justify-center">
-                                      Status bearbeiten
-                                      <PermissionInfo description="Mitarbeiter kann den aktuellen Status der Hundeschule (z.B. Dashboard-Meldung) ändern." />
-                                    </div>
-                                  </TableHead>
+                                  {activeModules.includes('calendar') && (
+                                    <TableHead className="text-center">
+                                      <div className="flex items-center justify-center">
+                                        Kurse anlegen
+                                        <PermissionInfo description="Mitarbeiter kann neue Kurse/Termine im Kalender erstellen und verwalten." />
+                                      </div>
+                                    </TableHead>
+                                  )}
+                                  {activeModules.includes('status_display') && (
+                                    <TableHead className="text-center">
+                                      <div className="flex items-center justify-center">
+                                        Status bearbeiten
+                                        <PermissionInfo description="Mitarbeiter kann den aktuellen Status der Hundeschule (z.B. Dashboard-Meldung) ändern." />
+                                      </div>
+                                    </TableHead>
+                                  )}
                                   <TableHead className="text-center">
                                     <div className="flex items-center justify-center">
                                       Kunden bearbeiten
@@ -2163,12 +2167,14 @@ export function EinstellungenPage() {
                                       <PermissionInfo description="Mitarbeiter kann Kundenkonten endgültig aus dem System löschen." />
                                     </div>
                                   </TableHead>
-                                  <TableHead className="text-center">
-                                    <div className="flex items-center justify-center">
-                                      Neuigkeiten
-                                      <PermissionInfo description="Mitarbeiter kann News-Beiträge erstellen und Push-Nachrichten an Kunden versenden." />
-                                    </div>
-                                  </TableHead>
+                                  {activeModules.includes('news') && (
+                                    <TableHead className="text-center">
+                                      <div className="flex items-center justify-center">
+                                        Neuigkeiten
+                                        <PermissionInfo description="Mitarbeiter kann News-Beiträge erstellen und Push-Nachrichten an Kunden versenden." />
+                                      </div>
+                                    </TableHead>
+                                  )}
                                   <TableHead className="text-right">Rolle</TableHead>
                                 </TableRow>
                               </TableHeader>
@@ -2178,20 +2184,24 @@ export function EinstellungenPage() {
                                     <TableCell className="font-medium whitespace-nowrap">
                                       {member.first_name || member.name} {member.last_name || ''}
                                     </TableCell>
-                                    <TableCell className="text-center">
-                                      <Switch
-                                        checked={member.role === 'admin' || (member.permissions?.can_create_courses || false)}
-                                        onCheckedChange={(val) => handlePermissionChange(member.id, 'can_create_courses', val)}
-                                        disabled={member.role === 'admin'}
-                                      />
-                                    </TableCell>
-                                    <TableCell className="text-center">
-                                      <Switch
-                                        checked={member.role === 'admin' || (member.permissions?.can_edit_status || false)}
-                                        onCheckedChange={(val) => handlePermissionChange(member.id, 'can_edit_status', val)}
-                                        disabled={member.role === 'admin'}
-                                      />
-                                    </TableCell>
+                                    {activeModules.includes('calendar') && (
+                                      <TableCell className="text-center">
+                                        <Switch
+                                          checked={member.role === 'admin' || (member.permissions?.can_create_courses || false)}
+                                          onCheckedChange={(val) => handlePermissionChange(member.id, 'can_create_courses', val)}
+                                          disabled={member.role === 'admin'}
+                                        />
+                                      </TableCell>
+                                    )}
+                                    {activeModules.includes('status_display') && (
+                                      <TableCell className="text-center">
+                                        <Switch
+                                          checked={member.role === 'admin' || (member.permissions?.can_edit_status || false)}
+                                          onCheckedChange={(val) => handlePermissionChange(member.id, 'can_edit_status', val)}
+                                          disabled={member.role === 'admin'}
+                                        />
+                                      </TableCell>
+                                    )}
                                     <TableCell className="text-center">
                                       <Switch
                                         checked={member.role === 'admin' || (member.permissions?.can_edit_customers || false)}
@@ -2206,13 +2216,15 @@ export function EinstellungenPage() {
                                         disabled={member.role === 'admin'}
                                       />
                                     </TableCell>
-                                    <TableCell className="text-center">
-                                      <Switch
-                                        checked={member.role === 'admin' || (member.permissions?.can_create_messages || false)}
-                                        onCheckedChange={(val) => handlePermissionChange(member.id, 'can_create_messages', val)}
-                                        disabled={member.role === 'admin'}
-                                      />
-                                    </TableCell>
+                                    {activeModules.includes('news') && (
+                                      <TableCell className="text-center">
+                                        <Switch
+                                          checked={member.role === 'admin' || (member.permissions?.can_create_messages || false)}
+                                          onCheckedChange={(val) => handlePermissionChange(member.id, 'can_create_messages', val)}
+                                          disabled={member.role === 'admin'}
+                                        />
+                                      </TableCell>
+                                    )}
                                     <TableCell className="text-right">
                                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${member.role === 'admin' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
                                         {member.role === 'admin' ? 'Admin' : 'Personal'}
