@@ -48,7 +48,8 @@ import {
   Menu,
   ArrowLeft,
   Smartphone as PreviewIcon,
-  Activity
+  Activity,
+  HelpCircle
 } from 'lucide-react';
 import React from 'react';
 import {
@@ -75,6 +76,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // --- TYPES (Frontend State) ---
 interface Service {
@@ -111,6 +118,7 @@ interface UserPermission {
   can_create_courses: boolean;
   can_edit_status: boolean;
   can_delete_customers: boolean;
+  can_edit_customers: boolean;
   can_create_messages: boolean;
 }
 
@@ -123,6 +131,21 @@ interface User {
   last_name?: string;
   permissions: UserPermission;
 }
+
+const PermissionInfo = ({ description }: { description: string }) => (
+  <TooltipProvider delayDuration={0}>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button className="inline-flex items-center justify-center ml-1 text-muted-foreground hover:text-primary transition-colors focus:outline-none">
+          <HelpCircle size={14} />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-[200px] text-xs p-2">
+        <p>{description}</p>
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+);
 
 interface ColorRule {
   id: string;
@@ -2116,10 +2139,36 @@ export function EinstellungenPage() {
                               <TableHeader>
                                 <TableRow className="bg-muted/50">
                                   <TableHead>Mitarbeiter</TableHead>
-                                  <TableHead className="text-center">Kurse anlegen</TableHead>
-                                  <TableHead className="text-center">Status bearbeiten</TableHead>
-                                  <TableHead className="text-center">Kunden löschen</TableHead>
-                                  <TableHead className="text-center">Nachrichten</TableHead>
+                                  <TableHead className="text-center">
+                                    <div className="flex items-center justify-center">
+                                      Kurse anlegen
+                                      <PermissionInfo description="Mitarbeiter kann neue Kurse/Termine im Kalender erstellen und verwalten." />
+                                    </div>
+                                  </TableHead>
+                                  <TableHead className="text-center">
+                                    <div className="flex items-center justify-center">
+                                      Status bearbeiten
+                                      <PermissionInfo description="Mitarbeiter kann den aktuellen Status der Hundeschule (z.B. Dashboard-Meldung) ändern." />
+                                    </div>
+                                  </TableHead>
+                                  <TableHead className="text-center">
+                                    <div className="flex items-center justify-center">
+                                      Kunden bearbeiten
+                                      <PermissionInfo description="Mitarbeiter kann Stammdaten, Guthaben, Level und Fortschritt von Kunden bearbeiten." />
+                                    </div>
+                                  </TableHead>
+                                  <TableHead className="text-center">
+                                    <div className="flex items-center justify-center">
+                                      Kunden löschen
+                                      <PermissionInfo description="Mitarbeiter kann Kundenkonten endgültig aus dem System löschen." />
+                                    </div>
+                                  </TableHead>
+                                  <TableHead className="text-center">
+                                    <div className="flex items-center justify-center">
+                                      Neuigkeiten
+                                      <PermissionInfo description="Mitarbeiter kann News-Beiträge erstellen und Push-Nachrichten an Kunden versenden." />
+                                    </div>
+                                  </TableHead>
                                   <TableHead className="text-right">Rolle</TableHead>
                                 </TableRow>
                               </TableHeader>
@@ -2140,6 +2189,13 @@ export function EinstellungenPage() {
                                       <Switch
                                         checked={member.role === 'admin' || (member.permissions?.can_edit_status || false)}
                                         onCheckedChange={(val) => handlePermissionChange(member.id, 'can_edit_status', val)}
+                                        disabled={member.role === 'admin'}
+                                      />
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                      <Switch
+                                        checked={member.role === 'admin' || (member.permissions?.can_edit_customers || false)}
+                                        onCheckedChange={(val) => handlePermissionChange(member.id, 'can_edit_customers', val)}
                                         disabled={member.role === 'admin'}
                                       />
                                     </TableCell>
