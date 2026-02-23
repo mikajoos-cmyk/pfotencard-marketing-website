@@ -247,6 +247,14 @@ export async function getInvoicePreview(settings: any) {
     return response.blob();
 }
 
+export async function getOrCreatePublicToken() {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/tenants/public-token`, {
+        headers,
+    });
+    return handleResponse(response);
+}
+
 export async function fetchUsers() {
     const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/api/users`, {

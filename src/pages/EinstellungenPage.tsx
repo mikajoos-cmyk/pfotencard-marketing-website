@@ -15,7 +15,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { API_BASE_URL, fetchAppConfig, saveSettings, uploadImage, fetchUsers, updateUser, getInvoicePreview } from '@/lib/api';
+import { getOrCreatePublicToken, API_BASE_URL, fetchAppConfig, saveSettings, uploadImage, fetchUsers, updateUser, getInvoicePreview } from '@/lib/api';
 import {
   Save,
   Upload,
@@ -49,7 +49,9 @@ import {
   ArrowLeft,
   Smartphone as PreviewIcon,
   Activity,
-  HelpCircle
+  HelpCircle,
+  Copy,
+  Check
 } from 'lucide-react';
 import React from 'react';
 import {
@@ -249,6 +251,13 @@ const AVAILABLE_MODULES: AppModule[] = [
     description: 'Ermöglicht Kunden den automatischen Download von Rechnungen für ihre Aufladungen.',
     premiumOnly: true,
     icon: Activity
+  },
+  {
+    id: 'widgets',
+    name: 'Website-Integration (Widgets)',
+    description: 'Erzeuge Iframe-Code für Status- und Termin-Widgets zur Einbettung auf deiner Website.',
+    premiumOnly: false,
+    icon: ExternalLink
   }
 ];
 
@@ -314,6 +323,7 @@ export function EinstellungenPage() {
   const [schoolName, setSchoolName] = useState('');
   const [supportEmail, setSupportEmail] = useState('');
   const [subdomain, setSubdomain] = useState('');
+  const [isWidgetModalOpen, setIsWidgetModalOpen] = useState(false);
   const [primaryColor, setPrimaryColor] = useState('#22C55E'); // Button Farbe
   const [secondaryColor, setSecondaryColor] = useState('#3B82F6');
   const [backgroundColor, setBackgroundColor] = useState('#F8FAFC'); // App Hintergrund
@@ -338,6 +348,7 @@ export function EinstellungenPage() {
   // --- NEU: Standardwerte für Termine ---
   const [defaultDuration, setDefaultDuration] = useState(60);
   const [defaultMaxParticipants, setDefaultMaxParticipants] = useState(10);
+  const [cancelationPeriodHours, setCancelationPeriodHours] = useState(0);
   const [colorRules, setColorRules] = useState<ColorRule[]>([]);
 
   // --- NEU: Mitarbeiter-Rechte ---
@@ -401,12 +412,27 @@ export function EinstellungenPage() {
   const [isModulesExpanded, setIsModulesExpanded] = useState(false);
   const [editingLevelIndex, setEditingLevelIndex] = useState<number | null>(null);
 
+  // --- Widget States (Inline) ---
+  const [widgetType, setWidgetType] = useState('status');
+  const [widgetTheme, setWidgetTheme] = useState('light');
+  const [widgetPrimaryColor, setWidgetPrimaryColor] = useState('f97316');
+  const [widgetLayout, setWidgetLayout] = useState('compact');
+  const [widgetCopied, setWidgetCopied] = useState(false);
+  const [publicToken, setPublicToken] = useState<string>('');
+  const [widgetHeight, setWidgetHeight] = useState<number>(200);
+
   // --- NEU: Automatische Bereinigung abhängiger Module ---
   useEffect(() => {
-    if (!activeModules.includes('calendar') && activeModules.includes('waitlist')) {
-      setActiveModules(prev => prev.filter(id => id !== 'waitlist'));
+    if (selectedModuleId === 'widgets' && !publicToken) {
+      getOrCreatePublicToken()
+        .then((res: any) => {
+          setPublicToken(res.public_widget_token);
+        })
+        .catch(() => {
+          toast({ title: 'Fehler', description: 'Konnte öffentliches Token nicht laden.' });
+        });
     }
-  }, [activeModules]);
+  }, [selectedModuleId, publicToken, toast]);
 
 
   // --- SYNC TO PREVIEW (IFRAME) ---
@@ -544,6 +570,7 @@ export function EinstellungenPage() {
         const branding = t.config?.branding || {};
         const wording = t.config?.wording || {};
         const balance = t.config?.balance || {};
+        const widgets = t.config?.widgets || {};
 
         setPrimaryColor(branding.primary_color || '#22C55E');
         setSecondaryColor(branding.secondary_color || '#3B82F6');
@@ -559,9 +586,17 @@ export function EinstellungenPage() {
         setAutoBillingEnabled(t.config?.auto_billing_enabled || false);
         setAutoProgressEnabled(t.config?.auto_progress_enabled || false);
 
+        // Widget-Einstellungen laden
+        setWidgetType(widgets.type || 'status');
+        setWidgetTheme(widgets.theme || 'light');
+        setWidgetPrimaryColor(widgets.primary_color || 'f97316');
+        setWidgetLayout(widgets.layout || 'compact');
+        setWidgetHeight(widgets.height || 200);
+
         const appointmentsConfig = t.config?.appointments || {};
         setDefaultDuration(appointmentsConfig.default_duration || 60);
         setDefaultMaxParticipants(appointmentsConfig.max_participants || 10);
+        setCancelationPeriodHours(appointmentsConfig.cancelation_period_hours || 0);
         setColorRules(appointmentsConfig.color_rules || []);
 
         if (branding.logo_url) {
@@ -665,9 +700,17 @@ export function EinstellungenPage() {
         appointments: {
           default_duration: defaultDuration,
           max_participants: defaultMaxParticipants,
+          cancelation_period_hours: cancelationPeriodHours,
           color_rules: colorRules
         },
-        invoice_settings: invoiceSettings
+        invoice_settings: invoiceSettings,
+        widgets: {
+          type: widgetType,
+          theme: widgetTheme,
+          primary_color: widgetPrimaryColor,
+          layout: widgetLayout,
+          height: widgetHeight
+        }
       };
 
       await saveSettings(payload);
@@ -1299,6 +1342,9 @@ export function EinstellungenPage() {
                               <p className="text-xs text-muted-foreground mt-1">Wird für wichtige Buttons und Aktionen verwendet.</p>
                             </div>
                           </div>
+
+                          <div className="h-px bg-border my-6" />
+
                         </CardContent>
                       </Card>
                     </div>
@@ -1738,6 +1784,147 @@ export function EinstellungenPage() {
                           </div>
                         </div>
 
+                        {/* Widgets Module */}
+                        {selectedModuleId === 'widgets' && (
+                          <div className="grid gap-6">
+                            <Card>
+                              <CardHeader>
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <CardTitle className="flex items-center gap-2">
+                                      <ExternalLink size={20} />
+                                      Website-Integration (Widgets)
+                                    </CardTitle>
+                                    <CardDescription>
+                                      Binde Status- oder Termin-Widgets über ein Iframe in deine Website ein. Wähle Theme, Primärfarbe, Layout und Höhe.
+                                    </CardDescription>
+                                  </div>
+                                </div>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-4">
+                                  {/* Einstellungen */}
+                                  <div className="space-y-6">
+                                    <div className="space-y-2">
+                                      <Label>Widget-Typ</Label>
+                                      <Tabs value={widgetType} onValueChange={setWidgetType} className="w-full">
+                                        <TabsList className="grid w-full grid-cols-2">
+                                          <TabsTrigger value="status">Status-Widget</TabsTrigger>
+                                          <TabsTrigger value="appointments">Termin-Widget</TabsTrigger>
+                                        </TabsList>
+                                      </Tabs>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label>Theme</Label>
+                                      <Select value={widgetTheme} onValueChange={setWidgetTheme}>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Theme wählen" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="light">Hell (Light)</SelectItem>
+                                          <SelectItem value="dark">Dunkel (Dark)</SelectItem>
+                                          <SelectItem value="transparent">Transparent</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label>Primärfarbe (Hex ohne #)</Label>
+                                      <div className="flex gap-2">
+                                        <div 
+                                          className="w-10 h-10 rounded border" 
+                                          style={{ backgroundColor: `#${widgetPrimaryColor}` }}
+                                        />
+                                        <Input 
+                                          value={widgetPrimaryColor} 
+                                          onChange={(e) => setWidgetPrimaryColor(e.target.value.replace('#', ''))}
+                                          placeholder="f97316"
+                                          maxLength={6}
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label>Layout</Label>
+                                      <Select value={widgetLayout} onValueChange={setWidgetLayout}>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Layout wählen" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="compact">Kompakt</SelectItem>
+                                          <SelectItem value="detailed">Detailliert</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                      <Label>Höhe (px)</Label>
+                                      <div className="flex items-center gap-3">
+                                        <Input
+                                          type="number"
+                                          min={120}
+                                          max={1200}
+                                          value={widgetHeight}
+                                          onChange={(e) => setWidgetHeight(parseInt(e.target.value || '0', 10))}
+                                        />
+                                        <span className="text-xs text-muted-foreground">Vorschlag: Status 200, Termine 400</span>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-2 pt-4">
+                                      <Label>HTML-Code zum Kopieren</Label>
+                                      <div className="relative">
+                                        <textarea
+                                          readOnly
+                                          className="w-full h-32 p-3 text-sm font-mono bg-muted rounded-md border resize-none"
+                                          value={`<iframe src="${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}?theme=${widgetTheme}&color=${widgetPrimaryColor}&layout=${widgetLayout}" width="100%" height="${widgetHeight}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`}
+                                        />
+                                          <Button
+                                           size="sm"
+                                           variant="secondary"
+                                           className="absolute bottom-2 right-2"
+                                           onClick={() => {
+                                             const code = `<iframe src="${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}?theme=${widgetTheme}&color=${widgetPrimaryColor}&layout=${widgetLayout}" width="100%" height="${widgetHeight}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`;
+                                             navigator.clipboard.writeText(code);
+                                             setWidgetCopied(true);
+                                             toast({ title: "Kopiert!", description: "Der Widget-Code wurde in die Zwischenablage kopiert." });
+                                             setTimeout(() => setWidgetCopied(false), 2000);
+                                           }}
+                                         >
+                                          {widgetCopied ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+                                          {widgetCopied ? "Kopiert" : "Kopieren"}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Live-Vorschau */}
+                                  <div className="flex flex-col space-y-4">
+                                    <Label className="flex items-center gap-2">
+                                      Live-Vorschau 
+                                      <span className="text-xs font-normal text-muted-foreground">(Beispielhaftes Iframe)</span>
+                                    </Label>
+                                    <div className="flex-1 border rounded-lg bg-slate-50 overflow-hidden min-h-[300px] flex items-center justify-center relative">
+                                      <iframe
+                                        src={`${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}?theme=${widgetTheme}&color=${widgetPrimaryColor}&layout=${widgetLayout}`}
+                                        width="100%"
+                                        height="100%"
+                                        className="border-none w-full h-full"
+                                        title="Widget Preview"
+                                      />
+                                      <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-primary/20 rounded-lg"></div>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground italic">
+                                      Hinweis: Die Vorschau lädt die Daten deines aktuellen Tenants.
+                                    </p>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </div>
+                        )}
+
                         {/* Invoice Details */}
                         {selectedModuleId === 'invoice_download' && (
                           <div className="grid gap-6">
@@ -1909,6 +2096,11 @@ export function EinstellungenPage() {
                                   <div className="space-y-2">
                                     <Label>Max. Teilnehmer (Standard)</Label>
                                     <Input type="number" min="1" value={defaultMaxParticipants} onChange={(e) => setDefaultMaxParticipants(parseInt(e.target.value) || 10)} />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Stornierungsfrist (Stunden)</Label>
+                                    <Input type="number" min="0" value={cancelationPeriodHours} onChange={(e) => setCancelationPeriodHours(parseInt(e.target.value) || 0)} />
+                                    <p className="text-[10px] text-muted-foreground italic">Wie viele Stunden vor dem Termin kann ein Teilnehmer noch selbst stornieren? (0 = jederzeit möglich)</p>
                                   </div>
                                 </div>
                               </CardContent>
