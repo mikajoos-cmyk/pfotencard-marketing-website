@@ -414,9 +414,8 @@ export function EinstellungenPage() {
 
   // --- Widget States (Inline) ---
   const [widgetType, setWidgetType] = useState('status');
-  const [widgetTheme, setWidgetTheme] = useState('light');
-  const [widgetPrimaryColor, setWidgetPrimaryColor] = useState('f97316');
   const [widgetLayout, setWidgetLayout] = useState('compact');
+  const [widgetLimit, setWidgetLimit] = useState<number>(5);
   const [widgetCopied, setWidgetCopied] = useState(false);
   const [publicToken, setPublicToken] = useState<string>('');
   const [widgetHeight, setWidgetHeight] = useState<number>(200);
@@ -588,9 +587,8 @@ export function EinstellungenPage() {
 
         // Widget-Einstellungen laden
         setWidgetType(widgets.type || 'status');
-        setWidgetTheme(widgets.theme || 'light');
-        setWidgetPrimaryColor(widgets.primary_color || 'f97316');
         setWidgetLayout(widgets.layout || 'compact');
+        setWidgetLimit(widgets.limit || 5);
         setWidgetHeight(widgets.height || 200);
 
         const appointmentsConfig = t.config?.appointments || {};
@@ -706,9 +704,8 @@ export function EinstellungenPage() {
         invoice_settings: invoiceSettings,
         widgets: {
           type: widgetType,
-          theme: widgetTheme,
-          primary_color: widgetPrimaryColor,
           layout: widgetLayout,
+          limit: widgetLimit,
           height: widgetHeight
         }
       };
@@ -1796,7 +1793,7 @@ export function EinstellungenPage() {
                                       Website-Integration (Widgets)
                                     </CardTitle>
                                     <CardDescription>
-                                      Binde Status- oder Termin-Widgets über ein Iframe in deine Website ein. Wähle Theme, Primärfarbe, Layout und Höhe.
+                                      Binde Status- oder Termin-Widgets über ein Iframe in deine Website ein.
                                     </CardDescription>
                                   </div>
                                 </div>
@@ -1815,62 +1812,52 @@ export function EinstellungenPage() {
                                       </Tabs>
                                     </div>
 
-                                    <div className="space-y-2">
-                                      <Label>Theme</Label>
-                                      <Select value={widgetTheme} onValueChange={setWidgetTheme}>
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Theme wählen" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="light">Hell (Light)</SelectItem>
-                                          <SelectItem value="dark">Dunkel (Dark)</SelectItem>
-                                          <SelectItem value="transparent">Transparent</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
+                                    {widgetType === 'appointments' && (
+                                      <>
+                                        <div className="space-y-2">
+                                          <Label>Layout</Label>
+                                          <Select value={widgetLayout} onValueChange={setWidgetLayout}>
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Layout wählen" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="compact">Kompakt</SelectItem>
+                                              <SelectItem value="detailed">Detailliert</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
 
-                                    <div className="space-y-2">
-                                      <Label>Primärfarbe (Hex ohne #)</Label>
-                                      <div className="flex gap-2">
-                                        <div 
-                                          className="w-10 h-10 rounded border" 
-                                          style={{ backgroundColor: `#${widgetPrimaryColor}` }}
-                                        />
-                                        <Input 
-                                          value={widgetPrimaryColor} 
-                                          onChange={(e) => setWidgetPrimaryColor(e.target.value.replace('#', ''))}
-                                          placeholder="f97316"
-                                          maxLength={6}
-                                        />
+                                        <div className="space-y-2">
+                                          <Label>Anzahl Termine</Label>
+                                          <div className="flex items-center gap-3">
+                                            <Input
+                                              type="number"
+                                              min={1}
+                                              max={50}
+                                              value={widgetLimit}
+                                              onChange={(e) => setWidgetLimit(parseInt(e.target.value || '1', 10))}
+                                            />
+                                            <span className="text-xs text-muted-foreground">Maximale Anzeige</span>
+                                          </div>
+                                        </div>
+                                      </>
+                                    )}
+
+                                    {widgetType === 'status' && (
+                                      <div className="space-y-2">
+                                        <Label>Höhe (px)</Label>
+                                        <div className="flex items-center gap-3">
+                                          <Input
+                                            type="number"
+                                            min={120}
+                                            max={1200}
+                                            value={widgetHeight}
+                                            onChange={(e) => setWidgetHeight(parseInt(e.target.value || '0', 10))}
+                                          />
+                                          <span className="text-xs text-muted-foreground">Standard: 200</span>
+                                        </div>
                                       </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                      <Label>Layout</Label>
-                                      <Select value={widgetLayout} onValueChange={setWidgetLayout}>
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Layout wählen" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="compact">Kompakt</SelectItem>
-                                          <SelectItem value="detailed">Detailliert</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                      <Label>Höhe (px)</Label>
-                                      <div className="flex items-center gap-3">
-                                        <Input
-                                          type="number"
-                                          min={120}
-                                          max={1200}
-                                          value={widgetHeight}
-                                          onChange={(e) => setWidgetHeight(parseInt(e.target.value || '0', 10))}
-                                        />
-                                        <span className="text-xs text-muted-foreground">Vorschlag: Status 200, Termine 400</span>
-                                      </div>
-                                    </div>
+                                    )}
 
                                     <div className="space-y-2 pt-4">
                                       <Label>HTML-Code zum Kopieren</Label>
@@ -1878,14 +1865,14 @@ export function EinstellungenPage() {
                                         <textarea
                                           readOnly
                                           className="w-full h-32 p-3 text-sm font-mono bg-muted rounded-md border resize-none"
-                                          value={`<iframe src="${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}?theme=${widgetTheme}&color=${widgetPrimaryColor}&layout=${widgetLayout}" width="100%" height="${widgetHeight}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`}
+                                          value={`<iframe src="${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}" width="100%" height="${widgetHeight}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`}
                                         />
                                           <Button
                                            size="sm"
                                            variant="secondary"
                                            className="absolute bottom-2 right-2"
                                            onClick={() => {
-                                             const code = `<iframe src="${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}?theme=${widgetTheme}&color=${widgetPrimaryColor}&layout=${widgetLayout}" width="100%" height="${widgetHeight}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`;
+                                             const code = `<iframe src="${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}" width="100%" height="${widgetHeight}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`;
                                              navigator.clipboard.writeText(code);
                                              setWidgetCopied(true);
                                              toast({ title: "Kopiert!", description: "Der Widget-Code wurde in die Zwischenablage kopiert." });
@@ -1907,7 +1894,7 @@ export function EinstellungenPage() {
                                     </Label>
                                     <div className="flex-1 border rounded-lg bg-slate-50 overflow-hidden min-h-[300px] flex items-center justify-center relative">
                                       <iframe
-                                        src={`${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}?theme=${widgetTheme}&color=${widgetPrimaryColor}&layout=${widgetLayout}`}
+                                        src={`${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}`}
                                         width="100%"
                                         height="100%"
                                         className="border-none w-full h-full"

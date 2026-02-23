@@ -32,6 +32,7 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
   const [theme, setTheme] = useState('light');
   const [primaryColor, setPrimaryColor] = useState('f97316');
   const [layout, setLayout] = useState('compact');
+  const [limit, setLimit] = useState<number>(5);
   const [copied, setCopied] = useState(false);
   const [publicToken, setPublicToken] = useState<string>('');
   const [height, setHeight] = useState<number>(200);
@@ -41,7 +42,9 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
   // Per ENV überschreibbar, sonst heuristisch abgeleitet
   const APP_BASE_URL = (import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5173', 'localhost:5174');
 
-  const generatedUrl = `${APP_BASE_URL}/widget/${widgetType}/${publicToken}?theme=${theme}&color=${primaryColor}&layout=${layout}`;
+  const generatedUrl = widgetType === 'status' 
+    ? `${APP_BASE_URL}/widget/${widgetType}/${publicToken}`
+    : `${APP_BASE_URL}/widget/${widgetType}/${publicToken}?layout=${layout}&limit=${limit}`;
   
   useEffect(() => {
     // Token laden/erzeugen sobald das Modal geöffnet wird
@@ -102,62 +105,52 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
               </Tabs>
             </div>
 
-            <div className="space-y-2">
-              <Label>Theme</Label>
-              <Select value={theme} onValueChange={setTheme}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Theme wählen" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="light">Hell (Light)</SelectItem>
-                  <SelectItem value="dark">Dunkel (Dark)</SelectItem>
-                  <SelectItem value="transparent">Transparent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {widgetType === 'appointments' && (
+              <>
+                <div className="space-y-2">
+                  <Label>Layout</Label>
+                  <Select value={layout} onValueChange={setLayout}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Layout wählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="compact">Kompakt</SelectItem>
+                      <SelectItem value="detailed">Detailliert</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-2">
-              <Label>Primärfarbe (Hex ohne #)</Label>
-              <div className="flex gap-2">
-                <div 
-                  className="w-10 h-10 rounded border" 
-                  style={{ backgroundColor: `#${primaryColor}` }}
-                />
-                <Input 
-                  value={primaryColor} 
-                  onChange={(e) => setPrimaryColor(e.target.value.replace('#', ''))}
-                  placeholder="f97316"
-                  maxLength={6}
-                />
+                <div className="space-y-2">
+                  <Label>Anzahl Termine</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={limit}
+                      onChange={(e) => setLimit(parseInt(e.target.value || '1', 10))}
+                    />
+                    <span className="text-xs text-muted-foreground">Maximale Anzeige</span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {widgetType === 'status' && (
+              <div className="space-y-2">
+                <Label>Höhe (px)</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="number"
+                    min={120}
+                    max={1200}
+                    value={height}
+                    onChange={(e) => setHeight(parseInt(e.target.value || '0', 10))}
+                  />
+                  <span className="text-xs text-muted-foreground">Standard: 200</span>
+                </div>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Layout</Label>
-              <Select value={layout} onValueChange={setLayout}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Layout wählen" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="compact">Kompakt</SelectItem>
-                  <SelectItem value="detailed">Detailliert</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Höhe (px)</Label>
-              <div className="flex items-center gap-3">
-                <Input
-                  type="number"
-                  min={120}
-                  max={1200}
-                  value={height}
-                  onChange={(e) => setHeight(parseInt(e.target.value || '0', 10))}
-                />
-                <span className="text-xs text-muted-foreground">Vorschlag: Status 200, Termine 400</span>
-              </div>
-            </div>
+            )}
 
             <div className="space-y-2 pt-4">
               <Label>HTML-Code zum Kopieren</Label>
