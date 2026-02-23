@@ -414,7 +414,7 @@ export function EinstellungenPage() {
 
   // --- Widget States (Inline) ---
   const [widgetType, setWidgetType] = useState('status');
-  const [widgetLayout, setWidgetLayout] = useState('compact');
+  const [widgetLayout, setWidgetLayout] = useState('detailed');
   const [widgetLimit, setWidgetLimit] = useState<number>(5);
   const [widgetCopied, setWidgetCopied] = useState(false);
   const [publicToken, setPublicToken] = useState<string>('');
@@ -587,7 +587,7 @@ export function EinstellungenPage() {
 
         // Widget-Einstellungen laden
         setWidgetType(widgets.type || 'status');
-        setWidgetLayout(widgets.layout || 'compact');
+        setWidgetLayout(widgets.layout || 'detailed');
         setWidgetLimit(widgets.limit || 5);
         setWidgetHeight(widgets.height || 200);
 
@@ -1821,42 +1821,27 @@ export function EinstellungenPage() {
                                               <SelectValue placeholder="Layout wählen" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                              <SelectItem value="compact">Kompakt</SelectItem>
                                               <SelectItem value="detailed">Detailliert</SelectItem>
+                                              <SelectItem value="compact">Kompakt</SelectItem>
+                                              <SelectItem value="calendar">Kalender</SelectItem>
                                             </SelectContent>
                                           </Select>
                                         </div>
 
                                         <div className="space-y-2">
-                                          <Label>Anzahl Termine</Label>
+                                          <Label>{widgetLayout === 'calendar' ? 'Anzahl angezeigte Tage' : 'Anzahl Termine'}</Label>
                                           <div className="flex items-center gap-3">
                                             <Input
                                               type="number"
                                               min={1}
-                                              max={50}
+                                              max={widgetLayout === 'calendar' ? 365 : 50}
                                               value={widgetLimit}
                                               onChange={(e) => setWidgetLimit(parseInt(e.target.value || '1', 10))}
                                             />
-                                            <span className="text-xs text-muted-foreground">Maximale Anzeige</span>
+                                            <span className="text-xs text-muted-foreground">{widgetLayout === 'calendar' ? 'Vorschau-Zeitraum' : 'Maximale Anzeige'}</span>
                                           </div>
                                         </div>
                                       </>
-                                    )}
-
-                                    {widgetType === 'status' && (
-                                      <div className="space-y-2">
-                                        <Label>Höhe (px)</Label>
-                                        <div className="flex items-center gap-3">
-                                          <Input
-                                            type="number"
-                                            min={120}
-                                            max={1200}
-                                            value={widgetHeight}
-                                            onChange={(e) => setWidgetHeight(parseInt(e.target.value || '0', 10))}
-                                          />
-                                          <span className="text-xs text-muted-foreground">Standard: 200</span>
-                                        </div>
-                                      </div>
                                     )}
 
                                     <div className="space-y-2 pt-4">
@@ -1865,14 +1850,14 @@ export function EinstellungenPage() {
                                         <textarea
                                           readOnly
                                           className="w-full h-32 p-3 text-sm font-mono bg-muted rounded-md border resize-none"
-                                          value={`<iframe src="${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}" width="100%" height="${widgetHeight}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`}
+                                          value={`<iframe src="${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}" width="100%" height="${widgetType === 'status' ? '100' : '600'}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`}
                                         />
                                           <Button
                                            size="sm"
                                            variant="secondary"
                                            className="absolute bottom-2 right-2"
                                            onClick={() => {
-                                             const code = `<iframe src="${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}" width="100%" height="${widgetHeight}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`;
+                                             const code = `<iframe src="${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}" width="100%" height="${widgetType === 'status' ? '100' : '600'}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`;
                                              navigator.clipboard.writeText(code);
                                              setWidgetCopied(true);
                                              toast({ title: "Kopiert!", description: "Der Widget-Code wurde in die Zwischenablage kopiert." });
@@ -1892,12 +1877,12 @@ export function EinstellungenPage() {
                                       Live-Vorschau 
                                       <span className="text-xs font-normal text-muted-foreground">(Beispielhaftes Iframe)</span>
                                     </Label>
-                                    <div className="flex-1 border rounded-lg bg-slate-50 overflow-hidden min-h-[300px] flex items-center justify-center relative">
+                                    <div className="flex-1 border rounded-lg bg-slate-50 overflow-y-auto min-h-[400px] max-h-[600px] relative">
                                       <iframe
                                         src={`${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}`}
                                         width="100%"
-                                        height="100%"
-                                        className="border-none w-full h-full"
+                                        className="border-none w-full"
+                                        style={{ height: widgetType === 'status' ? '100px' : '1200px' }}
                                         title="Widget Preview"
                                       />
                                       <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-primary/20 rounded-lg"></div>
