@@ -420,6 +420,18 @@ export function EinstellungenPage() {
   const [publicToken, setPublicToken] = useState<string>('');
   const [widgetHeight, setWidgetHeight] = useState<number>(200);
 
+  const getWidgetBaseUrl = useCallback(() => {
+    if ((import.meta as any).env?.VITE_WIDGET_APP_BASE_URL) {
+      return (import.meta as any).env.VITE_WIDGET_APP_BASE_URL;
+    }
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isLocalhost) {
+      return window.location.origin.replace('5174', '5173');
+    }
+    // Live Seite: Nutze die Subdomain des aktuellen Tenants
+    return `https://${subdomain || 'app'}.pfotencard.de`;
+  }, [subdomain]);
+
   // --- NEU: Automatische Bereinigung abhängiger Module ---
   useEffect(() => {
     if (selectedModuleId === 'widgets' && !publicToken) {
@@ -1850,14 +1862,14 @@ export function EinstellungenPage() {
                                         <textarea
                                           readOnly
                                           className="w-full h-32 p-3 text-sm font-mono bg-muted rounded-md border resize-none"
-                                          value={`<iframe src="${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}" width="100%" height="${widgetType === 'status' ? '100' : '600'}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`}
+                                          value={`<iframe src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}" width="100%" height="${widgetType === 'status' ? '100' : '600'}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`}
                                         />
                                           <Button
                                            size="sm"
                                            variant="secondary"
                                            className="absolute bottom-2 right-2"
                                            onClick={() => {
-                                             const code = `<iframe src="${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}" width="100%" height="${widgetType === 'status' ? '100' : '600'}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`;
+                                             const code = `<iframe src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}" width="100%" height="${widgetType === 'status' ? '100' : '600'}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`;
                                              navigator.clipboard.writeText(code);
                                              setWidgetCopied(true);
                                              toast({ title: "Kopiert!", description: "Der Widget-Code wurde in die Zwischenablage kopiert." });
@@ -1879,10 +1891,10 @@ export function EinstellungenPage() {
                                     </Label>
                                     <div className="flex-1 border rounded-lg bg-slate-50 overflow-y-auto min-h-[400px] max-h-[600px] relative">
                                       <iframe
-                                        src={`${(import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5174', 'localhost:5173')}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}`}
+                                        src={`${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}`}
                                         width="100%"
                                         className="border-none w-full"
-                                        style={{ height: widgetType === 'status' ? '100px' : '1200px' }}
+                                        style={{ height: `${widgetHeight}px`, transition: 'height 0.2s ease' }}
                                         title="Widget Preview"
                                       />
                                       <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-primary/20 rounded-lg"></div>
