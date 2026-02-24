@@ -419,6 +419,7 @@ export function EinstellungenPage() {
   const [widgetCopied, setWidgetCopied] = useState(false);
   const [publicToken, setPublicToken] = useState<string>('');
   const [widgetHeight, setWidgetHeight] = useState<number>(200);
+  const [widgetTheme, setWidgetTheme] = useState<'branding' | 'light' | 'dark' | 'transparent'>('branding');
 
   const getWidgetBaseUrl = useCallback(() => {
     if ((import.meta as any).env?.VITE_WIDGET_APP_BASE_URL) {
@@ -444,6 +445,18 @@ export function EinstellungenPage() {
         });
     }
   }, [selectedModuleId, publicToken, toast]);
+
+  // --- Widget Iframe Auto-Height Listener ---
+  useEffect(() => {
+    function handleMessage(e: MessageEvent) {
+      const data: any = e.data || {};
+      if (data && data.type === 'WIDGET_HEIGHT' && typeof data.height === 'number') {
+        setWidgetHeight(Math.max(10, Math.min(4000, Math.round(data.height))));
+      }
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
 
   // --- SYNC TO PREVIEW (IFRAME) ---
@@ -1001,7 +1014,7 @@ export function EinstellungenPage() {
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
-      <div className="p-6 border-b">
+      <div className="flex h-16 items-center px-6 border-b shrink-0">
         <div className="flex items-center gap-2 font-bold text-xl text-primary">
           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
             <Settings size={20} />
@@ -1119,9 +1132,9 @@ export function EinstellungenPage() {
   }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-background text-foreground pt-20">
+    <div className="flex flex-col md:flex-row min-h-screen bg-background text-foreground pt-16 md:pt-20">
       {/* --- DESKTOP SIDEBAR --- */}
-      <aside className="hidden lg:flex w-[260px] flex-col border-r bg-card sticky top-20 h-[calc(100vh-5rem)] overflow-y-auto">
+      <aside className="hidden lg:flex w-[260px] flex-col border-r bg-card sticky top-16 md:top-20 h-[calc(100vh-4rem)] md:h-[calc(100vh-5rem)] overflow-y-auto z-40">
         <SidebarContent />
       </aside>
 
@@ -1139,7 +1152,7 @@ export function EinstellungenPage() {
       {/* --- MAIN STAGE --- */}
       <main className="flex-1 flex flex-col min-w-0">
         {/* STICKY HEADER */}
-        <header className="sticky top-20 z-30 flex h-16 items-center border-b bg-background/95 backdrop-blur px-4 lg:px-6 gap-4">
+        <header className="sticky top-16 md:top-20 z-30 flex h-16 items-center border-b bg-background/95 backdrop-blur px-4 lg:px-6 gap-4">
           <Button variant="ghost" size="icon" className="lg:hidden shrink-0" onClick={() => setIsMobileMenuOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
@@ -1783,16 +1796,6 @@ export function EinstellungenPage() {
                     ) : (
                       /* Module Detail Settings */
                       <div className="space-y-6">
-                        <div className="flex items-center gap-4 mb-6">
-                          <Button variant="ghost" size="sm" onClick={() => setCurrentView('overview')} className="h-9 px-2 hover:bg-muted">
-                            <ArrowLeft size={18} className="mr-1" /> Zurück
-                          </Button>
-                          <div>
-                            <h2 className="text-xl font-bold">{AVAILABLE_MODULES.find(m => m.id === selectedModuleId)?.name}</h2>
-                            <p className="text-xs text-muted-foreground">Konfiguriere die Modul-Einstellungen</p>
-                          </div>
-                        </div>
-
                         {/* Widgets Module */}
                         {selectedModuleId === 'widgets' && (
                           <div className="grid gap-6">
@@ -1856,20 +1859,35 @@ export function EinstellungenPage() {
                                       </>
                                     )}
 
+                                    <div className="space-y-2">
+                                      <Label>Farbschema</Label>
+                                      <Select value={widgetTheme} onValueChange={(v) => setWidgetTheme(v as any)}>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Farbschema wählen" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="branding">Branding</SelectItem>
+                                          <SelectItem value="light">Hell</SelectItem>
+                                          <SelectItem value="dark">Dunkel</SelectItem>
+                                          <SelectItem value="transparent">Transparent</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
                                     <div className="space-y-2 pt-4">
                                       <Label>HTML-Code zum Kopieren</Label>
                                       <div className="relative">
                                         <textarea
                                           readOnly
                                           className="w-full h-32 p-3 text-sm font-mono bg-muted rounded-md border resize-none"
-                                          value={`<iframe src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}" width="100%" height="${widgetType === 'status' ? '100' : '600'}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`}
+                                          value={`<iframe src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}" width="100%" style="border:none; border-radius: 8px; overflow: hidden; width: 100%;" scrolling="no"></iframe>`}
                                         />
                                           <Button
                                            size="sm"
                                            variant="secondary"
                                            className="absolute bottom-2 right-2"
                                            onClick={() => {
-                                             const code = `<iframe src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}" width="100%" height="${widgetType === 'status' ? '100' : '600'}" style="border:none; border-radius: 8px; overflow: hidden;"></iframe>`;
+                                             const code = `<iframe src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}" width="100%" style="border:none; border-radius: 8px; overflow: hidden; width: 100%;" scrolling="no"></iframe>`;
                                              navigator.clipboard.writeText(code);
                                              setWidgetCopied(true);
                                              toast({ title: "Kopiert!", description: "Der Widget-Code wurde in die Zwischenablage kopiert." });
@@ -1889,13 +1907,14 @@ export function EinstellungenPage() {
                                       Live-Vorschau 
                                       <span className="text-xs font-normal text-muted-foreground">(Beispielhaftes Iframe)</span>
                                     </Label>
-                                    <div className="flex-1 border rounded-lg bg-slate-50 overflow-y-auto min-h-[400px] max-h-[600px] relative">
+                                    <div className="flex-1 border rounded-lg overflow-y-auto max-h-[600px] relative">
                                       <iframe
-                                        src={`${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}`}
+                                        src={`${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}`}
                                         width="100%"
                                         className="border-none w-full"
                                         style={{ height: `${widgetHeight}px`, transition: 'height 0.2s ease' }}
                                         title="Widget Preview"
+                                        scrolling="no"
                                       />
                                       <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-primary/20 rounded-lg"></div>
                                     </div>
@@ -2270,7 +2289,7 @@ export function EinstellungenPage() {
 
 
                         {/* Generic Placeholder for other modules */}
-                        {!['calendar', 'invoice_download'].includes(selectedModuleId || '') && (
+                        {!['calendar', 'invoice_download', 'widgets'].includes(selectedModuleId || '') && (
                           <Card className="border-dashed">
                             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                               <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-4">
