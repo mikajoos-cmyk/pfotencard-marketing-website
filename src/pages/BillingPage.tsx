@@ -170,14 +170,36 @@ export function BillingPage() {
 
     const isPendingSwitch = !!status?.upcoming_plan && status.upcoming_plan !== status.plan;
 
+    // --- NEUE FEHLER-STATI ---
+    const isIncompleteExpired = status?.stripe_subscription_status === 'incomplete_expired';
+    const isPastDue = status?.stripe_subscription_status === 'past_due' || status?.stripe_subscription_status === 'unpaid';
+    const isIncomplete = status?.stripe_subscription_status === 'incomplete';
+
     // Logik: Zeige Preise (Buchen) WENN:
     // 1. Kein Zahlungsmittel (Reg Trial)
     // 2. Gekündigt (Um Reaktivierung zu ermöglichen)
-    // 3. ODER Abgelaufen (isExpired)
-    const showPricing = !hasPaymentMethod || isCancelled || isExpired;
+    // 3. Abgelaufen ODER Abgebrochen (incomplete_expired)
+    // 4. Ausstehend (incomplete) -> Damit der Kunde nochmal auf den Plan klicken und das Fenster öffnen kann
+    // WICHTIG: Bei past_due zeigen wir KEINE neuen Pläne, da der User ins Portal muss.
+    const showPricing = (!hasPaymentMethod || isCancelled || isExpired || isIncompleteExpired || isIncomplete) && !isPastDue;
 
     const planName = status?.plan ? status.plan.charAt(0).toUpperCase() + status.plan.slice(1) : 'Starter';
     const upcomingPlanName = status?.upcoming_plan ? status.upcoming_plan.charAt(0).toUpperCase() + status.upcoming_plan.slice(1) : '';
+
+    // --- BADGE FARBEN LOGIK ---
+    let badgeText = 'AKTIV';
+    let badgeClass = 'bg-primary hover:bg-primary text-primary-foreground border-transparent';
+
+    if (isStripeTrial) {
+        badgeText = 'TESTPHASE';
+        badgeClass = 'bg-blue-100 text-blue-700 hover:bg-blue-100 border-transparent';
+    } else if (isPastDue) {
+        badgeText = 'FEHLGESCHLAGEN';
+        badgeClass = 'bg-red-100 text-red-800 hover:bg-red-100 border-red-200';
+    } else if (isIncomplete) {
+        badgeText = 'AUSSTEHEND';
+        badgeClass = 'bg-orange-100 text-orange-800 hover:bg-orange-100 border-orange-200';
+    }
 
     return (
         <main className="pt-24 pb-12 bg-background min-h-screen">
@@ -192,10 +214,49 @@ export function BillingPage() {
 
                 {/* --- INFO BANNER --- */}
 
-                {/* 0. Abgelaufen (Höchste Priorität) */}
-                {isExpired && (
+                {/* 1. Zahlung abgebrochen / abgelaufen (incomplete_expired) */}
+                {isIncompleteExpired && (
                     <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                        <AlertTriangle className="w-5 h-5 mt-0.5" />
+                        <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+                        <div>
+                            <strong>Zahlungsversuch abgelaufen</strong>
+                            <p className="text-sm mt-1">Dein letzter Bezahlvorgang wurde nicht abgeschlossen (z.B. weil das Browserfenster geschlossen wurde) und ist bei Stripe abgelaufen. Bitte wähle unten deinen gewünschten Plan einfach noch einmal aus, um die Buchung durchzuführen.</p>
+                        </div>
+                    </div>
+                )}
+
+                {/* 2. Zahlung fehlgeschlagen (past_due / unpaid) */}
+                {isPastDue && (
+                    <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                        <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+                        <div>
+                            <strong>Automatische Zahlung fehlgeschlagen</strong>
+                            <p className="text-sm mt-1">Wir konnten deine letzte Rechnung nicht abbuchen. Bitte aktualisiere deine Zahlungsmethode im Kundenportal, um deinen Zugang nicht zu verlieren.</p>
+                            <Button variant="outline" size="sm" className="mt-3 bg-white text-red-800 border-red-200 hover:bg-red-50" onClick={openCustomerPortal}>
+                                <ExternalLink className="w-4 h-4 mr-2" /> Zahlungsmethode prüfen & bezahlen
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* 3. Zahlung ausstehend (incomplete) */}
+                {isIncomplete && (
+                    <div className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                        <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
+                        <div>
+                            <strong>Zahlung noch nicht bestätigt</strong>
+                            <p className="text-sm mt-1">Es steht noch eine Bestätigung deiner Zahlung aus. Klicke unten einfach nochmal auf deinen gewählten Plan, um das Zahlungsfenster wieder zu öffnen.</p>
+                            <Button variant="outline" size="sm" className="mt-3 bg-white text-orange-800 border-orange-200 hover:bg-orange-50" onClick={openCustomerPortal}>
+                                <ExternalLink className="w-4 h-4 mr-2" /> Alternativ: Zum Kundenportal
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* 4. Normal abgelaufen (Höchste Priorität, aber nur wenn nicht schon ein Stripe-Fehler vorliegt) */}
+                {isExpired && !isIncompleteExpired && !isPastDue && !isIncomplete && (
+                    <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                        <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
                         <div>
                             <strong>{isTrialExpired ? "Test-Abo abgelaufen" : "Abo abgelaufen"}</strong>
                             <p className="text-sm mt-1">Bitte wähle unten einen Plan, um Pfotencard weiterhin zu nutzen.</p>
@@ -203,10 +264,10 @@ export function BillingPage() {
                     </div>
                 )}
 
-                {/* 1. Kündigung (Nur anzeigen, wenn NICHT abgelaufen) */}
+                {/* 5. Kündigung (Nur anzeigen, wenn NICHT abgelaufen) */}
                 {isCancelled && status?.subscription_ends_at && !isExpired && (
                     <div className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                        <AlertTriangle className="w-5 h-5 mt-0.5" />
+                        <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
                         <div>
                             <strong>Dein Abo ist gekündigt.</strong>
                             <p className="text-sm mt-1">Du hast noch Zugriff bis zum {formatDate(status.subscription_ends_at)}. Wähle unten einen Plan, um dein Abo zu reaktivieren.</p>
@@ -214,7 +275,7 @@ export function BillingPage() {
                     </div>
                 )}
 
-                {/* 2. Plan Wechsel (Nur wenn nicht abgelaufen) */}
+                {/* 6. Plan Wechsel (Nur wenn nicht abgelaufen) */}
                 {isPendingSwitch && !isCancelled && !isExpired && (
                     <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                         <Info className="w-5 h-5 mt-0.5" />
@@ -283,8 +344,8 @@ export function BillingPage() {
                             {/* Hauptkarte Abo */}
                             <Card className="md:col-span-2 border-primary/20 bg-gradient-to-br from-background to-primary/5 shadow-md overflow-hidden relative">
                                 <div className="absolute top-0 right-0 p-4">
-                                    <Badge variant={isStripeTrial ? "secondary" : "default"} className={isStripeTrial ? "bg-blue-100 text-blue-700 hover:bg-blue-100" : "bg-primary hover:bg-primary"}>
-                                        {isStripeTrial ? 'TESTPHASE' : 'AKTIV'}
+                                    <Badge variant="outline" className={badgeClass}>
+                                        {badgeText}
                                     </Badge>
                                 </div>
 
