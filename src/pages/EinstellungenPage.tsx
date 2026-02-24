@@ -418,7 +418,7 @@ export function EinstellungenPage() {
   const [widgetLimit, setWidgetLimit] = useState<number>(5);
   const [widgetCopied, setWidgetCopied] = useState(false);
   const [publicToken, setPublicToken] = useState<string>('');
-  const [widgetHeight, setWidgetHeight] = useState<number>(200);
+  const [widgetHeight, setWidgetHeight] = useState<number>(600);
   const [widgetTheme, setWidgetTheme] = useState<'branding' | 'light' | 'dark' | 'transparent'>('branding');
 
   const getWidgetBaseUrl = useCallback(() => {
@@ -446,17 +446,31 @@ export function EinstellungenPage() {
     }
   }, [selectedModuleId, publicToken, toast]);
 
-  // --- Widget Iframe Auto-Height Listener ---
+  // Calculate widget height based on layout and limit
   useEffect(() => {
-    function handleMessage(e: MessageEvent) {
-      const data: any = e.data || {};
-      if (data && data.type === 'WIDGET_HEIGHT' && typeof data.height === 'number') {
-        setWidgetHeight(Math.max(10, Math.min(4000, Math.round(data.height))));
-      }
+    if (widgetType === 'status') {
+      setWidgetHeight(400);
+      return;
     }
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
+
+    // Appointment widget height calculation
+    let calculatedHeight = 0;
+
+    if (widgetLayout === 'detailed') {
+      // Detailed layout: ~140px per appointment + header ~80px + padding
+      calculatedHeight = 80 + (widgetLimit * 140) + 40;
+    } else if (widgetLayout === 'compact') {
+      // Compact layout: ~80px per appointment + header ~60px + padding
+      calculatedHeight = 60 + (widgetLimit * 80) + 40;
+    } else if (widgetLayout === 'calendar') {
+      // Calendar layout: Dynamic height based on number of weeks to show
+      // Header: ~100px, Week header: ~40px, Day row: ~120px per week, Footer: ~60px
+      const numberOfWeeks = Math.max(1, Math.ceil(widgetLimit / 7));
+      calculatedHeight = 100 + 40 + (numberOfWeeks * 120) + 60;
+    }
+
+    setWidgetHeight(Math.max(200, Math.min(2000, calculatedHeight)));
+  }, [widgetType, widgetLayout, widgetLimit]);
 
 
   // --- SYNC TO PREVIEW (IFRAME) ---
@@ -1851,7 +1865,12 @@ export function EinstellungenPage() {
                                               min={1}
                                               max={widgetLayout === 'calendar' ? 365 : 50}
                                               value={widgetLimit}
-                                              onChange={(e) => setWidgetLimit(parseInt(e.target.value || '1', 10))}
+                                              onChange={(e) => {
+                                                const val = parseInt(e.target.value, 10);
+                                                if (!isNaN(val) && val >= 1) {
+                                                  setWidgetLimit(Math.min(val, widgetLayout === 'calendar' ? 365 : 50));
+                                                }
+                                              }}
                                             />
                                             <span className="text-xs text-muted-foreground">{widgetLayout === 'calendar' ? 'Vorschau-Zeitraum' : 'Maximale Anzeige'}</span>
                                           </div>
@@ -1880,48 +1899,22 @@ export function EinstellungenPage() {
                                         <textarea
                                           readOnly
                                           className="w-full h-48 p-3 text-sm font-mono bg-muted rounded-md border resize-none"
-                                          value={`<iframe 
-  id="pfotencard-widget-${publicToken}"
-  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}" 
-  width="100%" 
-  style="border:none; border-radius: 8px; min-height: ${widgetHeight}px;"
-></iframe>
-<script>
-  (function(){
-    var el = document.getElementById('pfotencard-widget-${publicToken}');
-    function onMsg(e){
-      if (e && e.data && e.data.type === 'WIDGET_HEIGHT' && typeof e.data.height === 'number') {
-        if (!el) el = document.getElementById('pfotencard-widget-${publicToken}');
-        if (el) el.style.height = e.data.height + 'px';
-      }
-    }
-    window.addEventListener('message', onMsg);
-  })();
-</script>`}
+                                          value={`<iframe
+  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}"
+  width="100%"
+  style="border:none; border-radius: 8px; height: ${widgetHeight}px; max-height: 2000px;"
+></iframe>`}
                                         />
                                           <Button
                                            size="sm"
                                            variant="secondary"
                                            className="absolute bottom-2 right-2"
                                            onClick={() => {
-                                             const code = `<iframe 
-  id="pfotencard-widget-${publicToken}"
-  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}" 
-  width="100%" 
-  style="border:none; border-radius: 8px; min-height: ${widgetHeight}px;"
-></iframe>
-<script>
-  (function(){
-    var el = document.getElementById('pfotencard-widget-${publicToken}');
-    function onMsg(e){
-      if (e && e.data && e.data.type === 'WIDGET_HEIGHT' && typeof e.data.height === 'number') {
-        if (!el) el = document.getElementById('pfotencard-widget-${publicToken}');
-        if (el) el.style.height = e.data.height + 'px';
-      }
-    }
-    window.addEventListener('message', onMsg);
-  })();
-</script>`;
+                                             const code = `<iframe
+  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}"
+  width="100%"
+  style="border:none; border-radius: 8px; height: ${widgetHeight}px; max-height: 2000px;"
+></iframe>`;
                                              navigator.clipboard.writeText(code);
                                              setWidgetCopied(true);
                                              toast({ title: "Kopiert!", description: "Der Widget-Code wurde in die Zwischenablage kopiert." });
@@ -1943,10 +1936,10 @@ export function EinstellungenPage() {
                                     </Label>
                                     <div className="flex-1 border rounded-lg bg-slate-50 min-h-[400px] flex items-center justify-center relative">
                                       <iframe
-                                        src={`${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}`}
+                                        src={`${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}`}
                                         width="100%"
                                         className="border-none w-full"
-                                        style={{ height: `${widgetHeight}px`, transition: 'height 0.2s ease' }}
+                                        style={{ height: `${widgetHeight}px`, maxHeight: '2000px' }}
                                         title="Widget Preview"
                                       />
                                       <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-primary/20 rounded-lg"></div>
