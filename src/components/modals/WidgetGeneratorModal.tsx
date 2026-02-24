@@ -35,8 +35,20 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
   const [limit, setLimit] = useState<number>(5);
   const [copied, setCopied] = useState(false);
   const [publicToken, setPublicToken] = useState<string>('');
-  const [height, setHeight] = useState<number>(200);
+  const [height, setHeight] = useState<number>(400);
+  const [autoHeight, setAutoHeight] = useState<number>(400);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'WIDGET_HEIGHT' && typeof event.data.height === 'number') {
+        setAutoHeight(event.data.height);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   // Die Basis-URL der App (wo die Widgets gehostet werden)
   // Per ENV überschreibbar, sonst heuristisch abgeleitet
@@ -61,16 +73,29 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
 
   useEffect(() => {
     // Standardhöhe je nach Widget anpassen
-    setHeight(widgetType === 'status' ? 200 : 400);
+    const defaultHeight = widgetType === 'status' ? 200 : 400;
+    setHeight(defaultHeight);
+    setAutoHeight(defaultHeight);
   }, [widgetType]);
 
   const widgetHeight = String(height);
   const iframeCode = `<iframe 
   src="${generatedUrl}" 
   width="100%" 
-  height="${widgetHeight}" 
-  style="border:none; border-radius: 8px; overflow: hidden;"
-></iframe>`;
+  style="border:none; border-radius: 8px; min-height: ${widgetHeight}px;"
+></iframe>
+<script>
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'WIDGET_HEIGHT') {
+      var iframes = document.getElementsByTagName('iframe');
+      for (var i = 0; i < iframes.length; i++) {
+        if (iframes[i].src === "${generatedUrl}") {
+          iframes[i].style.height = e.data.height + 'px';
+        }
+      }
+    }
+  });
+</script>`;
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(iframeCode);
@@ -133,12 +158,26 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
                     <span className="text-xs text-muted-foreground">Maximale Anzeige</span>
                   </div>
                 </div>
+
+                <div className="space-y-2">
+                  <Label>Minimale Höhe (px)</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      type="number"
+                      min={200}
+                      max={2000}
+                      value={height}
+                      onChange={(e) => setHeight(parseInt(e.target.value || '0', 10))}
+                    />
+                    <span className="text-xs text-muted-foreground">Standard: 400</span>
+                  </div>
+                </div>
               </>
             )}
 
             {widgetType === 'status' && (
               <div className="space-y-2">
-                <Label>Höhe (px)</Label>
+                <Label>Minimale Höhe (px)</Label>
                 <div className="flex items-center gap-3">
                   <Input
                     type="number"
@@ -179,13 +218,14 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
               Live-Vorschau 
               <span className="text-xs font-normal text-muted-foreground">(Beispielhaftes Iframe)</span>
             </Label>
-            <div className="flex-1 border rounded-lg bg-slate-50 overflow-hidden min-h-[300px] flex items-center justify-center relative">
+            <div className="flex-1 border rounded-lg bg-slate-50 min-h-[400px] flex items-center justify-center relative">
               <iframe
                 src={generatedUrl}
                 width="100%"
-                height="100%"
-                className="border-none w-full h-full"
+                height={autoHeight}
+                className="border-none w-full"
                 title="Widget Preview"
+                style={{ height: `${autoHeight}px` }}
               />
               <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-primary/20 rounded-lg"></div>
             </div>

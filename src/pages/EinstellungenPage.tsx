@@ -1879,15 +1879,49 @@ export function EinstellungenPage() {
                                       <div className="relative">
                                         <textarea
                                           readOnly
-                                          className="w-full h-32 p-3 text-sm font-mono bg-muted rounded-md border resize-none"
-                                          value={`<iframe src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}" width="100%" style="border:none; border-radius: 8px; overflow: hidden; width: 100%;" scrolling="no"></iframe>`}
+                                          className="w-full h-48 p-3 text-sm font-mono bg-muted rounded-md border resize-none"
+                                          value={`<iframe 
+  id="pfotencard-widget-${publicToken}"
+  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}" 
+  width="100%" 
+  style="border:none; border-radius: 8px; min-height: ${widgetHeight}px;"
+></iframe>
+<script>
+  (function(){
+    var el = document.getElementById('pfotencard-widget-${publicToken}');
+    function onMsg(e){
+      if (e && e.data && e.data.type === 'WIDGET_HEIGHT' && typeof e.data.height === 'number') {
+        if (!el) el = document.getElementById('pfotencard-widget-${publicToken}');
+        if (el) el.style.height = e.data.height + 'px';
+      }
+    }
+    window.addEventListener('message', onMsg);
+  })();
+</script>`}
                                         />
                                           <Button
                                            size="sm"
                                            variant="secondary"
                                            className="absolute bottom-2 right-2"
                                            onClick={() => {
-                                             const code = `<iframe src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}" width="100%" style="border:none; border-radius: 8px; overflow: hidden; width: 100%;" scrolling="no"></iframe>`;
+                                             const code = `<iframe 
+  id="pfotencard-widget-${publicToken}"
+  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}" 
+  width="100%" 
+  style="border:none; border-radius: 8px; min-height: ${widgetHeight}px;"
+></iframe>
+<script>
+  (function(){
+    var el = document.getElementById('pfotencard-widget-${publicToken}');
+    function onMsg(e){
+      if (e && e.data && e.data.type === 'WIDGET_HEIGHT' && typeof e.data.height === 'number') {
+        if (!el) el = document.getElementById('pfotencard-widget-${publicToken}');
+        if (el) el.style.height = e.data.height + 'px';
+      }
+    }
+    window.addEventListener('message', onMsg);
+  })();
+</script>`;
                                              navigator.clipboard.writeText(code);
                                              setWidgetCopied(true);
                                              toast({ title: "Kopiert!", description: "Der Widget-Code wurde in die Zwischenablage kopiert." });
@@ -1907,14 +1941,13 @@ export function EinstellungenPage() {
                                       Live-Vorschau 
                                       <span className="text-xs font-normal text-muted-foreground">(Beispielhaftes Iframe)</span>
                                     </Label>
-                                    <div className="flex-1 border rounded-lg overflow-y-auto max-h-[600px] relative">
+                                    <div className="flex-1 border rounded-lg bg-slate-50 min-h-[400px] flex items-center justify-center relative">
                                       <iframe
                                         src={`${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}`}
                                         width="100%"
                                         className="border-none w-full"
                                         style={{ height: `${widgetHeight}px`, transition: 'height 0.2s ease' }}
                                         title="Widget Preview"
-                                        scrolling="no"
                                       />
                                       <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-primary/20 rounded-lg"></div>
                                     </div>

@@ -24,12 +24,25 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
         setIsProcessing(true);
         const returnUrl = `${window.location.origin}/einstellungen?subscription_success=true`;
 
-        const { error } = await stripe.confirmPayment({
-            elements,
-            confirmParams: {
-                return_url: returnUrl,
-            },
-        });
+        // Unterscheidung zwischen PaymentIntent (pi_...) und SetupIntent (seti_...)
+        let result;
+        if (clientSecret.startsWith('seti_')) {
+            result = await stripe.confirmSetup({
+                elements,
+                confirmParams: {
+                    return_url: returnUrl,
+                },
+            });
+        } else {
+            result = await stripe.confirmPayment({
+                elements,
+                confirmParams: {
+                    return_url: returnUrl,
+                },
+            });
+        }
+
+        const { error } = result;
 
         if (error) {
             setErrorMessage(error.message || "Ein Fehler ist aufgetreten.");
@@ -92,7 +105,11 @@ export function CheckoutPage() {
 
                 if (!res.ok) {
                     const data = await res.json();
-                    throw new Error(data.detail || "Konnte Checkout-Session nicht erstellen");
+                    const errorDetail = data.detail;
+                    const message = typeof errorDetail === 'object' 
+                        ? (errorDetail.message || JSON.stringify(errorDetail))
+                        : (errorDetail || "Konnte Checkout-Session nicht erstellen");
+                    throw new Error(message);
                 }
 
                 const data = await res.json();
@@ -111,9 +128,15 @@ export function CheckoutPage() {
                     throw new Error(`Unerwarteter Status von Stripe: ${data.status}`);
                 }
             } catch (e: any) {
-                console.error(e);
+                console.error("Checkout Error:", e);
                 setStatus('error');
-                setErrorMsg(e.message || "Ein Fehler ist aufgetreten.");
+                let message = "Ein Fehler ist aufgetreten.";
+                if (e.message) {
+                    message = e.message;
+                } else if (typeof e === 'object') {
+                    message = JSON.stringify(e);
+                }
+                setErrorMsg(message);
             }
         }
         initPayment();
