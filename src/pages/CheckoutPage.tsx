@@ -39,10 +39,10 @@ function CheckoutForm({ clientSecret, amountDue }: { clientSecret: string, amoun
         }
     };
 
-    // NEU: Dynamischer Button-Text
-    const buttonText = amountDue && amountDue > 0 
+    // Dynamischer Button-Text je nach fälligem Betrag (auch 0€ abfangen!)
+    const buttonText = amountDue !== null && amountDue > 0 
         ? `Zahlungspflichtig bestellen (${amountDue.toFixed(2).replace('.', ',')} €)` 
-        : "Kostenpflichtig buchen";
+        : "Zahlungsmethode bestätigen";
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
