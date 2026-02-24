@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -12,13 +12,14 @@ import { motion } from 'framer-motion';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
 
-function CheckoutForm({ clientSecret }: { clientSecret: string }) {
+function CheckoutForm({ clientSecret, amountDue }: { clientSecret: string, amountDue: number | null }) {
     const stripe = useStripe();
     const elements = useElements();
     const [isProcessing, setIsProcessing] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
+        // (Dein bisheriger Code hierin bleibt völlig gleich)
         e.preventDefault();
         if (!stripe || !elements) return;
 
@@ -38,6 +39,11 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
         }
     };
 
+    // NEU: Dynamischer Button-Text
+    const buttonText = amountDue && amountDue > 0 
+        ? `Zahlungspflichtig bestellen (${amountDue.toFixed(2).replace('.', ',')} €)` 
+        : "Kostenpflichtig buchen";
+
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
             <PaymentElement />
@@ -47,7 +53,7 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
                 </div>
             )}
             <Button disabled={isProcessing || !stripe || !elements} className="w-full h-12 text-base shadow-lg">
-                {isProcessing ? <><Loader2 className="h-5 w-5 animate-spin mr-2" /> Verarbeitung...</> : "Zahlungspflichtig bestellen"}
+                {isProcessing ? <><Loader2 className="h-5 w-5 animate-spin mr-2" /> Verarbeitung...</> : buttonText}
             </Button>
         </form>
     );
@@ -64,6 +70,7 @@ export function CheckoutPage() {
     const [clientSecret, setClientSecret] = useState<string | null>(null);
     const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [amountDue, setAmountDue] = useState<number | null>(null); // <-- NEU
 
     // Form State für Rechnungsdaten
     const [billingData, setBillingData] = useState({
@@ -75,6 +82,47 @@ export function CheckoutPage() {
         country: 'DE',
         vat_id: ''
     });
+
+    // --- FIX 3: Lade existierende Rechnungsdaten beim Start ---
+    useEffect(() => {
+        if (!subdomain) return;
+        async function fetchConfig() {
+            try {
+                const token = localStorage.getItem('pfotencard_token');
+                const res = await fetch(`${API_BASE_URL}/api/config`, {
+                    headers: { 'x-tenant-subdomain': subdomain, 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const inv = data.tenant?.config?.invoice_settings;
+                    
+                    if (inv) {
+                        let zip = '';
+                        let cityStr = '';
+                        if (inv.address_line2) {
+                            // Splittet "12345 Musterstadt" auf
+                            const parts = inv.address_line2.split(' ');
+                            if (parts.length > 0) zip = parts[0];
+                            if (parts.length > 1) cityStr = parts.slice(1).join(' ');
+                        }
+                        
+                        setBillingData(prev => ({
+                            ...prev,
+                            company_name: inv.company_name || prev.company_name,
+                            name: inv.account_holder || prev.name,
+                            address_line1: inv.address_line1 || prev.address_line1,
+                            postal_code: zip || prev.postal_code,
+                            city: cityStr || prev.city,
+                            vat_id: inv.vat_id || prev.vat_id
+                        }));
+                    }
+                }
+            } catch (e) {
+                console.error("Konnte existierende Rechnungsdaten nicht laden", e);
+            }
+        }
+        fetchConfig();
+    }, [subdomain]);
 
     const handleBillingSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -106,6 +154,9 @@ export function CheckoutPage() {
 
             if (data.clientSecret) {
                 setClientSecret(data.clientSecret);
+                if (data.amountDue !== undefined) {
+                    setAmountDue(data.amountDue); // <-- NEU
+                }
                 setStep('payment');
                 setStatus('idle');
             } else if (data.status === 'updated' || data.status === 'created' || data.status === 'success') {
@@ -199,9 +250,22 @@ export function CheckoutPage() {
                                         </div>
                                         <Button type="button" variant="ghost" size="sm" onClick={() => setStep('billing')}>Ändern</Button>
                                     </div>
+                                    
+                                    {/* NEU: Anzeige des zu zahlenden Betrags */}
+                                    {amountDue !== null && (
+                                        <div className="mb-6 p-5 bg-primary/5 border border-primary/20 rounded-lg text-center shadow-sm">
+                                            <p className="text-sm font-medium text-primary/80 mb-1">
+                                                {amountDue === 0 ? "Kostenlose Testphase" : "Jetzt zu zahlender Betrag"}
+                                            </p>
+                                            <p className="text-4xl font-black text-foreground tracking-tight">
+                                                {amountDue === 0 ? "0,00 €" : `${amountDue.toFixed(2).replace('.', ',')} €`}
+                                            </p>
+                                            {amountDue > 0 && <p className="text-xs text-muted-foreground mt-2 font-medium">Inklusive Mehrwertsteuer. Bei einem Plan-Wechsel (Upgrade) wird dein bisheriges Guthaben bereits automatisch anteilig verrechnet.</p>}
+                                        </div>
+                                    )}
 
                                     <Elements stripe={stripePromise} options={{ clientSecret, appearance, locale: 'de' }}>
-                                        <CheckoutForm clientSecret={clientSecret} />
+                                        <CheckoutForm clientSecret={clientSecret} amountDue={amountDue} />
                                     </Elements>
                                 </div>
                             )}

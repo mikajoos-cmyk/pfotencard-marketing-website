@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { checkTenantStatus, API_BASE_URL, fetchInvoices, type Invoice } from '@/lib/api';
+import { checkTenantStatus, API_BASE_URL, fetchInvoices, reactivateSubscription, type Invoice } from '@/lib/api';
 import { Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText, FileCheck, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PricingTableSection } from '@/components/pricing/PricingTableSection';
@@ -14,6 +14,7 @@ export function BillingPage() {
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState<any>(null);
     const [canceling, setCanceling] = useState(false);
+        const [reactivating, setReactivating] = useState(false);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [acceptingAvv, setAcceptingAvv] = useState(false);
@@ -112,6 +113,19 @@ export function BillingPage() {
         }
     };
 
+    const handleReactivateSubscription = async () => {
+        setReactivating(true);
+        try {
+            await reactivateSubscription();
+            toast({ title: "Reaktiviert", description: "Dein Abo wurde erfolgreich reaktiviert." });
+            await fetchBillingData();
+        } catch (e) {
+            toast({ variant: "destructive", title: "Fehler", description: "Konnte nicht reaktivieren." });
+        } finally {
+            setReactivating(false);
+        }
+    };
+
     const openCustomerPortal = async () => {
         const token = localStorage.getItem('pfotencard_token');
         const subdomain = localStorage.getItem('pfotencard_subdomain');
@@ -181,7 +195,7 @@ export function BillingPage() {
     // 3. Abgelaufen ODER Abgebrochen (incomplete_expired)
     // 4. Ausstehend (incomplete) -> Damit der Kunde nochmal auf den Plan klicken und das Fenster öffnen kann
     // WICHTIG: Bei past_due zeigen wir KEINE neuen Pläne, da der User ins Portal muss.
-    const showPricing = (!hasPaymentMethod || isCancelled || isExpired || isIncompleteExpired || isIncomplete) && !isPastDue;
+    const showPricing = (!hasPaymentMethod || isExpired || isIncompleteExpired || isIncomplete) && !isPastDue;
 
     const planName = status?.plan ? status.plan.charAt(0).toUpperCase() + status.plan.slice(1) : 'Starter';
     const upcomingPlanName = status?.upcoming_plan ? status.upcoming_plan.charAt(0).toUpperCase() + status.upcoming_plan.slice(1) : '';
@@ -268,10 +282,13 @@ export function BillingPage() {
                 {isCancelled && status?.subscription_ends_at && !isExpired && (
                     <div className="bg-orange-50 border border-orange-200 text-orange-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
                         <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0" />
-                        <div>
+                        <div className="flex-1">
                             <strong>Dein Abo ist gekündigt.</strong>
-                            <p className="text-sm mt-1">Du hast noch Zugriff bis zum {formatDate(status.subscription_ends_at)}. Wähle unten einen Plan, um dein Abo zu reaktivieren.</p>
+                            <p className="text-sm mt-1">Du hast noch Zugriff bis zum {formatDate(status.subscription_ends_at)}. Du kannst dein Abo jederzeit wieder reaktivieren.</p>
                         </div>
+                        <Button variant="default" size="sm" onClick={handleReactivateSubscription} disabled={reactivating}>
+                            {reactivating ? <><Loader2 className="animate-spin mr-2" /> Reaktiviere...</> : 'Abo reaktivieren'}
+                        </Button>
                     </div>
                 )}
 
@@ -406,9 +423,15 @@ export function BillingPage() {
                                     <Button variant="outline" className="bg-background" onClick={() => navigate('/preise')}>
                                         Plan ändern
                                     </Button>
-                                    <Button variant="ghost" className="text-destructive hover:bg-destructive/10 ml-auto hover:text-destructive" onClick={handleCancelSubscription} disabled={canceling}>
-                                        {canceling ? <Loader2 className="animate-spin w-4 h-4" /> : 'Kündigen'}
-                                    </Button>
+                                    {isCancelled ? (
+                                        <Button variant="default" className="ml-auto" onClick={handleReactivateSubscription} disabled={reactivating}>
+                                            {reactivating ? <Loader2 className="animate-spin w-4 h-4" /> : 'Reaktivieren'}
+                                        </Button>
+                                    ) : (
+                                        <Button variant="ghost" className="text-destructive hover:bg-destructive/10 ml-auto hover:text-destructive" onClick={handleCancelSubscription} disabled={canceling}>
+                                            {canceling ? <Loader2 className="animate-spin w-4 h-4" /> : 'Kündigen'}
+                                        </Button>
+                                    )}
                                 </CardFooter>
                             </Card>
 
