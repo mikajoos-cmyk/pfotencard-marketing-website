@@ -141,7 +141,8 @@ export function CheckoutPage() {
                 body: JSON.stringify({
                     subdomain,
                     plan: plan.toLowerCase(),
-                    billing_details: billingData
+                    billing_details: billingData,
+                    trial_allowed: false
                 })
             });
 
