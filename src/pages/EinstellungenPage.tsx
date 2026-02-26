@@ -158,6 +158,31 @@ interface ColorRule {
   match_all?: boolean;
 }
 
+interface LegalSettings {
+  company_name: string;
+  legal_form: 'individual' | 'registered';
+  owner_name: string; // For Individual/GbR
+  representative: string; // For Registered
+  registry_court: string; // For Registered
+  registry_number: string; // For Registered
+  street: string;
+  house_number: string;
+  zip_code: string;
+  city: string;
+  email_public: string;
+  email_support: string;
+  phone: string;
+  supervisory_authority: string;
+  has_vat_id: boolean;
+  vat_id: string;
+  separate_billing_address: boolean;
+  billing_company_name: string;
+  billing_street: string;
+  billing_house_number: string;
+  billing_zip_code: string;
+  billing_city: string;
+}
+
 interface InvoiceSettings {
   company_name: string;
   address_line1: string;
@@ -289,6 +314,12 @@ const NAVIGATION = [
     items: [
       { id: 'rights', label: 'Mitarbeiter-Rechte', icon: ShieldCheck }
     ]
+  },
+  {
+    group: 'Rechtliches',
+    items: [
+      { id: 'legal', label: 'Adresse', icon: ShieldCheck }
+    ]
   }
 ];
 
@@ -373,6 +404,31 @@ export function EinstellungenPage() {
     vat_rate: 19.0,
     is_small_business: false,
     small_business_text: 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.'
+  });
+
+  const [legalSettings, setLegalSettings] = useState<LegalSettings>({
+    company_name: '',
+    legal_form: 'individual',
+    owner_name: '',
+    representative: '',
+    registry_court: '',
+    registry_number: '',
+    street: '',
+    house_number: '',
+    zip_code: '',
+    city: '',
+    email_public: '',
+    email_support: '',
+    phone: '',
+    supervisory_authority: '',
+    has_vat_id: false,
+    vat_id: '',
+    separate_billing_address: false,
+    billing_company_name: '',
+    billing_street: '',
+    billing_house_number: '',
+    billing_zip_code: '',
+    billing_city: '',
   });
 
   const [showInvoicePreview, setShowInvoicePreview] = useState(false);
@@ -782,6 +838,10 @@ export function EinstellungenPage() {
           });
         }
 
+        if (t.config?.legal_settings) {
+          setLegalSettings(t.config.legal_settings);
+        }
+
       } catch (e) {
         console.error(e);
         toast({
@@ -800,6 +860,30 @@ export function EinstellungenPage() {
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
+      // Wenn keine abweichende Rechnungsadresse, dann synchronisieren
+      let finalInvoiceSettings = { ...invoiceSettings };
+      if (!legalSettings.separate_billing_address) {
+        finalInvoiceSettings.company_name = legalSettings.legal_form === 'individual' 
+          ? (legalSettings.owner_name || legalSettings.company_name) 
+          : legalSettings.company_name;
+        finalInvoiceSettings.address_line1 = `${legalSettings.street} ${legalSettings.house_number}`;
+        finalInvoiceSettings.address_line2 = `${legalSettings.zip_code} ${legalSettings.city}`;
+      } else {
+        // Falls abweichend, nutzen wir die expliziten Billing-Felder
+        finalInvoiceSettings.company_name = legalSettings.billing_company_name;
+        finalInvoiceSettings.address_line1 = `${legalSettings.billing_street} ${legalSettings.billing_house_number}`;
+        finalInvoiceSettings.address_line2 = `${legalSettings.billing_zip_code} ${legalSettings.billing_city}`;
+      }
+      
+      // VAT ID Synchronisation
+      if (legalSettings.has_vat_id) {
+        finalInvoiceSettings.vat_id = legalSettings.vat_id;
+        finalInvoiceSettings.is_small_business = false;
+      } else {
+        finalInvoiceSettings.vat_id = '';
+        finalInvoiceSettings.is_small_business = true;
+      }
+
       const normalizedLevels = levels.map((l, index) => ({
         ...l,
         rank_order: index + 1,
@@ -834,7 +918,8 @@ export function EinstellungenPage() {
           cancelation_period_hours: cancelationPeriodHours,
           color_rules: colorRules
         },
-        invoice_settings: invoiceSettings,
+        invoice_settings: finalInvoiceSettings,
+        legal_settings: legalSettings,
         widgets: {
           type: widgetType,
           layout: widgetLayout,
@@ -2599,6 +2684,311 @@ export function EinstellungenPage() {
                             </Table>
                           </div>
                         )}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+
+                {/* Legal Section */}
+                {activeSection === 'legal' && (
+                  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Rechtliches & Impressum</CardTitle>
+                        <CardDescription>Hinterlege hier die rechtlich erforderlichen Daten deiner Hundeschule für das Impressum und die Rechnungsstellung.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-8">
+                        {/* 1. Rechtsform */}
+                        <div className="space-y-4">
+                          <h3 className="text-sm font-semibold border-b pb-2 flex items-center gap-2">
+                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px]">1</span>
+                            Rechtsform & Inhaber
+                          </h3>
+                          <div className="space-y-4">
+                            <div>
+                              <Label>Art des Unternehmens</Label>
+                              <Select 
+                                value={legalSettings.legal_form} 
+                                onValueChange={(v: 'individual' | 'registered') => setLegalSettings({ ...legalSettings, legal_form: v })}
+                              >
+                                <SelectTrigger className="mt-2">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="individual">Einzelunternehmen / Kleingewerbe / GbR</SelectItem>
+                                  <SelectItem value="registered">Eingetragenes Unternehmen (GmbH, UG, e.K., AG)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {legalSettings.legal_form === 'individual' ? (
+                              <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                                <div className="space-y-2">
+                                  <Label>Vor- und Nachname des Inhabers / der Inhaber (Pflicht)</Label>
+                                  <Input
+                                    value={legalSettings.owner_name}
+                                    onChange={e => setLegalSettings({ ...legalSettings, owner_name: e.target.value })}
+                                    placeholder="z.B. Max Mustermann"
+                                  />
+                                  <p className="text-xs text-muted-foreground">Dies ist der rechtliche Vertragspartner.</p>
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Geschäftsbezeichnung / Fantasiename (Optional)</Label>
+                                  <Input
+                                    value={legalSettings.company_name}
+                                    onChange={e => setLegalSettings({ ...legalSettings, company_name: e.target.value })}
+                                    placeholder="z.B. Bello's Hundeschule"
+                                  />
+                                  <p className="text-xs text-muted-foreground">Darf im Impressum stehen, ersetzt aber niemals den echten Namen.</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                                <div className="space-y-2">
+                                  <Label>Vollständiger Firmenname inkl. Rechtsform</Label>
+                                  <Input
+                                    value={legalSettings.company_name}
+                                    onChange={e => setLegalSettings({ ...legalSettings, company_name: e.target.value })}
+                                    placeholder="z.B. Hundetraining Musterstadt GmbH"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Vertretungsberechtigter (z.B. Geschäftsführer)</Label>
+                                  <Input
+                                    value={legalSettings.representative}
+                                    onChange={e => setLegalSettings({ ...legalSettings, representative: e.target.value })}
+                                    placeholder="z.B. Geschäftsführer: Max Mustermann"
+                                  />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-2">
+                                    <Label>Registergericht</Label>
+                                    <Input
+                                      value={legalSettings.registry_court}
+                                      onChange={e => setLegalSettings({ ...legalSettings, registry_court: e.target.value })}
+                                      placeholder="z.B. Amtsgericht München"
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Handelsregisternummer</Label>
+                                    <Input
+                                      value={legalSettings.registry_number}
+                                      onChange={e => setLegalSettings({ ...legalSettings, registry_number: e.target.value })}
+                                      placeholder="z.B. HRB 12345"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 2. Allgemeine Kontakt- und Adressdaten */}
+                        <div className="space-y-4">
+                          <h3 className="text-sm font-semibold border-b pb-2 flex items-center gap-2">
+                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px]">2</span>
+                            Allgemeine Kontakt- und Adressdaten
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="col-span-2 space-y-2">
+                                  <Label>Straße</Label>
+                                  <Input
+                                    value={legalSettings.street}
+                                    onChange={e => setLegalSettings({ ...legalSettings, street: e.target.value })}
+                                    placeholder="Muss ladungsfähige Adresse sein"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label>Nr.</Label>
+                                  <Input
+                                    value={legalSettings.house_number}
+                                    onChange={e => setLegalSettings({ ...legalSettings, house_number: e.target.value })}
+                                    placeholder="1"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="space-y-2">
+                                  <Label>PLZ</Label>
+                                  <Input
+                                    value={legalSettings.zip_code}
+                                    onChange={e => setLegalSettings({ ...legalSettings, zip_code: e.target.value })}
+                                    placeholder="12345"
+                                  />
+                                </div>
+                                <div className="col-span-2 space-y-2">
+                                  <Label>Ort</Label>
+                                  <Input
+                                    value={legalSettings.city}
+                                    onChange={e => setLegalSettings({ ...legalSettings, city: e.target.value })}
+                                    placeholder="Musterstadt"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <Label>Öffentliche Kontakt-E-Mail (Impressum)</Label>
+                                <Input
+                                  value={legalSettings.email_public}
+                                  onChange={e => setLegalSettings({ ...legalSettings, email_public: e.target.value })}
+                                  placeholder="info@hundeschule.de"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Telefonnummer (Impressum)</Label>
+                                <Input
+                                  value={legalSettings.phone}
+                                  onChange={e => setLegalSettings({ ...legalSettings, phone: e.target.value })}
+                                  placeholder="+49 123 456789"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Support / Rechnungs-E-Mail (Stripe)</Label>
+                                <Input
+                                  value={legalSettings.email_support}
+                                  onChange={e => setLegalSettings({ ...legalSettings, email_support: e.target.value })}
+                                  placeholder="rechnung@hundeschule.de (optional)"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 3. Branchenspezifische Pflichtangaben */}
+                        <div className="space-y-4">
+                          <h3 className="text-sm font-semibold border-b pb-2 flex items-center gap-2">
+                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px]">3</span>
+                            Branchenspezifische Pflichtangaben
+                          </h3>
+                          <div className="space-y-2">
+                            <Label>Zuständige Aufsichtsbehörde (§ 11 TierSchG)</Label>
+                            <Input
+                              value={legalSettings.supervisory_authority}
+                              onChange={e => setLegalSettings({ ...legalSettings, supervisory_authority: e.target.value })}
+                              placeholder="z.B. Veterinäramt Landkreis Musterstadt, Musterweg 1, 12345 Musterstadt"
+                            />
+                            <p className="text-xs text-muted-foreground">Hier muss der Name und die Anschrift des Veterinäramts eingetragen werden, das die Erlaubnis erteilt hat.</p>
+                          </div>
+                        </div>
+
+                        {/* 4. Steuerliche Angaben */}
+                        <div className="space-y-4">
+                          <h3 className="text-sm font-semibold border-b pb-2 flex items-center gap-2">
+                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px]">4</span>
+                            Steuerliche Angaben
+                          </h3>
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+                              <div className="space-y-0.5">
+                                <Label>Verfügst du über eine Umsatzsteuer-Identifikationsnummer (USt-IdNr.)?</Label>
+                                <p className="text-sm text-muted-foreground">Wähle "Nein" bei Kleinunternehmer-Regelung.</p>
+                              </div>
+                              <Switch
+                                checked={legalSettings.has_vat_id}
+                                onCheckedChange={(checked) => setLegalSettings({ ...legalSettings, has_vat_id: checked })}
+                              />
+                            </div>
+
+                            {legalSettings.has_vat_id && (
+                              <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                <Label>USt-IdNr.</Label>
+                                <Input
+                                  value={legalSettings.vat_id}
+                                  onChange={e => setLegalSettings({ ...legalSettings, vat_id: e.target.value })}
+                                  placeholder="z.B. DE123456789"
+                                />
+                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-md flex gap-2">
+                                  <HelpCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                                  <p className="text-xs text-amber-800 leading-relaxed">
+                                    <strong>Wichtiger Hinweis:</strong> Trage hier niemals deine private Steuernummer vom Finanzamt ein! Es geht ausschließlich um die USt-IdNr.
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 5. Rechnungsadresse (Falls abweichend) */}
+                        <div className="space-y-4 pt-4 border-t">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold flex items-center gap-2">
+                              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px]">5</span>
+                              Abweichende Rechnungsadresse
+                            </h3>
+                            <Switch
+                              id="separate-billing"
+                              checked={legalSettings.separate_billing_address}
+                              onCheckedChange={(checked) => setLegalSettings({ ...legalSettings, separate_billing_address: checked })}
+                            />
+                          </div>
+
+                          {legalSettings.separate_billing_address ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-top-2 duration-200">
+                              <div className="space-y-2">
+                                <Label>Firmenname (Rechnung)</Label>
+                                <Input
+                                  value={legalSettings.billing_company_name}
+                                  onChange={e => setLegalSettings({ ...legalSettings, billing_company_name: e.target.value })}
+                                  placeholder="Rechnungsfirma GmbH"
+                                />
+                              </div>
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div className="col-span-2 space-y-2">
+                                    <Label>Straße (Rechnung)</Label>
+                                    <Input
+                                      value={legalSettings.billing_street}
+                                      onChange={e => setLegalSettings({ ...legalSettings, billing_street: e.target.value })}
+                                      placeholder="Rechnungsstraße"
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label>Nr.</Label>
+                                    <Input
+                                      value={legalSettings.billing_house_number}
+                                      onChange={e => setLegalSettings({ ...legalSettings, billing_house_number: e.target.value })}
+                                      placeholder="2"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div className="space-y-2">
+                                    <Label>PLZ</Label>
+                                    <Input
+                                      value={legalSettings.billing_zip_code}
+                                      onChange={e => setLegalSettings({ ...legalSettings, billing_zip_code: e.target.value })}
+                                      placeholder="54321"
+                                    />
+                                  </div>
+                                  <div className="col-span-2 space-y-2">
+                                    <Label>Ort</Label>
+                                    <Input
+                                      value={legalSettings.billing_city}
+                                      onChange={e => setLegalSettings({ ...legalSettings, billing_city: e.target.value })}
+                                      placeholder="Rechnungsort"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-6 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center bg-muted/20">
+                              <p className="text-sm text-muted-foreground">
+                                Die Rechnungsadresse entspricht der oben angegebenen Adresse.
+                              </p>
+                              <Button
+                                variant="link"
+                                className="mt-1 text-primary h-auto p-0"
+                                onClick={() => setLegalSettings({ ...legalSettings, separate_billing_address: true })}
+                              >
+                                Abweichende Adresse festlegen
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                       </CardContent>
                     </Card>
                   </motion.div>

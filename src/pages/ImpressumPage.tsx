@@ -12,51 +12,52 @@ export function ImpressumPage() {
 
           <div className="prose prose-slate dark:prose-invert max-w-none space-y-8">
             <section>
-              <h2 className="text-xl font-semibold mb-2">Angaben gemäß § 5 TMG</h2>
+              <h2 className="text-xl font-semibold mb-2">Angaben gemäß § 5 DDG (Digitale-Dienste-Gesetz):</h2>
               <p>
-                [DEIN FIRMENNAME / EINGETRAGENER KAUFMANN]<br />
-                [STRASSE UND HAUSNUMMER]<br />
-                [PLZ UND ORT]<br />
-                Deutschland
+                [Ihr Firmenname, z. B. Max Mustermann Softwarelösungen oder Muster GmbH]<br />
+                [Ihre Straße und Hausnummer]<br />
+                [Ihre PLZ und Ort]
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-2">Kontakt</h2>
+              <h2 className="text-xl font-semibold mb-2">Vertreten durch:</h2>
               <p>
-                Telefon: [DEINE TELEFONNUMMER]<br />
-                E-Mail: <a href="mailto:info@pfotencard.de" className="text-primary hover:underline">info@pfotencard.de</a>
+                [Vor- und Nachname des Inhabers bzw. der Geschäftsführer]
               </p>
             </section>
 
-            {/* Falls du eine USt-ID hast: */}
             <section>
-              <h2 className="text-xl font-semibold mb-2">Umsatzsteuer-ID</h2>
+              <h2 className="text-xl font-semibold mb-2">Kontakt:</h2>
+              <p>
+                Telefon: [Ihre Telefonnummer]<br />
+                E-Mail: <a href="mailto:info@ihredomain.de" className="text-primary hover:underline">info@ihredomain.de</a>
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold mb-2">Registereintrag:</h2>
+              <p>
+                Eintragung im Handelsregister.<br />
+                Registergericht: [Name des Gerichts, z. B. Amtsgericht München]<br />
+                Registernummer: [Ihre HRB/HRA Nummer]
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold mb-2">Umsatzsteuer-ID:</h2>
               <p>
                 Umsatzsteuer-Identifikationsnummer gemäß § 27 a Umsatzsteuergesetz:<br />
-                [DEINE UST-ID, z.B. DE123456789]
+                [Ihre USt-IdNr., z. B. DE123456789]
               </p>
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-2">Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV</h2>
+              <h2 className="text-xl font-semibold mb-2">Verbraucherstreitbeilegung/Universalschlichtungsstelle:</h2>
               <p>
-                [DEIN VORNAME NACHNAME]<br />
-                [ADRESSE WIE OBEN]
+                Wir sind nicht bereit oder verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.
               </p>
             </section>
-
-            <section className="bg-muted/30 p-4 rounded-lg text-sm text-muted-foreground border border-border">
-              <h2 className="text-base font-semibold mb-2 text-foreground">Haftungsausschluss (Disclaimer)</h2>
-              <p className="mb-2">
-                <strong>Haftung für Inhalte:</strong> Als Diensteanbieter sind wir gemäß § 7 Abs.1 TMG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich.
-              </p>
-              <p>
-                <strong>Haftung für Links:</strong> Unser Angebot enthält Links zu externen Webseiten Dritter, auf deren Inhalte wir keinen Einfluss haben. Für die Inhalte der verlinkten Seiten ist stets der jeweilige Anbieter oder Betreiber der Seiten verantwortlich.
-              </p>
-            </section>
-
-            {/* WICHTIG: KEIN LINK ZUR OS-PLATTFORM MEHR! Das wurde laut Gutachten entfernt. */}
           </div>
         </motion.div>
       </div>
