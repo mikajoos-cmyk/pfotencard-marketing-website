@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { checkTenantStatus, API_BASE_URL, fetchInvoices, reactivateSubscription, type Invoice } from '@/lib/api';
-import { Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText, FileCheck, Shield } from 'lucide-react';
+import { Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText, FileCheck, Shield, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PricingTableSection } from '@/components/pricing/PricingTableSection';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AVVDocument from '@/components/legal/AVVDocument';
+import html2pdf from 'html2pdf.js';
 
 export function BillingPage() {
     const [loading, setLoading] = useState(true);
@@ -19,45 +21,10 @@ export function BillingPage() {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [acceptingAvv, setAcceptingAvv] = useState(false);
     const [latestAvvVersion, setLatestAvvVersion] = useState("1.0");
+    const [showAvvPreview, setShowAvvPreview] = useState(false);
+    const avvRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
     const { toast } = useToast();
-
-    const getAvvFilename = (version: string) => {
-        if (!version || typeof version !== 'string') return '/AVV_Pfotencard_v1_0.pdf';
-        // Formatiert "1.0" zu "1_0" für den Dateinamen
-        const vPart = version.replace('.', '_');
-        return `/AVV_Pfotencard_v${vPart}.pdf`;
-    };
-
-    // Sucht automatisch nach der neuesten Version (probt v1.0, v1.1, v1.2...)
-    const detectLatestAvv = async () => {
-        let major = 1;
-        let minor = 0;
-        let lastValid = "1.0";
-
-        // Wir proben bis zu 10 Minor-Versionen in die Zukunft
-        try {
-            for (let i = 0; i < 10; i++) {
-                const version = `${major}.${minor + i}`;
-                const url = getAvvFilename(version);
-                const res = await fetch(url, { method: 'HEAD' });
-
-                // WICHTIG: Prüfen ob es wirklich ein PDF ist (und nicht die index.html vom SPA Fallback)
-                const contentType = res.headers.get('content-type');
-                const isPdf = contentType && contentType.includes('application/pdf');
-
-                if (res.ok && isPdf) {
-                    lastValid = version;
-                } else if (i > 0) {
-                    // Wenn wir eine Lücke finden, hören wir auf (v1.0 exists, v1.1 exists, v1.2 doesn't -> 1.1 is latest)
-                    break;
-                }
-            }
-            setLatestAvvVersion(lastValid);
-        } catch (e) {
-            console.error("Fehler bei AVV Erkennung", e);
-        }
-    };
 
     const fetchBillingData = async () => {
         try {
@@ -65,12 +32,11 @@ export function BillingPage() {
             const subdomain = localStorage.getItem('pfotencard_subdomain');
             if (!subdomain) throw new Error("Keine Subdomain");
 
-            // AVV Check parallel starten, damit latestAvvVersion frühzeitig gesetzt wird
-            const avvPromise = detectLatestAvv();
-            const statusPromise = checkTenantStatus(subdomain);
-
-            const [_, configStatus] = await Promise.all([avvPromise, statusPromise]);
+            const configStatus = await checkTenantStatus(subdomain);
             setStatus(configStatus);
+            if (configStatus.current_avv_version) {
+                setLatestAvvVersion(configStatus.current_avv_version);
+            }
 
             // Rechnungen laden...
             if (configStatus.has_payment_method || configStatus.stripe_subscription_status) {
@@ -165,6 +131,28 @@ export function BillingPage() {
         } finally {
             setAcceptingAvv(false);
         }
+    };
+
+    const handleDownloadPDF = () => {
+        const element = avvRef.current;
+        if (!element) return;
+        
+        const opt = {
+          margin:       10,
+          filename:     `AVV_Pfotencard_v${latestAvvVersion.replace('.', '_')}.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2 },
+          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        html2pdf().set(opt).from(element).save();
+    };
+
+    const handleDownloadPreviousPDF = (version: string) => {
+        // Hier rendern wir kurz die alte Version in ein verstecktes Element oder nutzen das bestehende mit anderen Props
+        // Da wir nur eine Komponente haben, ist es am einfachsten, die aktuelle zu nehmen.
+        // Falls sich der Text massiv ändert, müsste die Komponente versionsabhängig rendern.
+        handleDownloadPDF(); 
     };
 
     if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin mr-2" /> Lade Daten...</div>;
@@ -464,39 +452,75 @@ export function BillingPage() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {status?.avv_accepted_at ? (
+                                {status?.avv_accepted_at && status.avv_version === latestAvvVersion ? (
                                     <div className="flex items-center gap-3 text-green-700 bg-green-50 p-3 rounded-md border border-green-200">
                                         <FileCheck className="w-5 h-5" />
-                                        <div>
-                                            <strong>Vertrag aktiv</strong>
+                                        <div className="flex-1">
+                                            <strong>Vertrag aktiv & aktuell</strong>
                                             <p className="text-sm">Akzeptiert am {new Date(status.avv_accepted_at).toLocaleDateString()} (Version {status.avv_version})</p>
                                         </div>
-                                        <Button variant="ghost" size="sm" className="ml-auto text-green-800 hover:text-green-900 hover:bg-green-100" asChild>
-                                            <a href={getAvvFilename(status.avv_version || "1.0")} target="_blank">Auftragsverarbeitungsvertrag (AVV) v{status.avv_version || "1.0"} ansehen</a>
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => setShowAvvPreview(!showAvvPreview)}>
+                                                <Eye className="w-4 h-4 mr-2" /> {showAvvPreview ? 'Schließen' : 'Ansehen'}
+                                            </Button>
+                                            <Button variant="outline" size="sm" onClick={() => handleDownloadPreviousPDF(status.avv_version)}>
+                                                <Download className="w-4 h-4 mr-2" /> PDF
+                                            </Button>
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
+                                        {status?.avv_accepted_at && (
+                                             <div className="bg-orange-100 border border-orange-200 text-orange-800 p-3 rounded-md flex items-center gap-3 text-sm">
+                                                <AlertTriangle className="w-4 h-4 shrink-0" />
+                                                <p>Eine neue Version des AVV ({latestAvvVersion}) ist verfügbar. Bitte bestätige diese erneut.</p>
+                                             </div>
+                                        )}
                                         <div className="bg-white p-4 rounded border text-sm">
-                                            <p className="mb-2">Bitte lade den Vertrag herunter, lies ihn durch und bestätige ihn hier digital.</p>
-                                            <a href={getAvvFilename(latestAvvVersion)} target="_blank" className="text-primary hover:underline font-medium flex items-center gap-1">
-                                                <Download className="w-4 h-4" /> Auftragsverarbeitungsvertrag (AVV) v{latestAvvVersion} herunterladen
-                                            </a>
+                                            <p className="mb-4">Bitte prüfe den aktuellen Vertrag und bestätige ihn hier digital.</p>
+                                            <div className="flex flex-wrap gap-3">
+                                                <Button variant="outline" size="sm" onClick={() => setShowAvvPreview(!showAvvPreview)}>
+                                                    <Eye className="w-4 h-4 mr-2" /> {showAvvPreview ? 'Vertragstext ausblenden' : 'Vertragstext anzeigen'}
+                                                </Button>
+                                                <Button variant="outline" size="sm" onClick={handleDownloadPDF}>
+                                                    <Download className="w-4 h-4 mr-2" /> Als PDF herunterladen
+                                                </Button>
+                                            </div>
                                         </div>
+
+                                        {showAvvPreview && (
+                                            <div className="bg-white border rounded-md p-4 max-h-[400px] overflow-y-auto shadow-inner mb-4">
+                                                <AVVDocument tenantName={status?.name} tenantAddress={status?.tenant_address} />
+                                            </div>
+                                        )}
+
                                         <div className="space-y-3">
                                             <p className="text-xs text-muted-foreground italic">
-                                                Durch Klick auf den Button erklärst du dich mit dem oben verlinkten AVV einverstanden.
+                                                Durch Klick auf den Button erklärst du dich mit der aktuellen Version des AVV ({latestAvvVersion}) einverstanden.
                                                 Wir protokollieren diesen Klick mit Zeitstempel als rechtlichen Nachweis.
                                             </p>
                                             <div className="flex items-center gap-4">
                                                 <Button onClick={handleAcceptAVV} disabled={acceptingAvv}>
                                                     {acceptingAvv ? <Loader2 className="animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
-                                                    AVV jetzt digital abschließen
+                                                    AVV jetzt digital bestätigen
                                                 </Button>
                                             </div>
                                         </div>
                                     </div>
                                 )}
+
+                                {showAvvPreview && status?.avv_accepted_at && status.avv_version === latestAvvVersion && (
+                                     <div className="mt-4 bg-white border rounded-md p-4 max-h-[400px] overflow-y-auto shadow-inner">
+                                        <AVVDocument tenantName={status?.name} tenantAddress={status?.tenant_address} />
+                                    </div>
+                                )}
+
+                                {/* Verstecktes Element für PDF-Generierung (immer vorhanden aber unsichtbar) */}
+                                <div style={{ position: 'absolute', left: '-9999px', top: '0' }}>
+                                    <div ref={avvRef}>
+                                        <AVVDocument tenantName={status?.name} tenantAddress={status?.tenant_address} />
+                                    </div>
+                                </div>
                             </CardContent>
                         </Card>
 
