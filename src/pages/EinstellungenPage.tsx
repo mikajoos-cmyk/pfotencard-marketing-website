@@ -416,9 +416,20 @@ export function EinstellungenPage() {
   const [widgetType, setWidgetType] = useState('status');
   const [widgetLayout, setWidgetLayout] = useState('detailed');
   const [widgetLimit, setWidgetLimit] = useState<number>(5);
+  const [debouncedWidgetLimit, setDebouncedWidgetLimit] = useState<number>(5);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedWidgetLimit(widgetLimit);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [widgetLimit]);
+
   const [widgetCopied, setWidgetCopied] = useState(false);
   const [publicToken, setPublicToken] = useState<string>('');
   const [widgetHeight, setWidgetHeight] = useState<number>(600);
+  const [useWidgetMaxHeight, setUseWidgetMaxHeight] = useState<boolean>(false);
+  const [widgetMaxHeight, setWidgetMaxHeight] = useState<number>(500);
   const [widgetTheme, setWidgetTheme] = useState<'branding' | 'light' | 'dark' | 'transparent'>('branding');
 
   const getWidgetBaseUrl = useCallback(() => {
@@ -463,10 +474,92 @@ export function EinstellungenPage() {
       // Compact layout: ~80px per appointment + header ~60px + padding
       calculatedHeight = 60 + (widgetLimit * 80) + 40;
     } else if (widgetLayout === 'calendar') {
-      // Calendar layout: Dynamic height based on number of weeks to show
-      // Header: ~100px, Week header: ~40px, Day row: ~120px per week, Footer: ~60px
-      const numberOfWeeks = Math.max(1, Math.ceil(widgetLimit / 7));
-      calculatedHeight = 100 + 40 + (numberOfWeeks * 120) + 60;
+      // PIXELGENAUE Kalender-Höhenberechnung
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const lastDay = new Date(today);
+      lastDay.setDate(today.getDate() + widgetLimit - 1);
+
+      // Hilfsfunktion: Wochentag-Index (0=Mo, 6=So)
+      const getDayIdx = (d: Date) => (d.getDay() + 6) % 7;
+
+      // Gruppiere Tage nach Monat (exakt wie in AppointmentsWidget.tsx)
+      const monthGroups: { month: string; days: Date[] }[] = [];
+      const current = new Date(today);
+
+      while (current <= lastDay) {
+        const monthName = current.toLocaleString('de-DE', { month: 'short' });
+        let lastGroup = monthGroups[monthGroups.length - 1];
+
+        if (!lastGroup || lastGroup.month !== monthName) {
+          lastGroup = { month: monthName, days: [] };
+          monthGroups.push(lastGroup);
+        }
+
+        lastGroup.days.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+      }
+
+      // Berechne exakte Zeilenanzahl pro Monatsgruppe
+      let totalRows = 0;
+      monthGroups.forEach(group => {
+        const firstDay = group.days[0];
+        const startOffset = getDayIdx(firstDay); // Leerfelder am Anfang für Wochentagausrichtung
+        const totalItemsInGroup = startOffset + group.days.length;
+        const rowsInMonth = Math.ceil(totalItemsInGroup / 7);
+        totalRows += rowsInMonth;
+      });
+
+      // FIXE PIXELWERTE aus AppointmentsWidget.tsx:
+      // 1. Container: padding: '20px' → 20px oben + 20px unten = 40px
+      const containerPadding = 40;
+
+      // 2. School name h2: margin: '0 0 12px 0', fontSize: '16px'
+      //    Line-height ca. 1.5 → 16 * 1.5 = 24px + 12px margin = 36px
+      const schoolNameHeight = 36;
+
+      // 3. Weekday header grid:
+      //    - display: 'grid', gap: '4px', marginBottom: '4px', fontSize: '12px'
+      //    - Text height: 12px * 1.5 ≈ 18px + 4px marginBottom = 22px
+      const weekdayHeaderHeight = 22;
+
+      // 4. Jede Kalenderzeile:
+      //    - Grid: 50px (month column) + 7 cells + 6*4px gaps
+      //    - Zellen haben aspectRatio: '1' → Höhe = Breite
+      //
+      //    Annahme: iframe ist 600px breit (typisch bei 100% width)
+      //      - Minus padding links+rechts: 600 - 40 = 560px verfügbar
+      //      - Grid columns: 50px (month) + 6*4px (gaps) + 7*cellWidth = 560px
+      //      - 7*cellWidth = 560 - 50 - 24 = 486px → cellWidth = 69.4px
+      //
+      //    Jede Zeile: cellHeight (69.4px) + gap nach unten (4px innerhalb grid)
+      //    Da gap: 4px im Grid ist, zwischen allen Zeilen 4px.
+      //    Pro Zeile rechnen wir: cellHeight + 4px gap = 73.4px
+
+      const assumedIframeWidth = 600;
+      const containerPaddingLR = 40; // 20px links + 20px rechts
+      const monthColumnWidth = 50;
+      const gridGaps = 6 * 4; // 6 gaps zwischen 7 Spalten
+      const availableWidthForCells = assumedIframeWidth - containerPaddingLR - monthColumnWidth - gridGaps;
+      const cellWidth = availableWidthForCells / 7; // ~69.4px
+      const cellHeight = cellWidth; // aspectRatio 1:1
+      const rowGap = 4; // gap zwischen Zeilen
+      const heightPerRow = cellHeight + rowGap; // ~73.4px
+
+      // 5. Spacing zwischen Monatsgruppen:
+      //    marginBottom: 12px (außer bei letzter Gruppe)
+      const monthGroupSpacing = (monthGroups.length - 1) * 12;
+
+      // GESAMTHÖHE:
+      calculatedHeight =
+        containerPadding +
+        schoolNameHeight +
+        weekdayHeaderHeight +
+        (totalRows * heightPerRow) +
+        monthGroupSpacing;
+
+      // Kleine Sicherheitsmarge
+      calculatedHeight += 10;
     }
 
     setWidgetHeight(Math.max(200, Math.min(2000, calculatedHeight)));
@@ -1893,6 +1986,40 @@ export function EinstellungenPage() {
                                       </Select>
                                     </div>
 
+                                    <div className="space-y-4 pt-2">
+                                      <div className="flex items-center justify-between">
+                                        <div className="space-y-0.5">
+                                          <Label>Maximale Höhe einschränken</Label>
+                                          <p className="text-[10px] text-muted-foreground">Begrenzt die Höhe des Widgets auf deiner Website</p>
+                                        </div>
+                                        <Switch
+                                          checked={useWidgetMaxHeight}
+                                          onCheckedChange={setUseWidgetMaxHeight}
+                                        />
+                                      </div>
+
+                                      {useWidgetMaxHeight && (
+                                        <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                          <Label>Max. Höhe (Pixel)</Label>
+                                          <div className="flex items-center gap-3">
+                                            <Input
+                                              type="number"
+                                              min={100}
+                                              max={2000}
+                                              value={widgetMaxHeight}
+                                              onChange={(e) => {
+                                                const val = parseInt(e.target.value, 10);
+                                                if (!isNaN(val)) {
+                                                  setWidgetMaxHeight(val);
+                                                }
+                                              }}
+                                            />
+                                            <span className="text-xs text-muted-foreground">px</span>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+
                                     <div className="space-y-2 pt-4">
                                       <Label>HTML-Code zum Kopieren</Label>
                                       <div className="relative">
@@ -1900,9 +2027,9 @@ export function EinstellungenPage() {
                                           readOnly
                                           className="w-full h-48 p-3 text-sm font-mono bg-muted rounded-md border resize-none"
                                           value={`<iframe
-  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}"
+  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${debouncedWidgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}"
   width="100%"
-  style="border:none; border-radius: 8px; height: ${widgetHeight}px; max-height: 2000px;"
+  style="border:none; border-radius: 8px; height: ${widgetHeight}px;${useWidgetMaxHeight ? ` max-height: ${widgetMaxHeight}px;` : ''} overflow: auto;"
 ></iframe>`}
                                         />
                                           <Button
@@ -1911,9 +2038,9 @@ export function EinstellungenPage() {
                                            className="absolute bottom-2 right-2"
                                            onClick={() => {
                                              const code = `<iframe
-  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}"
+  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${debouncedWidgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}"
   width="100%"
-  style="border:none; border-radius: 8px; height: ${widgetHeight}px; max-height: 2000px;"
+  style="border:none; border-radius: 8px; height: ${widgetHeight}px;${useWidgetMaxHeight ? ` max-height: ${widgetMaxHeight}px;` : ''} overflow: auto;"
 ></iframe>`;
                                              navigator.clipboard.writeText(code);
                                              setWidgetCopied(true);
@@ -1936,10 +2063,10 @@ export function EinstellungenPage() {
                                     </Label>
                                     <div className="flex-1 border rounded-lg bg-slate-50 min-h-[400px] flex items-center justify-center relative">
                                       <iframe
-                                        src={`${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${widgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}`}
+                                        src={`${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${debouncedWidgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}`}
                                         width="100%"
                                         className="border-none w-full"
-                                        style={{ height: `${widgetHeight}px`, maxHeight: '2000px' }}
+                                        style={{ height: `${widgetHeight}px`, maxHeight: useWidgetMaxHeight ? `${widgetMaxHeight}px` : '2000px', overflow: 'auto' }}
                                         title="Widget Preview"
                                       />
                                       <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-primary/20 rounded-lg"></div>
