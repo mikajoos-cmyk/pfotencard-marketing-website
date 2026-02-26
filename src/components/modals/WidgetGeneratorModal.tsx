@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Copy, Check, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getOrCreatePublicToken } from '@/lib/api';
@@ -30,6 +31,7 @@ interface WidgetGeneratorModalProps {
 export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: WidgetGeneratorModalProps) {
   const [widgetType, setWidgetType] = useState('status');
   const [theme, setTheme] = useState('light');
+  const [itemTheme, setItemTheme] = useState('light');
   const [primaryColor, setPrimaryColor] = useState('f97316');
   const [layout, setLayout] = useState('compact');
   const [limit, setLimit] = useState<number>(5);
@@ -37,6 +39,7 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
   const [publicToken, setPublicToken] = useState<string>('');
   const [height, setHeight] = useState<number>(400);
   const [autoHeight, setAutoHeight] = useState<number>(400);
+  const [autoHeightEnabled, setAutoHeightEnabled] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -54,9 +57,11 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
   // Per ENV überschreibbar, sonst heuristisch abgeleitet
   const APP_BASE_URL = (import.meta as any).env?.VITE_WIDGET_APP_BASE_URL || window.location.origin.replace('marketing.', 'app.').replace('localhost:5173', 'localhost:5174');
 
-  const generatedUrl = widgetType === 'status' 
-    ? `${APP_BASE_URL}/widget/${widgetType}/${publicToken}`
-    : `${APP_BASE_URL}/widget/${widgetType}/${publicToken}?layout=${layout}&limit=${limit}`;
+  const generatedUrl = useMemo(() => {
+    return widgetType === 'status' 
+      ? `${APP_BASE_URL}/widget/${widgetType}/${publicToken}?theme=${theme}`
+      : `${APP_BASE_URL}/widget/${widgetType}/${publicToken}?theme=${theme}&itemTheme=${itemTheme}&layout=${layout}&limit=${limit}`;
+  }, [APP_BASE_URL, widgetType, publicToken, theme, itemTheme, layout, limit]);
   
   useEffect(() => {
     // Token laden/erzeugen sobald das Modal geöffnet wird
@@ -72,14 +77,18 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
   }, [isOpen]);
 
   useEffect(() => {
-    // Standardhöhe je nach Widget anpassen
-    const defaultHeight = widgetType === 'status' ? 200 : 400;
+    // Standardhöhe & Auto-Höhe je nach Widget anpassen
+    const defaultHeight = widgetType === 'status' ? 120 : 400;
     setHeight(defaultHeight);
     setAutoHeight(defaultHeight);
+    setAutoHeightEnabled(widgetType === 'status'); // Bei Terminen standardmäßig feste Höhe für Scrollbar
   }, [widgetType]);
 
   const widgetHeight = String(height);
-  const iframeCode = `<iframe 
+  
+  // HTML Code passt sich an, ob automatische Höhe an oder aus ist
+  const iframeCode = autoHeightEnabled 
+    ? `<iframe 
   src="${generatedUrl}" 
   width="100%" 
   style="border:none; border-radius: 8px; min-height: ${widgetHeight}px;"
@@ -95,7 +104,13 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
       }
     }
   });
-</script>`;
+</script>`
+    : `<iframe 
+  src="${generatedUrl}" 
+  width="100%" 
+  height="${widgetHeight}"
+  style="border:none; border-radius: 8px;"
+></iframe>`;
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(iframeCode);
@@ -139,57 +154,78 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
                       <SelectValue placeholder="Layout wählen" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="compact">Kompakt</SelectItem>
-                      <SelectItem value="detailed">Detailliert</SelectItem>
+                      <SelectItem value="compact">Kompakte Liste</SelectItem>
+                      <SelectItem value="detailed">Detaillierte Liste</SelectItem>
+                      <SelectItem value="grid">Kalender-Raster</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Anzahl Termine</Label>
-                  <div className="flex items-center gap-3">
-                    <Input
-                      type="number"
-                      min={1}
-                      max={50}
-                      value={limit}
-                      onChange={(e) => setLimit(parseInt(e.target.value || '1', 10))}
-                    />
-                    <span className="text-xs text-muted-foreground">Maximale Anzeige</span>
-                  </div>
+                  <Label>Maximale Anzahl Termine</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={limit}
+                    onChange={(e) => setLimit(parseInt(e.target.value || '5', 10))}
+                  />
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Minimale Höhe (px)</Label>
-                  <div className="flex items-center gap-3">
-                    <Input
-                      type="number"
-                      min={200}
-                      max={2000}
-                      value={height}
-                      onChange={(e) => setHeight(parseInt(e.target.value || '0', 10))}
-                    />
-                    <span className="text-xs text-muted-foreground">Standard: 400</span>
-                  </div>
+                  <Label>Farbe der Kalender-Elemente</Label>
+                  <Select value={itemTheme} onValueChange={setItemTheme}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Farbe wählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">Hell (Weiß)</SelectItem>
+                      <SelectItem value="dark">Dunkel</SelectItem>
+                      <SelectItem value="transparent">Transparent</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </>
             )}
 
-            {widgetType === 'status' && (
-              <div className="space-y-2">
-                <Label>Minimale Höhe (px)</Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="number"
-                    min={120}
-                    max={1200}
-                    value={height}
-                    onChange={(e) => setHeight(parseInt(e.target.value || '0', 10))}
-                  />
-                  <span className="text-xs text-muted-foreground">Standard: 200</span>
-                </div>
+            <div className="space-y-2">
+              <Label>Farbschema (Widget-Hintergrund)</Label>
+              <Select value={theme} onValueChange={setTheme}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Theme wählen" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="light">Hell</SelectItem>
+                  <SelectItem value="dark">Dunkel</SelectItem>
+                  <SelectItem value="transparent">Transparent</SelectItem>
+                  <SelectItem value="branding">Branding Farbe</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{autoHeightEnabled ? 'Minimale Höhe (px)' : 'Feste Höhe (px)'}</Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="number"
+                  min={120}
+                  max={2000}
+                  value={height}
+                  onChange={(e) => setHeight(parseInt(e.target.value || '0', 10))}
+                />
               </div>
-            )}
+            </div>
+            
+            {/* NEU: Auto-Höhe Switch */}
+            <div className="flex items-center justify-between space-y-0 pt-2 pb-2 border-b">
+              <div className="space-y-0.5">
+                <Label>Automatische Höhe anpassen</Label>
+                <p className="text-xs text-muted-foreground">
+                  Deaktivieren, um eine feste Höhe mit Scrollbar zu erzwingen.
+                </p>
+              </div>
+              <Switch checked={autoHeightEnabled} onCheckedChange={setAutoHeightEnabled} />
+            </div>
 
             <div className="space-y-2 pt-4">
               <Label>HTML-Code zum Kopieren</Label>
@@ -222,10 +258,10 @@ export function WidgetGeneratorModal({ isOpen, onClose, tenantSubdomain }: Widge
               <iframe
                 src={generatedUrl}
                 width="100%"
-                height={autoHeight}
+                height={autoHeightEnabled ? autoHeight : height}
                 className="border-none w-full"
                 title="Widget Preview"
-                style={{ height: `${autoHeight}px` }}
+                style={{ height: `${autoHeightEnabled ? autoHeight : height}px` }}
               />
               <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-primary/20 rounded-lg"></div>
             </div>

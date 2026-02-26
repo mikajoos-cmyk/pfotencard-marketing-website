@@ -431,6 +431,7 @@ export function EinstellungenPage() {
   const [useWidgetMaxHeight, setUseWidgetMaxHeight] = useState<boolean>(false);
   const [widgetMaxHeight, setWidgetMaxHeight] = useState<number>(500);
   const [widgetTheme, setWidgetTheme] = useState<'branding' | 'light' | 'dark' | 'transparent'>('branding');
+  const [widgetItemTheme, setWidgetItemTheme] = useState<'light' | 'dark' | 'transparent'>('light');
 
   const getWidgetBaseUrl = useCallback(() => {
     if ((import.meta as any).env?.VITE_WIDGET_APP_BASE_URL) {
@@ -1968,6 +1969,20 @@ export function EinstellungenPage() {
                                             <span className="text-xs text-muted-foreground">{widgetLayout === 'calendar' ? 'Vorschau-Zeitraum' : 'Maximale Anzeige'}</span>
                                           </div>
                                         </div>
+
+                                        <div className="space-y-2">
+                                          <Label>Farbe der Kalender-Elemente</Label>
+                                          <Select value={widgetItemTheme} onValueChange={(v) => setWidgetItemTheme(v as any)}>
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Farbe wählen" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="light">Hell (Weiß)</SelectItem>
+                                              <SelectItem value="dark">Dunkel</SelectItem>
+                                              <SelectItem value="transparent">Transparent</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
                                       </>
                                     )}
 
@@ -2027,7 +2042,7 @@ export function EinstellungenPage() {
                                           readOnly
                                           className="w-full h-48 p-3 text-sm font-mono bg-muted rounded-md border resize-none"
                                           value={`<iframe
-  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${debouncedWidgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}"
+  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${debouncedWidgetLimit}&itemTheme=${widgetItemTheme}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}"
   width="100%"
   style="border:none; border-radius: 8px; height: ${widgetHeight}px;${useWidgetMaxHeight ? ` max-height: ${widgetMaxHeight}px;` : ''} overflow: auto;"
 ></iframe>`}
@@ -2038,7 +2053,7 @@ export function EinstellungenPage() {
                                            className="absolute bottom-2 right-2"
                                            onClick={() => {
                                              const code = `<iframe
-  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${debouncedWidgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}"
+  src="${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${debouncedWidgetLimit}&itemTheme=${widgetItemTheme}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}"
   width="100%"
   style="border:none; border-radius: 8px; height: ${widgetHeight}px;${useWidgetMaxHeight ? ` max-height: ${widgetMaxHeight}px;` : ''} overflow: auto;"
 ></iframe>`;
@@ -2063,7 +2078,7 @@ export function EinstellungenPage() {
                                     </Label>
                                     <div className="flex-1 border rounded-lg bg-slate-50 min-h-[400px] flex items-center justify-center relative">
                                       <iframe
-                                        src={`${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${debouncedWidgetLimit}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}`}
+                                        src={`${getWidgetBaseUrl()}/widget/${widgetType}/${publicToken}${widgetType === 'appointments' ? `?layout=${widgetLayout}&limit=${debouncedWidgetLimit}&itemTheme=${widgetItemTheme}` : ''}${widgetType === 'status' ? `?theme=${widgetTheme}` : `&theme=${widgetTheme}`}${widgetTheme === 'branding' ? `&bgColor=${encodeURIComponent(customBackgroundColor || backgroundColor)}` : ''}`}
                                         width="100%"
                                         className="border-none w-full"
                                         style={{ height: `${widgetHeight}px`, maxHeight: useWidgetMaxHeight ? `${widgetMaxHeight}px` : '2000px', overflow: 'auto' }}
