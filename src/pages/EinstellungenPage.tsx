@@ -189,6 +189,8 @@ interface InvoiceSettings {
   address_line2: string;
   tax_number: string;
   vat_id: string;
+  registry_court: string;
+  registry_number: string;
   bank_name: string;
   iban: string;
   bic: string;
@@ -198,6 +200,8 @@ interface InvoiceSettings {
   vat_rate: number;
   is_small_business: boolean;
   small_business_text: string;
+  owner_name: string;
+  fantasie_name: string;
 }
 
 
@@ -395,6 +399,8 @@ export function EinstellungenPage() {
     address_line2: '',
     tax_number: '',
     vat_id: '',
+    registry_court: '',
+    registry_number: '',
     bank_name: '',
     iban: '',
     bic: '',
@@ -403,7 +409,9 @@ export function EinstellungenPage() {
     logo_url: '',
     vat_rate: 19.0,
     is_small_business: false,
-    small_business_text: 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.'
+    small_business_text: 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.',
+    owner_name: '',
+    fantasie_name: ''
   });
 
   const [legalSettings, setLegalSettings] = useState<LegalSettings>({
@@ -817,6 +825,10 @@ export function EinstellungenPage() {
       }));
       setLevels(mappedLevels);
 
+      if (t.config?.legal_settings) {
+        setLegalSettings(t.config.legal_settings);
+      }
+
       if (t.config?.invoice_settings) {
         setInvoiceSettings({
           company_name: t.config.invoice_settings.company_name || '',
@@ -824,6 +836,8 @@ export function EinstellungenPage() {
           address_line2: t.config.invoice_settings.address_line2 || '',
           tax_number: t.config.invoice_settings.tax_number || '',
           vat_id: t.config.invoice_settings.vat_id || '',
+          registry_court: t.config.invoice_settings.registry_court || t.config.legal_settings?.registry_court || '',
+          registry_number: t.config.invoice_settings.registry_number || t.config.legal_settings?.registry_number || '',
           bank_name: t.config.invoice_settings.bank_name || '',
           iban: t.config.invoice_settings.iban || '',
           bic: t.config.invoice_settings.bic || '',
@@ -832,12 +846,10 @@ export function EinstellungenPage() {
           logo_url: t.config.invoice_settings.logo_url || '',
           vat_rate: t.config.invoice_settings.vat_rate || 19.0,
           is_small_business: t.config.invoice_settings.is_small_business || false,
-          small_business_text: t.config.invoice_settings.small_business_text || 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.'
+          small_business_text: t.config.invoice_settings.small_business_text || 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.',
+          owner_name: t.config.invoice_settings.owner_name || '',
+          fantasie_name: t.config.invoice_settings.fantasie_name || ''
         });
-      }
-
-      if (t.config?.legal_settings) {
-        setLegalSettings(t.config.legal_settings);
       }
 
     } catch (e) {
@@ -857,32 +869,169 @@ export function EinstellungenPage() {
     loadData();
   }, [loadData]);
 
+  // --- SYNCHRONISATION ZWISCHEN LEGAL UND INVOICE SETTINGS ---
+  // 1. Von LegalSettings zu InvoiceSettings
+  useEffect(() => {
+    setInvoiceSettings(prev => {
+      let updates: Partial<InvoiceSettings> = {};
+
+      // Firmenname / Name
+      if (!legalSettings.separate_billing_address) {
+        const expectedName = legalSettings.legal_form === 'individual' 
+          ? (legalSettings.company_name || legalSettings.owner_name)
+          : legalSettings.company_name;
+        
+        if (prev.company_name !== expectedName) {
+          updates.company_name = expectedName;
+        }
+
+        // Adresse
+        const expectedAddr1 = `${legalSettings.street} ${legalSettings.house_number}`.trim();
+        const expectedAddr2 = `${legalSettings.zip_code} ${legalSettings.city}`.trim();
+        
+        if (prev.address_line1 !== expectedAddr1) updates.address_line1 = expectedAddr1;
+        if (prev.address_line2 !== expectedAddr2) updates.address_line2 = expectedAddr2;
+      } else {
+        // Bei abweichender Rechnungsadresse
+        if (prev.company_name !== legalSettings.billing_company_name) updates.company_name = legalSettings.billing_company_name;
+        
+        const expectedAddr1 = `${legalSettings.billing_street} ${legalSettings.billing_house_number}`.trim();
+        const expectedAddr2 = `${legalSettings.billing_zip_code} ${legalSettings.billing_city}`.trim();
+        
+        if (prev.address_line1 !== expectedAddr1) updates.address_line1 = expectedAddr1;
+        if (prev.address_line2 !== expectedAddr2) updates.address_line2 = expectedAddr2;
+      }
+
+      // Inhaber & Register (nur GmbH/Registered)
+      if (legalSettings.owner_name && prev.owner_name !== legalSettings.owner_name) {
+        updates.owner_name = legalSettings.owner_name;
+      }
+      
+      if (legalSettings.registry_court && prev.registry_court !== legalSettings.registry_court) {
+        updates.registry_court = legalSettings.registry_court;
+      }
+      
+      if (legalSettings.registry_number && prev.registry_number !== legalSettings.registry_number) {
+        updates.registry_number = legalSettings.registry_number;
+      }
+
+      // VAT ID
+      if (legalSettings.has_vat_id && legalSettings.vat_id && prev.vat_id !== legalSettings.vat_id) {
+        updates.vat_id = legalSettings.vat_id;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        return { ...prev, ...updates };
+      }
+      return prev;
+    });
+  }, [
+    legalSettings.company_name, 
+    legalSettings.owner_name, 
+    legalSettings.street, 
+    legalSettings.house_number, 
+    legalSettings.zip_code, 
+    legalSettings.city,
+    legalSettings.separate_billing_address,
+    legalSettings.billing_company_name,
+    legalSettings.billing_street,
+    legalSettings.billing_house_number,
+    legalSettings.billing_zip_code,
+    legalSettings.billing_city,
+    legalSettings.registry_court,
+    legalSettings.registry_number,
+    legalSettings.has_vat_id,
+    legalSettings.vat_id,
+    legalSettings.legal_form
+  ]);
+
+  // 2. Von InvoiceSettings zu LegalSettings (nur wenn sinnvoll)
+  useEffect(() => {
+    setLegalSettings(prev => {
+      let updates: Partial<LegalSettings> = {};
+
+      // Wenn wir im Rechnungsmodul den Firmennamen ändern, sollte er ggf. zurückfließen
+      if (!prev.separate_billing_address) {
+        if (invoiceSettings.company_name && prev.company_name !== invoiceSettings.company_name) {
+          updates.company_name = invoiceSettings.company_name;
+        }
+      } else {
+        if (invoiceSettings.company_name && prev.billing_company_name !== invoiceSettings.company_name) {
+          updates.billing_company_name = invoiceSettings.company_name;
+        }
+      }
+
+      // Inhaber
+      if (invoiceSettings.owner_name && prev.owner_name !== invoiceSettings.owner_name) {
+        updates.owner_name = invoiceSettings.owner_name;
+      }
+
+      // Register
+      if (invoiceSettings.registry_court && prev.registry_court !== invoiceSettings.registry_court) {
+        updates.registry_court = invoiceSettings.registry_court;
+      }
+      if (invoiceSettings.registry_number && prev.registry_number !== invoiceSettings.registry_number) {
+        updates.registry_number = invoiceSettings.registry_number;
+      }
+
+      // VAT ID (hier etwas komplexer wegen has_vat_id flag)
+      if (invoiceSettings.vat_id && prev.vat_id !== invoiceSettings.vat_id) {
+        updates.vat_id = invoiceSettings.vat_id;
+        updates.has_vat_id = true;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        return { ...prev, ...updates };
+      }
+      return prev;
+    });
+  }, [
+    invoiceSettings.company_name,
+    invoiceSettings.owner_name,
+    invoiceSettings.registry_court,
+    invoiceSettings.registry_number,
+    invoiceSettings.vat_id
+  ]);
+
   // --- DATEN SPEICHERN ---
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
       // Wenn keine abweichende Rechnungsadresse, dann synchronisieren
       let finalInvoiceSettings = { ...invoiceSettings };
+      
       if (!legalSettings.separate_billing_address) {
-        finalInvoiceSettings.company_name = legalSettings.legal_form === 'individual' 
-          ? (legalSettings.owner_name || legalSettings.company_name) 
-          : legalSettings.company_name;
         finalInvoiceSettings.address_line1 = `${legalSettings.street} ${legalSettings.house_number}`;
         finalInvoiceSettings.address_line2 = `${legalSettings.zip_code} ${legalSettings.city}`;
       } else {
-        // Falls abweichend, nutzen wir die expliziten Billing-Felder
-        finalInvoiceSettings.company_name = legalSettings.billing_company_name;
         finalInvoiceSettings.address_line1 = `${legalSettings.billing_street} ${legalSettings.billing_house_number}`;
         finalInvoiceSettings.address_line2 = `${legalSettings.billing_zip_code} ${legalSettings.billing_city}`;
       }
       
-      // VAT ID Synchronisation
-      if (legalSettings.has_vat_id) {
-        finalInvoiceSettings.vat_id = legalSettings.vat_id;
-        finalInvoiceSettings.is_small_business = false;
+      // Kleingewerbe vs. GmbH Synchronisation
+      if (finalInvoiceSettings.is_small_business) {
+        // Kleingewerbe: Inhabername ist Pflicht
+        finalInvoiceSettings.owner_name = legalSettings.owner_name || '';
+        // Fantasiename optional (aus legalSettings.company_name oder bestehendem fantasie_name)
+        if (!finalInvoiceSettings.fantasie_name) {
+          finalInvoiceSettings.fantasie_name = legalSettings.legal_form === 'individual' ? legalSettings.company_name : '';
+        }
+        // Company Name für den PDF Generator zusammenbauen (Bsp: "Bello's Hundeschule – Inh. Max Mustermann")
+        finalInvoiceSettings.company_name = finalInvoiceSettings.fantasie_name 
+          ? `${finalInvoiceSettings.fantasie_name} – Inh. ${finalInvoiceSettings.owner_name}` 
+          : finalInvoiceSettings.owner_name;
+        
+        finalInvoiceSettings.vat_id = ''; // Meistens leer
+        finalInvoiceSettings.vat_rate = 0;
+        finalInvoiceSettings.registry_court = '';
+        finalInvoiceSettings.registry_number = '';
       } else {
-        finalInvoiceSettings.vat_id = '';
-        finalInvoiceSettings.is_small_business = true;
+        // GmbH / Regelbesteuerung
+        // Hier lassen wir die Synchronisation nun primär über die useEffects laufen, 
+        // stellen aber sicher, dass beim Speichern die finalen Werte korrekt sind.
+        if (legalSettings.has_vat_id) {
+          finalInvoiceSettings.vat_id = legalSettings.vat_id;
+        }
       }
 
       const normalizedLevels = levels.map((l, index) => ({
@@ -2208,31 +2357,142 @@ export function EinstellungenPage() {
                                 </div>
                               </CardHeader>
                               <CardContent className="space-y-6">
+                                <div className="space-y-4 pt-4">
+                                  <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg border border-primary/20">
+                                    <div className="space-y-0.5">
+                                      <Label className="text-base">Unternehmensform</Label>
+                                      <p className="text-xs text-muted-foreground">
+                                        {invoiceSettings.is_small_business 
+                                          ? "Kleingewerbe (Kleinunternehmer-Regelung § 19 UStG)" 
+                                          : "GmbH / Regelbesteuerung (MwSt. wird ausgewiesen)"}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <span className={`text-xs font-medium ${!invoiceSettings.is_small_business ? 'text-primary' : 'text-muted-foreground'}`}>GmbH</span>
+                                      <Switch
+                                        checked={invoiceSettings.is_small_business}
+                                        onCheckedChange={val => setInvoiceSettings({ ...invoiceSettings, is_small_business: val })}
+                                      />
+                                      <span className={`text-xs font-medium ${invoiceSettings.is_small_business ? 'text-primary' : 'text-muted-foreground'}`}>Kleingewerbe</span>
+                                    </div>
+                                  </div>
+                                </div>
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                   <div className="space-y-4">
-                                    <h3 className="text-sm font-semibold border-b pb-2">Unternehmensdaten</h3>
-                                    <div className="space-y-2">
-                                      <Label>Firmenname / Inhaber</Label>
-                                      <Input value={invoiceSettings.company_name} onChange={e => setInvoiceSettings({ ...invoiceSettings, company_name: e.target.value })} placeholder="Max Mustermann Hundeschule" />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label>Straße & Hausnummer</Label>
-                                      <Input value={invoiceSettings.address_line1} onChange={e => setInvoiceSettings({ ...invoiceSettings, address_line1: e.target.value })} placeholder="Hauptstraße 1" />
-                                    </div>
-                                    <div className="space-y-2">
-                                      <Label>PLZ & Ort</Label>
-                                      <Input value={invoiceSettings.address_line2} onChange={e => setInvoiceSettings({ ...invoiceSettings, address_line2: e.target.value })} placeholder="12345 Musterstadt" />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4 pt-2">
+                                    <h3 className="text-sm font-semibold border-b pb-2">Absender-Informationen</h3>
+                                    
+                                    {invoiceSettings.is_small_business ? (
+                                      <>
+                                        <div className="space-y-2">
+                                          <Label>Name des Inhabers (Pflichtfeld)</Label>
+                                          <Input 
+                                            value={invoiceSettings.owner_name} 
+                                            onChange={e => setInvoiceSettings({ ...invoiceSettings, owner_name: e.target.value })} 
+                                            placeholder="Vor- und Nachname" 
+                                            required
+                                          />
+                                          <p className="text-[10px] text-muted-foreground italic">Muss zwingend auf der Rechnung erscheinen.</p>
+                                        </div>
+                                        <div className="space-y-2">
+                                          <Label>Fantasiename (Optional)</Label>
+                                          <Input 
+                                            value={invoiceSettings.fantasie_name} 
+                                            onChange={e => setInvoiceSettings({ ...invoiceSettings, fantasie_name: e.target.value })} 
+                                            placeholder="z.B. Bello's Hundeschule" 
+                                          />
+                                        </div>
+                                      </>
+                                    ) : (
                                       <div className="space-y-2">
-                                        <Label>Steuernummer</Label>
-                                        <Input value={invoiceSettings.tax_number} onChange={e => setInvoiceSettings({ ...invoiceSettings, tax_number: e.target.value })} placeholder="12/345/67890" />
+                                        <Label>Firmenname (inkl. Rechtsform)</Label>
+                                        <Input 
+                                          value={invoiceSettings.company_name} 
+                                          onChange={e => setInvoiceSettings({ ...invoiceSettings, company_name: e.target.value })} 
+                                          placeholder="Hundetraining Musterstadt GmbH" 
+                                        />
+                                      </div>
+                                    )}
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div className="space-y-2">
+                                        <Label>Straße & Hausnummer</Label>
+                                        <Input value={invoiceSettings.address_line1} onChange={e => setInvoiceSettings({ ...invoiceSettings, address_line1: e.target.value })} placeholder="Hauptstraße 1" />
                                       </div>
                                       <div className="space-y-2">
-                                        <Label>USt-ID (Optional)</Label>
-                                        <Input value={invoiceSettings.vat_id} onChange={e => setInvoiceSettings({ ...invoiceSettings, vat_id: e.target.value })} placeholder="DE123456789" />
+                                        <Label>PLZ & Ort</Label>
+                                        <Input value={invoiceSettings.address_line2} onChange={e => setInvoiceSettings({ ...invoiceSettings, address_line2: e.target.value })} placeholder="12345 Musterstadt" />
                                       </div>
                                     </div>
+
+                                    <div className="grid grid-cols-1 gap-4 pt-2">
+                                      {invoiceSettings.is_small_business ? (
+                                        <div className="space-y-2">
+                                          <Label>Steuernummer (Pflicht)</Label>
+                                          <Input 
+                                            value={invoiceSettings.tax_number} 
+                                            onChange={e => setInvoiceSettings({ ...invoiceSettings, tax_number: e.target.value })} 
+                                            placeholder="12/345/67890" 
+                                          />
+                                          <p className="text-[10px] text-muted-foreground italic">
+                                            Da du Kleinunternehmer bist, benötigt das Finanzamt deine Steuernummer auf der Rechnung. Bitte trage hier die Steuernummer deines Unternehmens ein (nicht deine private Steuer-ID).
+                                          </p>
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-2">
+                                          <Label>Umsatzsteuer-Identifikationsnummer (USt-IdNr.) oder Steuernummer</Label>
+                                          <Input 
+                                            value={invoiceSettings.vat_id || invoiceSettings.tax_number} 
+                                            onChange={e => {
+                                              const val = e.target.value;
+                                              if (val.startsWith('DE')) {
+                                                setInvoiceSettings({ ...invoiceSettings, vat_id: val });
+                                              } else {
+                                                setInvoiceSettings({ ...invoiceSettings, tax_number: val });
+                                              }
+                                            }} 
+                                            placeholder="DE123456789 oder 12/345/67890" 
+                                          />
+                                          <p className="text-[10px] text-muted-foreground italic">
+                                            Trage hier bevorzugt deine USt-IdNr. (z. B. DE123456789) ein. Nur wenn du keine hast, trage deine Steuernummer ein.
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {!invoiceSettings.is_small_business && (
+                                      <>
+                                        <div className="grid grid-cols-2 gap-4 pt-2">
+                                          <div className="space-y-2">
+                                            <Label>Registergericht</Label>
+                                            <Input 
+                                              value={invoiceSettings.registry_court} 
+                                              onChange={e => setInvoiceSettings({ ...invoiceSettings, registry_court: e.target.value })} 
+                                              placeholder="Amtsgericht Musterstadt" 
+                                            />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label>Registernummer</Label>
+                                            <Input 
+                                              value={invoiceSettings.registry_number} 
+                                              onChange={e => setInvoiceSettings({ ...invoiceSettings, registry_number: e.target.value })} 
+                                              placeholder="HRB 12345" 
+                                            />
+                                          </div>
+                                        </div>
+                                        <div className="space-y-2 pt-2">
+                                          <Label>Umsatzsteuersatz (%)</Label>
+                                          <div className="flex items-center gap-2 max-w-[120px]">
+                                            <Input
+                                              type="number"
+                                              value={invoiceSettings.vat_rate}
+                                              onChange={e => setInvoiceSettings({ ...invoiceSettings, vat_rate: parseFloat(e.target.value) || 0 })}
+                                            />
+                                            <span className="text-sm font-medium">%</span>
+                                          </div>
+                                        </div>
+                                      </>
+                                    )}
                                   </div>
 
                                   <div className="space-y-4">
@@ -2257,11 +2517,6 @@ export function EinstellungenPage() {
                                 </div>
 
                                 <div className="space-y-4 pt-4 border-t">
-                                  <div className="space-y-2">
-                                    <Label>Fußzeilen-Text (Optional)</Label>
-                                    <Input value={invoiceSettings.footer_text} onChange={e => setInvoiceSettings({ ...invoiceSettings, footer_text: e.target.value })} placeholder="Registergericht..." />
-                                  </div>
-
                                   <div className="space-y-2 py-2">
                                     <Label>Rechnungs-Logo (Optional)</Label>
                                     <p className="text-xs text-muted-foreground mb-2">Falls leer, wird dein normales Schul-Logo verwendet.</p>
@@ -2294,43 +2549,16 @@ export function EinstellungenPage() {
                                     </div>
                                   </div>
 
-                                  <div className="space-y-4 pt-4 border-t">
-                                    <div className="flex items-center justify-between">
-                                      <div className="space-y-0.5">
-                                        <Label>Kleinunternehmer-Regelung</Label>
-                                        <p className="text-xs text-muted-foreground">Keine MwSt. Ausweisung gemäß § 19 UStG</p>
-                                      </div>
-                                      <Switch
-                                        checked={invoiceSettings.is_small_business}
-                                        onCheckedChange={val => setInvoiceSettings({ ...invoiceSettings, is_small_business: val })}
+                                  {invoiceSettings.is_small_business && (
+                                    <div className="space-y-2 pt-4 border-t">
+                                      <Label>Rechtshinweis für Kleinunternehmer</Label>
+                                      <Input
+                                        value={invoiceSettings.small_business_text}
+                                        onChange={e => setInvoiceSettings({ ...invoiceSettings, small_business_text: e.target.value })}
                                       />
+                                      <p className="text-[11px] text-muted-foreground italic">Dieser Text erscheint auf der Rechnung anstelle der MwSt-Aufschlüsselung.</p>
                                     </div>
-
-                                    {!invoiceSettings.is_small_business && (
-                                      <div className="space-y-2 max-w-[200px]">
-                                        <Label>Umsatzsteuersatz (%)</Label>
-                                        <div className="flex items-center gap-2">
-                                          <Input
-                                            type="number"
-                                            value={invoiceSettings.vat_rate}
-                                            onChange={e => setInvoiceSettings({ ...invoiceSettings, vat_rate: parseFloat(e.target.value) || 0 })}
-                                          />
-                                          <span className="text-sm font-medium">%</span>
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {invoiceSettings.is_small_business && (
-                                      <div className="space-y-2">
-                                        <Label>Rechtshinweis für Kleinunternehmer</Label>
-                                        <Input
-                                          value={invoiceSettings.small_business_text}
-                                          onChange={e => setInvoiceSettings({ ...invoiceSettings, small_business_text: e.target.value })}
-                                        />
-                                        <p className="text-[11px] text-muted-foreground italic">Dieser Text erscheint auf der Rechnung anstelle der MwSt-Aufschlüsselung.</p>
-                                      </div>
-                                    )}
-                                  </div>
+                                  )}
                                 </div>
                               </CardContent>
                             </Card>
