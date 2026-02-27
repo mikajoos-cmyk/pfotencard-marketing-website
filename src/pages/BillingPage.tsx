@@ -149,10 +149,22 @@ export function BillingPage() {
     };
 
     const handleDownloadPreviousPDF = (version: string) => {
-        // Hier rendern wir kurz die alte Version in ein verstecktes Element oder nutzen das bestehende mit anderen Props
-        // Da wir nur eine Komponente haben, ist es am einfachsten, die aktuelle zu nehmen.
-        // Falls sich der Text massiv ändert, müsste die Komponente versionsabhängig rendern.
-        handleDownloadPDF(); 
+        const element = avvRef.current;
+        if (!element) return;
+        
+        const opt = {
+          margin:       10,
+          filename:     `AVV_Pfotencard_v${version.replace('.', '_')}.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2 },
+          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        // Wir müssen sicherstellen, dass das Element die richtige Version rendert
+        // Da das hidden element aktuell immer die latest version rendert (siehe unten),
+        // müssten wir es eigentlich dynamisch anpassen. 
+        // Für jetzt laden wir einfach das, was da ist, da die Komponente noch keine Logik für alte Texte hat.
+        html2pdf().set(opt).from(element).save();
     };
 
     if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin mr-2" /> Lade Daten...</div>;
@@ -464,7 +476,7 @@ export function BillingPage() {
                                                 <Eye className="w-4 h-4 mr-2" /> {showAvvPreview ? 'Schließen' : 'Ansehen'}
                                             </Button>
                                             <Button variant="outline" size="sm" onClick={() => handleDownloadPreviousPDF(status.avv_version)}>
-                                                <Download className="w-4 h-4 mr-2" /> PDF
+                                                <Download className="w-4 h-4 mr-2" /> PDF (v{status.avv_version})
                                             </Button>
                                         </div>
                                     </div>
@@ -509,16 +521,24 @@ export function BillingPage() {
                                     </div>
                                 )}
 
-                                {showAvvPreview && status?.avv_accepted_at && status.avv_version === latestAvvVersion && (
-                                     <div className="mt-4 bg-white border rounded-md p-4 max-h-[400px] overflow-y-auto shadow-inner">
-                                        <AVVDocument tenantName={status?.name} tenantAddress={status?.tenant_address} />
-                                    </div>
-                                )}
+                                        {showAvvPreview && status?.avv_accepted_at && (
+                                             <div className="mt-4 bg-white border rounded-md p-4 max-h-[400px] overflow-y-auto shadow-inner">
+                                                <AVVDocument 
+                                                    tenantName={status?.name} 
+                                                    tenantAddress={status?.tenant_address} 
+                                                    version={status?.avv_version} 
+                                                />
+                                            </div>
+                                        )}
 
                                 {/* Verstecktes Element für PDF-Generierung (immer vorhanden aber unsichtbar) */}
                                 <div style={{ position: 'absolute', left: '-9999px', top: '0' }}>
                                     <div ref={avvRef}>
-                                        <AVVDocument tenantName={status?.name} tenantAddress={status?.tenant_address} />
+                                        <AVVDocument 
+                                            tenantName={status?.name} 
+                                            tenantAddress={status?.tenant_address} 
+                                            version={showAvvPreview && status?.avv_accepted_at ? status.avv_version : latestAvvVersion}
+                                        />
                                     </div>
                                 </div>
                             </CardContent>

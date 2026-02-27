@@ -740,121 +740,122 @@ export function EinstellungenPage() {
 
   const [uploadingLevelIndex, setUploadingLevelIndex] = useState<number | null>(null);
 
+  const loadData = useCallback(async () => {
+    try {
+      const config = await fetchAppConfig();
+      const t = config.tenant;
+
+      setSchoolName(t.name);
+      setSupportEmail(t.support_email || '');
+      setSubdomain(t.subdomain);
+
+      let plan = (t.plan || 'starter').toLowerCase();
+      if (plan === 'verband') plan = 'enterprise';
+      setCurrentPlan(plan as PlanType);
+
+      const branding = t.config?.branding || {};
+      const wording = t.config?.wording || {};
+      const balance = t.config?.balance || {};
+      const widgets = t.config?.widgets || {};
+
+      setPrimaryColor(branding.primary_color || '#22C55E');
+      setSecondaryColor(branding.secondary_color || '#3B82F6');
+      setBackgroundColor(branding.background_color || '#F8FAFC');
+      setSidebarColor(branding.sidebar_color || '#1E293B');
+      setOpenForAllColor(branding.open_for_all_color || '#10b981');
+      setWorkshopLectureColor(branding.workshop_lecture_color || '#F97316');
+      setLevelTerm(wording.level || 'Level');
+      setVipTerm(wording.vip || 'VIP');
+      setTopUpOptions(balance.top_up_options || []);
+      setAllowCustomTopUp(balance.allow_custom_top_up !== undefined ? balance.allow_custom_top_up : true);
+      setActiveModules(t.config?.active_modules || ['news', 'documents']);
+      setAutoBillingEnabled(t.config?.auto_billing_enabled || false);
+      setAutoProgressEnabled(t.config?.auto_progress_enabled || false);
+
+      // Widget-Einstellungen laden
+      setWidgetType(widgets.type || 'status');
+      setWidgetLayout(widgets.layout || 'detailed');
+      setWidgetLimit(widgets.limit || 5);
+      setWidgetHeight(widgets.height || 200);
+
+      const appointmentsConfig = t.config?.appointments || {};
+      setDefaultDuration(appointmentsConfig.default_duration || 60);
+      setDefaultMaxParticipants(appointmentsConfig.max_participants || 10);
+      setCancelationPeriodHours(appointmentsConfig.cancelation_period_hours || 0);
+      setColorRules(appointmentsConfig.color_rules || []);
+
+      if (branding.logo_url) {
+        const logoUrl = branding.logo_url.startsWith('http')
+          ? branding.logo_url
+          : `${API_BASE_URL}${branding.logo_url}`;
+        setPreviewLogo(logoUrl);
+        setHasLogo(true);
+      }
+
+      const mappedServices = config.training_types.map((tt: any) => ({
+        id: tt.id,
+        name: tt.name,
+        category: tt.category,
+        price: tt.default_price,
+        rank_order: tt.rank_order || 0
+      }));
+      setServices(mappedServices);
+
+      const mappedLevels = config.levels.map((l: any) => ({
+        id: l.id,
+        name: l.name,
+        rank_order: l.rank_order,
+        badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BASE_URL}${l.icon_url}`) : undefined,
+        color: l.color,
+        has_additional_requirements: l.has_additional_requirements || false,
+        requirements: l.requirements.map((r: any) => ({
+          id: r.id,
+          training_type_id: r.training_type_id,
+          required_count: r.required_count,
+          is_additional: r.is_additional || false
+        }))
+      }));
+      setLevels(mappedLevels);
+
+      if (t.config?.invoice_settings) {
+        setInvoiceSettings({
+          company_name: t.config.invoice_settings.company_name || '',
+          address_line1: t.config.invoice_settings.address_line1 || '',
+          address_line2: t.config.invoice_settings.address_line2 || '',
+          tax_number: t.config.invoice_settings.tax_number || '',
+          vat_id: t.config.invoice_settings.vat_id || '',
+          bank_name: t.config.invoice_settings.bank_name || '',
+          iban: t.config.invoice_settings.iban || '',
+          bic: t.config.invoice_settings.bic || '',
+          account_holder: t.config.invoice_settings.account_holder || '',
+          footer_text: t.config.invoice_settings.footer_text || '',
+          logo_url: t.config.invoice_settings.logo_url || '',
+          vat_rate: t.config.invoice_settings.vat_rate || 19.0,
+          is_small_business: t.config.invoice_settings.is_small_business || false,
+          small_business_text: t.config.invoice_settings.small_business_text || 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.'
+        });
+      }
+
+      if (t.config?.legal_settings) {
+        setLegalSettings(t.config.legal_settings);
+      }
+
+    } catch (e) {
+      console.error(e);
+      toast({
+        variant: "destructive",
+        title: "Fehler",
+        description: "Konnte Einstellungen nicht laden. Bist du eingeloggt?"
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
   // --- DATEN LADEN ---
   useEffect(() => {
-    async function loadData() {
-      try {
-        const config = await fetchAppConfig();
-        const t = config.tenant;
-
-        setSchoolName(t.name);
-        setSupportEmail(t.support_email || '');
-        setSubdomain(t.subdomain);
-
-        let plan = (t.plan || 'starter').toLowerCase();
-        if (plan === 'verband') plan = 'enterprise';
-        setCurrentPlan(plan as PlanType);
-
-        const branding = t.config?.branding || {};
-        const wording = t.config?.wording || {};
-        const balance = t.config?.balance || {};
-        const widgets = t.config?.widgets || {};
-
-        setPrimaryColor(branding.primary_color || '#22C55E');
-        setSecondaryColor(branding.secondary_color || '#3B82F6');
-        setBackgroundColor(branding.background_color || '#F8FAFC');
-        setSidebarColor(branding.sidebar_color || '#1E293B');
-        setOpenForAllColor(branding.open_for_all_color || '#10b981');
-        setWorkshopLectureColor(branding.workshop_lecture_color || '#F97316');
-        setLevelTerm(wording.level || 'Level');
-        setVipTerm(wording.vip || 'VIP');
-        setTopUpOptions(balance.top_up_options || []);
-        setAllowCustomTopUp(balance.allow_custom_top_up !== undefined ? balance.allow_custom_top_up : true);
-        setActiveModules(t.config?.active_modules || ['news', 'documents']);
-        setAutoBillingEnabled(t.config?.auto_billing_enabled || false);
-        setAutoProgressEnabled(t.config?.auto_progress_enabled || false);
-
-        // Widget-Einstellungen laden
-        setWidgetType(widgets.type || 'status');
-        setWidgetLayout(widgets.layout || 'detailed');
-        setWidgetLimit(widgets.limit || 5);
-        setWidgetHeight(widgets.height || 200);
-
-        const appointmentsConfig = t.config?.appointments || {};
-        setDefaultDuration(appointmentsConfig.default_duration || 60);
-        setDefaultMaxParticipants(appointmentsConfig.max_participants || 10);
-        setCancelationPeriodHours(appointmentsConfig.cancelation_period_hours || 0);
-        setColorRules(appointmentsConfig.color_rules || []);
-
-        if (branding.logo_url) {
-          const logoUrl = branding.logo_url.startsWith('http')
-            ? branding.logo_url
-            : `${API_BASE_URL}${branding.logo_url}`;
-          setPreviewLogo(logoUrl);
-          setHasLogo(true);
-        }
-
-        const mappedServices = config.training_types.map((tt: any) => ({
-          id: tt.id,
-          name: tt.name,
-          category: tt.category,
-          price: tt.default_price,
-          rank_order: tt.rank_order || 0
-        }));
-        setServices(mappedServices);
-
-        const mappedLevels = config.levels.map((l: any) => ({
-          id: l.id,
-          name: l.name,
-          rank_order: l.rank_order,
-          badgeImage: l.icon_url ? (l.icon_url.startsWith('http') ? l.icon_url : `${API_BASE_URL}${l.icon_url}`) : undefined,
-          color: l.color,
-          has_additional_requirements: l.has_additional_requirements || false,
-          requirements: l.requirements.map((r: any) => ({
-            id: r.id,
-            training_type_id: r.training_type_id,
-            required_count: r.required_count,
-            is_additional: r.is_additional || false
-          }))
-        }));
-        setLevels(mappedLevels);
-
-        if (t.config?.invoice_settings) {
-          setInvoiceSettings({
-            company_name: t.config.invoice_settings.company_name || '',
-            address_line1: t.config.invoice_settings.address_line1 || '',
-            address_line2: t.config.invoice_settings.address_line2 || '',
-            tax_number: t.config.invoice_settings.tax_number || '',
-            vat_id: t.config.invoice_settings.vat_id || '',
-            bank_name: t.config.invoice_settings.bank_name || '',
-            iban: t.config.invoice_settings.iban || '',
-            bic: t.config.invoice_settings.bic || '',
-            account_holder: t.config.invoice_settings.account_holder || '',
-            footer_text: t.config.invoice_settings.footer_text || '',
-            logo_url: t.config.invoice_settings.logo_url || '',
-            vat_rate: t.config.invoice_settings.vat_rate || 19.0,
-            is_small_business: t.config.invoice_settings.is_small_business || false,
-            small_business_text: t.config.invoice_settings.small_business_text || 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.'
-          });
-        }
-
-        if (t.config?.legal_settings) {
-          setLegalSettings(t.config.legal_settings);
-        }
-
-      } catch (e) {
-        console.error(e);
-        toast({
-          variant: "destructive",
-          title: "Fehler",
-          description: "Konnte Einstellungen nicht laden. Bist du eingeloggt?"
-        });
-      } finally {
-        setLoading(false);
-      }
-    }
     loadData();
-  }, [toast]);
+  }, [loadData]);
 
   // --- DATEN SPEICHERN ---
   const handleSaveSettings = async () => {
@@ -935,7 +936,8 @@ export function EinstellungenPage() {
         description: "Deine Änderungen wurden erfolgreich übernommen."
       });
 
-      window.location.reload();
+      // Lade die Daten neu, um den State zu aktualisieren ohne die Seite neu zu laden
+      await loadData();
 
     } catch (e) {
       console.error(e);

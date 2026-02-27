@@ -94,26 +94,21 @@ export function CheckoutPage() {
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    const inv = data.tenant?.config?.invoice_settings;
+                    const legal = data.tenant?.config?.legal_settings;
                     
-                    if (inv) {
-                        let zip = '';
-                        let cityStr = '';
-                        if (inv.address_line2) {
-                            // Splittet "12345 Musterstadt" auf
-                            const parts = inv.address_line2.split(' ');
-                            if (parts.length > 0) zip = parts[0];
-                            if (parts.length > 1) cityStr = parts.slice(1).join(' ');
-                        }
+                    if (legal) {
+                        const useBilling = legal.separate_billing_address;
                         
                         setBillingData(prev => ({
                             ...prev,
-                            company_name: inv.company_name || prev.company_name,
-                            name: inv.account_holder || prev.name,
-                            address_line1: inv.address_line1 || prev.address_line1,
-                            postal_code: zip || prev.postal_code,
-                            city: cityStr || prev.city,
-                            vat_id: inv.vat_id || prev.vat_id
+                            company_name: (useBilling ? legal.billing_company_name : legal.company_name) || prev.company_name,
+                            name: legal.owner_name || legal.representative || prev.name,
+                            address_line1: (useBilling 
+                                ? `${legal.billing_street || ''} ${legal.billing_house_number || ''}`.trim()
+                                : `${legal.street || ''} ${legal.house_number || ''}`.trim()) || prev.address_line1,
+                            postal_code: (useBilling ? legal.billing_zip_code : legal.zip_code) || prev.postal_code,
+                            city: (useBilling ? legal.billing_city : legal.city) || prev.city,
+                            vat_id: legal.vat_id || prev.vat_id
                         }));
                     }
                 }
