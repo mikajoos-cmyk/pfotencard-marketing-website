@@ -150,6 +150,7 @@ export function Footer() {
           </div>
 
           <div className="flex items-center gap-6">
+            <Link to="/admin" className="text-muted-foreground hover:text-primary transition-colors text-xs opacity-50">Admin</Link>
             <a
               href="#"
               className="text-muted-foreground hover:text-primary transition-colors"

@@ -231,6 +231,11 @@ export async function fetchInvoices() {
     return handleResponse(response);
 }
 
+export async function fetchPackages() {
+    const response = await fetch(`${API_BASE_URL}/api/packages`);
+    return handleResponse(response);
+}
+
 export async function reactivateSubscription() {
     const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/api/stripe/reactivate`, {

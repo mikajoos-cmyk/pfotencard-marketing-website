@@ -15,6 +15,10 @@ import { AGBPage } from './pages/AGBPage';
 import { EinstellungenPage } from './pages/EinstellungenPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { BillingPage } from './pages/BillingPage';
+import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
+import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
+import SuperAdminTenantUsers from './pages/superadmin/SuperAdminTenantUsers';
+import SuperAdminPackages from './pages/superadmin/SuperAdminPackages';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from './components/ui/toaster';
 import { checkTenantStatus } from '@/lib/api';
@@ -104,6 +108,12 @@ function AppContent() {
           <Route path="/impressum" element={<ImpressumPage />} />
           <Route path="/datenschutz" element={<DatenschutzPage />} />
           <Route path="/agb" element={<AGBPage />} />
+
+          {/* Super-Admin Routen */}
+          <Route path="/admin" element={<SuperAdminLogin />} />
+          <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
+          <Route path="/admin/tenants/:tenantId/users" element={<SuperAdminTenantUsers />} />
+          <Route path="/admin/packages" element={<SuperAdminPackages />} />
 
           {/* Geschützte Routen */}
           <Route
