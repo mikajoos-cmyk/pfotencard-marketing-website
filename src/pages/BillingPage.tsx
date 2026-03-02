@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { checkTenantStatus, API_BASE_URL, fetchInvoices, reactivateSubscription, type Invoice } from '@/lib/api';
-import { Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText, FileCheck, Shield, Eye } from 'lucide-react';
+import { Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText, FileCheck, Shield, Eye, Users, Coins } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
 import { PricingTableSection } from '@/components/pricing/PricingTableSection';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -452,6 +453,94 @@ export function BillingPage() {
                                 <CardFooter>
                                     <Button className="w-full" variant="secondary" onClick={() => navigate('/kontakt')}>Kontakt aufnehmen</Button>
                                 </CardFooter>
+                            </Card>
+                        </div>
+
+                        {/* --- USAGE / NUTZUNG --- */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <Card className="border-primary/10">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                        <Users className="w-5 h-5 text-primary" /> Kunden-Nutzung
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Aktuelle Anzahl der Kunden im Vergleich zum Inklusiv-Volumen.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-end mb-1">
+                                            <div>
+                                                <span className="text-3xl font-bold">{status?.customer_count || 0}</span>
+                                                <span className="text-muted-foreground ml-1">von {status?.max_customers || '∞'} Kunden</span>
+                                            </div>
+                                            {status?.max_customers && status.customer_count > status.max_customers && (
+                                                <Badge variant="destructive" className="mb-1">
+                                                    +{formatCurrency((status.customer_count - status.max_customers) * (status.additional_cost_per_customer || 0))} / Monat
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        
+                                        {status?.max_customers ? (
+                                            <Progress 
+                                                value={Math.min(100, (status.customer_count / status.max_customers) * 100)} 
+                                                className={`h-2 ${status.customer_count > status.max_customers ? 'bg-red-100' : ''}`}
+                                            />
+                                        ) : (
+                                            <Progress value={0} className="h-2" />
+                                        )}
+
+                                        <p className="text-xs text-muted-foreground">
+                                            {status?.max_customers 
+                                                ? `In deinem ${planName}-Plan sind ${status.max_customers} Kunden enthalten. ` 
+                                                : `In deinem ${planName}-Plan sind unbegrenzt Kunden enthalten. `}
+                                            {status?.additional_cost_per_customer > 0 && 
+                                                `Jeder weitere Kunde kostet ${formatCurrency(status.additional_cost_per_customer)} pro Monat.`
+                                            }
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="border-primary/10">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-lg flex items-center gap-2">
+                                        <Coins className="w-5 h-5 text-primary" /> Gebühren & Aufladung
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Informationen zu Transaktionsgebühren und Guthaben.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-muted/30 rounded-lg flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="p-2 bg-primary/10 rounded-full text-primary">
+                                                    <Wallet className="w-4 h-4" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium">Service Gebühr</p>
+                                                    <p className="text-xs text-muted-foreground">Bei selbstständiger Aufladung</p>
+                                                </div>
+                                            </div>
+                                            <span className="text-xl font-bold">{(status?.top_up_fee_fixed || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</span>
+                                        </div>
+
+                                        {status?.current_billing_period_fees > 0 && (
+                                            <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                                                <p className="text-xs text-primary font-semibold uppercase tracking-wider mb-1">Aktueller Abrechnungszeitraum</p>
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-sm">Gesammelte Service Gebühren</span>
+                                                    <span className="text-lg font-bold">{status.current_billing_period_fees.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <p className="text-xs text-muted-foreground">
+                                            Wenn deine Kunden ihr Guthaben selbstständig (z.B. via Stripe/PayPal) aufladen, fällt eine Service Gebühr von {(status?.top_up_fee_percent || 0).toLocaleString('de-DE')}% pro Aufladung an (entspricht {(status?.top_up_fee_fixed || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} bei einer Standardaufladung). Bei manuellen Aufladungen durch dich entstehen keine zusätzlichen Pfotencard-Gebühren.
+                                        </p>
+                                    </div>
+                                </CardContent>
                             </Card>
                         </div>
 
