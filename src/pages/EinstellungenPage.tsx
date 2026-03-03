@@ -870,7 +870,7 @@ export function EinstellungenPage() {
   }, [loadData]);
 
   // --- SYNCHRONISATION ZWISCHEN LEGAL UND INVOICE SETTINGS ---
-  // 1. Von LegalSettings zu InvoiceSettings
+  // 1. Von LegalSettings zu InvoiceSettings (Einweg-Synchronisation)
   useEffect(() => {
     setInvoiceSettings(prev => {
       let updates: Partial<InvoiceSettings> = {};
@@ -943,54 +943,6 @@ export function EinstellungenPage() {
     legalSettings.has_vat_id,
     legalSettings.vat_id,
     legalSettings.legal_form
-  ]);
-
-  // 2. Von InvoiceSettings zu LegalSettings (nur wenn sinnvoll)
-  useEffect(() => {
-    setLegalSettings(prev => {
-      let updates: Partial<LegalSettings> = {};
-
-      // Wenn wir im Rechnungsmodul den Firmennamen ändern, sollte er ggf. zurückfließen
-      if (!prev.separate_billing_address) {
-        if (invoiceSettings.company_name && prev.company_name !== invoiceSettings.company_name) {
-          updates.company_name = invoiceSettings.company_name;
-        }
-      } else {
-        if (invoiceSettings.company_name && prev.billing_company_name !== invoiceSettings.company_name) {
-          updates.billing_company_name = invoiceSettings.company_name;
-        }
-      }
-
-      // Inhaber
-      if (invoiceSettings.owner_name && prev.owner_name !== invoiceSettings.owner_name) {
-        updates.owner_name = invoiceSettings.owner_name;
-      }
-
-      // Register
-      if (invoiceSettings.registry_court && prev.registry_court !== invoiceSettings.registry_court) {
-        updates.registry_court = invoiceSettings.registry_court;
-      }
-      if (invoiceSettings.registry_number && prev.registry_number !== invoiceSettings.registry_number) {
-        updates.registry_number = invoiceSettings.registry_number;
-      }
-
-      // VAT ID (hier etwas komplexer wegen has_vat_id flag)
-      if (invoiceSettings.vat_id && prev.vat_id !== invoiceSettings.vat_id) {
-        updates.vat_id = invoiceSettings.vat_id;
-        updates.has_vat_id = true;
-      }
-
-      if (Object.keys(updates).length > 0) {
-        return { ...prev, ...updates };
-      }
-      return prev;
-    });
-  }, [
-    invoiceSettings.company_name,
-    invoiceSettings.owner_name,
-    invoiceSettings.registry_court,
-    invoiceSettings.registry_number,
-    invoiceSettings.vat_id
   ]);
 
   // --- DATEN SPEICHERN ---
