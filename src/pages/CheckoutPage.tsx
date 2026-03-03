@@ -16,12 +16,13 @@ function CheckoutForm({ clientSecret, amountDue }: { clientSecret: string, amoun
     const stripe = useStripe();
     const elements = useElements();
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isElementLoaded, setIsElementLoaded] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         // (Dein bisheriger Code hierin bleibt völlig gleich)
         e.preventDefault();
-        if (!stripe || !elements) return;
+        if (!stripe || !elements || !isElementLoaded) return;
 
         setIsProcessing(true);
         const returnUrl = `${window.location.origin}/einstellungen?subscription_success=true`;
@@ -46,13 +47,13 @@ function CheckoutForm({ clientSecret, amountDue }: { clientSecret: string, amoun
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
-            <PaymentElement />
+            <PaymentElement onReady={() => setIsElementLoaded(true)} />
             {errorMessage && (
                 <div className="text-red-500 text-sm text-center bg-red-50 p-3 rounded-md border border-red-100">
                     {errorMessage}
                 </div>
             )}
-            <Button disabled={isProcessing || !stripe || !elements} className="w-full h-12 text-base shadow-lg">
+            <Button disabled={isProcessing || !stripe || !elements || !isElementLoaded} className="w-full h-12 text-base shadow-lg">
                 {isProcessing ? <><Loader2 className="h-5 w-5 animate-spin mr-2" /> Verarbeitung...</> : buttonText}
             </Button>
         </form>

@@ -1691,7 +1691,7 @@ export function EinstellungenPage() {
                             </div>
 
                             <div>
-                              <Label>Button-Farbe (PrimÃ¤r)</Label>
+                              <Label>Button-Farbe (Primär)</Label>
                               <div className="flex gap-3 mt-2">
                                 <input
                                   type="color"
@@ -2077,7 +2077,7 @@ export function EinstellungenPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {AVAILABLE_MODULES.map((module) => {
                             const isActive = activeModules.includes(module.id);
-                            const isAllowed = isFeatureAllowed(module.id);
+                            // const isAllowed = isFeatureAllowed(module.id);
 
                             return (
                               <Card key={module.id} className={`transition-all duration-200 ${isActive ? 'ring-1 ring-primary/20 bg-primary/5 shadow-sm' : 'hover:border-primary/50 opacity-90'}`}>
@@ -2090,7 +2090,6 @@ export function EinstellungenPage() {
                                       <Switch
                                         checked={isActive}
                                         disabled={
-                                          (module.premiumOnly && !isAllowed) ||
                                           module.comingSoon ||
                                           (module.id === 'invoice_download' && !isInvoiceDataComplete())
                                         }
@@ -2125,12 +2124,12 @@ export function EinstellungenPage() {
                                       Einstellungen
                                     </Button>
                                   )}
-                                  {module.premiumOnly && !isAllowed && !isActive && (
+                                  {/* {module.premiumOnly && !isAllowed && !isActive && (
                                     <div className="mt-4 p-2 bg-amber-500/5 rounded border border-amber-500/10 flex items-center justify-between">
                                       <span className="text-[10px] font-semibold text-amber-600 uppercase flex items-center gap-1"><Lock size={10} /> Nur Pro/Enterprise</span>
                                       <Button variant="ghost" size="sm" className="h-6 text-[10px] text-amber-700 hover:text-amber-800 p-0" onClick={() => window.open(`/preise?subdomain=${subdomain}`, '_self')}>Upgrade</Button>
                                     </div>
-                                  )}
+                                  )} */}
                                 </CardContent>
                               </Card>
                             );

@@ -176,6 +176,32 @@ export function BillingPage() {
     const formatDate = (dateString?: string) => dateString ? new Date(dateString).toLocaleDateString('de-DE') : '-';
     const formatCurrency = (amount?: number) => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(amount || 0);
 
+    // --- BERECHNUNG DES GESAMTPREISES ---
+    const calculateTotal = () => {
+        if (!status) return 0;
+        
+        // 1. Basis-Abo-Preis (Wir nehmen an, next_payment_amount ist der Grundpreis des Abos)
+        const basePrice = status.next_payment_amount || 0;
+        
+        // 2. Kosten für zusätzliche Kunden
+        let additionalCustomerCosts = 0;
+        if (status.max_customers && status.customer_count > status.max_customers) {
+            additionalCustomerCosts = (status.customer_count - status.max_customers) * (status.additional_cost_per_customer || 0);
+        }
+        
+        // 3. Servicegebühren (Top-up Fees)
+        const serviceFees = status.current_billing_period_fees || 0;
+        
+        return {
+            basePrice,
+            additionalCustomerCosts,
+            serviceFees,
+            total: basePrice + additionalCustomerCosts + serviceFees
+        };
+    };
+
+    const priceDetails = calculateTotal();
+
     // --- STATUS FLAGS ---
     const isExpired = status && !status.subscription_valid;
     const isCancelled = status?.cancel_at_period_end === true || status?.stripe_subscription_status === 'canceled';
@@ -390,13 +416,37 @@ export function BillingPage() {
 
                                                 {status?.next_payment_date ? (
                                                     <div>
-                                                        <div className="flex items-baseline gap-2">
-                                                            <span className="text-2xl font-bold text-foreground">
-                                                                {formatCurrency(status.next_payment_amount)}
-                                                            </span>
-                                                            <span className="text-sm text-muted-foreground">
-                                                                am {formatDate(status.next_payment_date)}
-                                                            </span>
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="flex items-baseline gap-2">
+                                                                <span className="text-3xl font-bold text-foreground">
+                                                                    {typeof priceDetails === 'object' ? formatCurrency(priceDetails.total) : formatCurrency(status.next_payment_amount)}
+                                                                </span>
+                                                                <span className="text-sm text-muted-foreground">
+                                                                    am {formatDate(status.next_payment_date)}
+                                                                </span>
+                                                            </div>
+                                                            
+                                                            {/* Aufschlüsselung der Kosten */}
+                                                            {typeof priceDetails === 'object' && (priceDetails.additionalCustomerCosts > 0 || priceDetails.serviceFees > 0) ? (
+                                                                <div className="text-xs text-muted-foreground mt-1 space-y-0.5 border-t pt-1 max-w-[250px]">
+                                                                    <div className="flex justify-between">
+                                                                        <span>{isPendingSwitch ? upcomingPlanName : planName} Abo:</span>
+                                                                        <span>{formatCurrency(priceDetails.basePrice)}</span>
+                                                                    </div>
+                                                                    {priceDetails.additionalCustomerCosts > 0 && (
+                                                                        <div className="flex justify-between">
+                                                                            <span>Zusätzliche Kunden ({status.customer_count - status.max_customers}):</span>
+                                                                            <span>{formatCurrency(priceDetails.additionalCustomerCosts)}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {priceDetails.serviceFees > 0 && (
+                                                                        <div className="flex justify-between">
+                                                                            <span>Service Gebühren:</span>
+                                                                            <span>{formatCurrency(priceDetails.serviceFees)}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : null}
                                                         </div>
 
                                                         {isPendingSwitch && (
@@ -523,21 +573,19 @@ export function BillingPage() {
                                                     <p className="text-xs text-muted-foreground">Bei selbstständiger Aufladung</p>
                                                 </div>
                                             </div>
-                                            <span className="text-xl font-bold">{(status?.top_up_fee_fixed || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</span>
+                                            <span className="text-xl font-bold">{(status?.top_up_fee_percent || 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>
                                         </div>
 
-                                        {status?.current_billing_period_fees > 0 && (
-                                            <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-                                                <p className="text-xs text-primary font-semibold uppercase tracking-wider mb-1">Aktueller Abrechnungszeitraum</p>
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-sm">Gesammelte Service Gebühren</span>
-                                                    <span className="text-lg font-bold">{status.current_billing_period_fees.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</span>
-                                                </div>
+                                        <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                                            <p className="text-xs text-primary font-semibold uppercase tracking-wider mb-1">Aktueller Abrechnungszeitraum</p>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm">Gesammelte Service Gebühren</span>
+                                                <span className="text-lg font-bold">{(status?.current_billing_period_fees || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}</span>
                                             </div>
-                                        )}
+                                        </div>
 
                                         <p className="text-xs text-muted-foreground">
-                                            Wenn deine Kunden ihr Guthaben selbstständig (z.B. via Stripe/PayPal) aufladen, fällt eine Service Gebühr von {(status?.top_up_fee_percent || 0).toLocaleString('de-DE')}% pro Aufladung an (entspricht {(status?.top_up_fee_fixed || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} bei einer Standardaufladung). Bei manuellen Aufladungen durch dich entstehen keine zusätzlichen Pfotencard-Gebühren.
+                                            Wenn deine Kunden ihr Guthaben selbstständig (z.B. via Stripe/PayPal) aufladen, fällt eine Service Gebühr von {(status?.top_up_fee_percent || 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% pro Aufladung an (entspricht {(status?.top_up_fee_fixed || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} bei einer Standardaufladung). Bei manuellen Aufladungen durch dich entstehen keine zusätzlichen Pfotencard-Gebühren.
                                         </p>
                                     </div>
                                 </CardContent>
