@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from 'react';
+﻿import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -84,6 +84,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+// Import Section Components
+import { BrandingSection } from './settings/BrandingSection';
+import { WordingSection } from './settings/WordingSection';
+import { ServicesSection } from './settings/ServicesSection';
+import { LevelsSection } from './settings/LevelsSection';
+import { TopupSection } from './settings/TopupSection';
+import { ModuleHub } from './settings/ModuleHub';
+import { RightsSection } from './settings/RightsSection';
+import { LegalSection } from './settings/LegalSection';
 
 // --- TYPES (Frontend State) ---
 interface Service {
@@ -697,7 +707,7 @@ export function EinstellungenPage() {
     return false;
   };
 
-  const getPreviewUrl = () => {
+  const getPreviewUrl = useMemo(() => {
     const mappedLevels = levels.map((l, index) => ({
       ...l,
       id: index + 1,
@@ -735,7 +745,14 @@ export function EinstellungenPage() {
 
     const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(config))));
     return `${PREVIEW_APP_URL}#config=${encoded}`;
-  };
+  }, [
+    levels, services, customPrimaryColor, primaryColor, customSecondaryColor, secondaryColor,
+    customBackgroundColor, backgroundColor, customSidebarColor, sidebarColor, openForAllColor,
+    workshop_lecture_color, schoolName, previewLogo, hasLogo, allowCustomTopUp, topUpOptions,
+    previewViewMode, previewRole, activeModules, levelTerm, vipTerm, colorRules
+  ]);
+
+  const previewUrl = getPreviewUrl;
 
   const [isServiceDialogOpen, setIsServiceDialogOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
@@ -3195,7 +3212,7 @@ export function EinstellungenPage() {
                       variant="outline"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => window.open(getPreviewUrl(), '_blank')}
+                      onClick={() => window.open(previewUrl, '_blank')}
                       title="In neuem Tab öffnen"
                     >
                       <ExternalLink size={14} />
@@ -3311,7 +3328,7 @@ export function EinstellungenPage() {
                     />
                   </div>
                 </div>
-                <Button variant="outline" className="w-full" onClick={() => window.open(getPreviewUrl(), '_blank')}>
+                <Button variant="outline" className="w-full" onClick={() => window.open(previewUrl, '_blank')}>
                   <ExternalLink size={16} className="mr-2" /> In neuem Tab öffnen
                 </Button>
               </div>
