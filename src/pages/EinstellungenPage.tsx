@@ -85,6 +85,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+import { BrandingSection } from './settings/BrandingSection';
+import { WordingSection } from './settings/WordingSection';
+import { ServicesSection } from './settings/ServicesSection';
+import { LevelsSection } from './settings/LevelsSection';
+import { TopupSection } from './settings/TopupSection';
+import { ModuleHub } from './settings/ModuleHub';
+import { RightsSection } from './settings/RightsSection';
+import { LegalSection } from './settings/LegalSection';
+
 // --- TYPES (Frontend State) ---
 interface Service {
   id?: number;

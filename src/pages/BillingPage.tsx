@@ -94,6 +94,14 @@ export function BillingPage() {
     };
 
     const openCustomerPortal = async () => {
+        if (localStorage.getItem('cookie-consent-seen') !== 'true') {
+            if (!confirm("Um das Stripe Kundenportal zu nutzen, müssen Cookies akzeptiert werden. Möchten Sie Cookies jetzt akzeptieren?")) {
+                return;
+            }
+            localStorage.setItem('cookie-consent-seen', 'true');
+            window.dispatchEvent(new Event('cookie-consent-updated'));
+        }
+
         const token = localStorage.getItem('pfotencard_token');
         const subdomain = localStorage.getItem('pfotencard_subdomain');
         try {

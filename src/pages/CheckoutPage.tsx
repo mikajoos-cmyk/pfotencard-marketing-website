@@ -1,26 +1,59 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import type { Stripe } from '@stripe/stripe-js';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { API_BASE_URL } from '@/lib/api';
-import { Loader2, ShieldCheck, CheckCircle2, ArrowRight, Building, MapPin, User } from 'lucide-react';
+import { Loader2, ShieldCheck, CheckCircle2, ArrowRight, Building, MapPin, User, Cookie } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+// Stripe wird jetzt erst geladen, wenn die Cookies akzeptiert wurden
+let stripePromise: Promise<Stripe | null> | null = null;
 
-function CheckoutForm({ clientSecret, amountDue }: { clientSecret: string, amountDue: number | null }) {
-    const stripe = useStripe();
-    const elements = useElements();
+const getStripe = async () => {
+    if (!stripePromise && localStorage.getItem('cookie-consent-seen') === 'true') {
+        const { loadStripe } = await import('@stripe/stripe-js');
+        stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+    }
+    return stripePromise;
+};
+
+// Dynamisches Laden der Stripe-Komponenten
+const LazyElements = lazy(async () => {
+    const { Elements } = await import('@stripe/react-stripe-js');
+    return { default: Elements };
+});
+
+const LazyPaymentElement = lazy(async () => {
+    const { PaymentElement } = await import('@stripe/react-stripe-js');
+    return { default: PaymentElement };
+});
+
+function StripeFormWrapper({ clientSecret, amountDue }: { clientSecret: string, amountDue: number | null }) {
+    // Wir importieren die Hooks dynamisch
+    const [stripeHooks, setStripeHooks] = useState<{ useStripe: any, useElements: any } | null>(null);
+
+    useEffect(() => {
+        import('@stripe/react-stripe-js').then(mod => {
+            setStripeHooks({ useStripe: mod.useStripe, useElements: mod.useElements });
+        });
+    }, []);
+
+    if (!stripeHooks) return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+
+    return <CheckoutFormInner clientSecret={clientSecret} amountDue={amountDue} hooks={stripeHooks} />;
+}
+
+function CheckoutFormInner({ clientSecret, amountDue, hooks }: { clientSecret: string, amountDue: number | null, hooks: any }) {
+    const stripe = hooks.useStripe();
+    const elements = hooks.useElements();
     const [isProcessing, setIsProcessing] = useState(false);
     const [isElementLoaded, setIsElementLoaded] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
-        // (Dein bisheriger Code hierin bleibt völlig gleich)
         e.preventDefault();
         if (!stripe || !elements || !isElementLoaded) return;
 
@@ -40,14 +73,15 @@ function CheckoutForm({ clientSecret, amountDue }: { clientSecret: string, amoun
         }
     };
 
-    // Dynamischer Button-Text je nach fälligem Betrag (auch 0€ abfangen!)
     const buttonText = amountDue !== null && amountDue > 0 
         ? `Zahlungspflichtig bestellen (${amountDue.toFixed(2).replace('.', ',')} €)` 
         : "Zahlungsmethode bestätigen";
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
-            <PaymentElement onReady={() => setIsElementLoaded(true)} />
+            <Suspense fallback={<div className="h-40 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+                <LazyPaymentElement onReady={() => setIsElementLoaded(true)} />
+            </Suspense>
             {errorMessage && (
                 <div className="text-red-500 text-sm text-center bg-red-50 p-3 rounded-md border border-red-100">
                     {errorMessage}
@@ -72,6 +106,15 @@ export function CheckoutPage() {
     const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [amountDue, setAmountDue] = useState<number | null>(null); // <-- NEU
+    const [hasCookieConsent, setHasCookieConsent] = useState(localStorage.getItem('cookie-consent-seen') === 'true');
+
+    useEffect(() => {
+        const handleConsentUpdate = () => {
+            setHasCookieConsent(localStorage.getItem('cookie-consent-seen') === 'true');
+        };
+        window.addEventListener('cookie-consent-updated', handleConsentUpdate);
+        return () => window.removeEventListener('cookie-consent-updated', handleConsentUpdate);
+    }, []);
 
     // Form State für Rechnungsdaten
     const [billingData, setBillingData] = useState({
@@ -261,9 +304,34 @@ export function CheckoutPage() {
                                         </div>
                                     )}
 
-                                    <Elements stripe={stripePromise} options={{ clientSecret, appearance, locale: 'de' }}>
-                                        <CheckoutForm clientSecret={clientSecret} amountDue={amountDue} />
-                                    </Elements>
+                                    {!hasCookieConsent ? (
+                                        <div className="p-8 text-center border-2 border-dashed rounded-xl bg-muted/30 space-y-4">
+                                            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto text-primary">
+                                                <Cookie size={24} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <h4 className="font-semibold">Cookies erforderlich</h4>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Um die sichere Zahlungsabwicklung via Stripe zu laden, müssen Sie den Cookies zustimmen.
+                                                </p>
+                                            </div>
+                                            <Button 
+                                                variant="outline" 
+                                                onClick={() => {
+                                                    localStorage.setItem('cookie-consent-seen', 'true');
+                                                    window.dispatchEvent(new Event('cookie-consent-updated'));
+                                                }}
+                                            >
+                                                Zustimmen & Zahlung laden
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <Suspense fallback={<div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
+                                            <LazyElements stripe={getStripe()} options={{ clientSecret, appearance, locale: 'de' }}>
+                                                <StripeFormWrapper clientSecret={clientSecret} amountDue={amountDue} />
+                                            </LazyElements>
+                                        </Suspense>
+                                    )}
                                 </div>
                             )}
 
