@@ -167,6 +167,14 @@ interface ColorRule {
   match_all?: boolean;
 }
 
+interface Location {
+  id: string;
+  name: string;
+  google_maps_link: string;
+  lat?: string;
+  lng?: string;
+}
+
 interface LegalSettings {
   company_name: string;
   legal_form: 'individual' | 'registered';
@@ -394,6 +402,7 @@ export function EinstellungenPage() {
   const [defaultMaxParticipants, setDefaultMaxParticipants] = useState(10);
   const [cancelationPeriodHours, setCancelationPeriodHours] = useState(0);
   const [colorRules, setColorRules] = useState<ColorRule[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
 
   // --- NEU: Mitarbeiter-Rechte ---
   const [staff, setStaff] = useState<User[]>([]);
@@ -451,6 +460,23 @@ export function EinstellungenPage() {
   const [showInvoicePreview, setShowInvoicePreview] = useState(false);
   const [invoicePreviewUrl, setInvoicePreviewUrl] = useState<string | null>(null);
   const [generatingPreview, setGeneratingPreview] = useState(false);
+
+  const isShortGoogleMapsUrl = (url: string) => {
+    return url.includes('maps.app.goo.gl') || url.includes('goo.gl/maps');
+  };
+
+  const extractCoordinates = (googleMapsUrl: string) => {
+    const regexAt = /@(-?\d+\.\d+),(-?\d+\.\d+)/;
+    const matchAt = googleMapsUrl.match(regexAt);
+    if (matchAt) return { lat: matchAt[1], lng: matchAt[2] };
+    const regexBang = /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/;
+    const matchBang = googleMapsUrl.match(regexBang);
+    if (matchBang) return { lat: matchBang[1], lng: matchBang[2] };
+    const regexQ = /[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/;
+    const matchQ = googleMapsUrl.match(regexQ);
+    if (matchQ) return { lat: matchQ[1], lng: matchQ[2] };
+    return null;
+  };
 
   const isInvoiceDataComplete = () => {
     return !!(
@@ -800,6 +826,7 @@ export function EinstellungenPage() {
       setDefaultMaxParticipants(appointmentsConfig.max_participants || 10);
       setCancelationPeriodHours(appointmentsConfig.cancelation_period_hours || 0);
       setColorRules(appointmentsConfig.color_rules || []);
+      setLocations(appointmentsConfig.locations || []);
 
       if (branding.logo_url) {
         const logoUrl = branding.logo_url.startsWith('http')
@@ -1027,7 +1054,8 @@ export function EinstellungenPage() {
           default_duration: defaultDuration,
           max_participants: defaultMaxParticipants,
           cancelation_period_hours: cancelationPeriodHours,
-          color_rules: colorRules
+          color_rules: colorRules,
+          locations: locations
         },
         invoice_settings: finalInvoiceSettings,
         legal_settings: legalSettings,
@@ -2585,6 +2613,102 @@ export function EinstellungenPage() {
                                           </div>
                                           <Switch checked={autoProgressEnabled} onCheckedChange={setAutoProgressEnabled} />
                                         </div>
+                                      </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                                        <div>
+                                          <CardTitle>Orte</CardTitle>
+                                          <CardDescription>Erstelle vordefinierte Orte mit Google Maps Links für deine Termine</CardDescription>
+                                        </div>
+                                        <Button size="sm" onClick={() => {
+                                          const newLoc: Location = {
+                                            id: Math.random().toString(36).substr(2, 9),
+                                            name: '',
+                                            google_maps_link: ''
+                                          };
+                                          setLocations([...locations, newLoc]);
+                                        }}>
+                                          <Plus size={16} className="mr-2" />
+                                          Ort hinzufügen
+                                        </Button>
+                                      </CardHeader>
+                                      <CardContent className="space-y-4">
+                                        {locations.length === 0 ? (
+                                            <div className="text-center py-8 text-muted-foreground italic border-2 border-dashed rounded-lg">
+                                              Keine Orte definiert.
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3">
+                                              {locations.map((loc, idx) => (
+                                                  <div key={loc.id} className="p-4 border rounded-lg bg-background/50 space-y-4">
+                                                    <div className="flex items-center justify-between gap-4">
+                                                      <div className="flex-1 space-y-4">
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                          <div className="space-y-2">
+                                                            <Label>Name des Ortes</Label>
+                                                            <Input
+                                                                placeholder="z.B. Trainingsplatz A"
+                                                                value={loc.name}
+                                                                onChange={(e) => {
+                                                                  const newLocs = [...locations];
+                                                                  newLocs[idx].name = e.target.value;
+                                                                  setLocations(newLocs);
+                                                                }}
+                                                            />
+                                                          </div>
+                                                          <div className="space-y-2">
+                                                            <Label>Google Maps Link</Label>
+                                                            <Input
+                                                                placeholder="https://maps.google.com/..."
+                                                                value={loc.google_maps_link}
+                                                                onChange={(e) => {
+                                                                  const newLink = e.target.value;
+                                                                  const coords = extractCoordinates(newLink);
+                                                                  const newLocs = [...locations];
+                                                                  newLocs[idx].google_maps_link = newLink;
+                                                                  if (coords) {
+                                                                    newLocs[idx].lat = coords.lat;
+                                                                    newLocs[idx].lng = coords.lng;
+                                                                  }
+                                                                  setLocations(newLocs);
+                                                                }}
+                                                                className={isShortGoogleMapsUrl(loc.google_maps_link) ? "border-orange-500 bg-orange-50" : ""}
+                                                            />
+                                                            {isShortGoogleMapsUrl(loc.google_maps_link) && (
+                                                              <p className="text-[10px] text-orange-600 font-medium leading-tight">
+                                                                ⚠️ Dies ist ein Kurzlink. Bitte verwende nach Möglichkeit den langen Google Maps Link aus der Browser-Adresszeile, damit die Karte korrekt angezeigt werden kann.
+                                                              </p>
+                                                            )}
+                                                            {!isShortGoogleMapsUrl(loc.google_maps_link) && loc.google_maps_link && !extractCoordinates(loc.google_maps_link) && (
+                                                              <p className="text-[10px] text-muted-foreground italic leading-tight">
+                                                                Hinweis: Link enthält keine direkten Koordinaten. Die Anzeige könnte ungenau sein.
+                                                              </p>
+                                                            )}
+                                                            {loc.lat && loc.lng && (
+                                                              <p className="text-[10px] text-green-600 font-medium leading-tight">
+                                                                ✓ Koordinaten extrahiert: {loc.lat}, {loc.lng}
+                                                              </p>
+                                                            )}
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                      <Button
+                                                          variant="ghost"
+                                                          size="icon"
+                                                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                          onClick={() => {
+                                                            setLocations(locations.filter((_, i) => i !== idx));
+                                                          }}
+                                                      >
+                                                        <Trash2 size={18} />
+                                                      </Button>
+                                                    </div>
+                                                  </div>
+                                              ))}
+                                            </div>
+                                        )}
                                       </CardContent>
                                     </Card>
 

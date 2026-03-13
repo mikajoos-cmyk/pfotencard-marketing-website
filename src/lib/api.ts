@@ -41,7 +41,7 @@ async function handleResponse(response: Response) {
 
 export async function loginUser(subdomain: string, email: string, password: string) {
     const formData = new FormData();
-    formData.append('username', email);
+    formData.append('username', email.toLowerCase());
     formData.append('password', password);
 
     const response = await fetch(`${API_BASE_URL}/api/login`, {
@@ -76,7 +76,7 @@ export async function registerTenant(data: {
         },
         admin_data: {
             name: data.adminName,
-            email: data.email,
+            email: data.email.toLowerCase(),
             password: data.password,
             role: "admin",
             phone: data.phone,
