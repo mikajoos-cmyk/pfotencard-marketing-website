@@ -2641,7 +2641,7 @@ export function EinstellungenPage() {
                                             </div>
                                         ) : (
                                             <div className="space-y-3">
-                                              {locations.map((loc, idx) => (
+                                              {locations.filter((l: any) => l.is_public !== false).map((loc, idx) => (
                                                   <div key={loc.id} className="p-4 border rounded-lg bg-background/50 space-y-4">
                                                     <div className="flex items-center justify-between gap-4">
                                                       <div className="flex-1 space-y-4">
