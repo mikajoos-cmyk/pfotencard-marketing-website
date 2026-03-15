@@ -286,3 +286,100 @@ export async function updateUser(userId: number, data: any) {
     });
     return handleResponse(response);
 }
+
+// --- HAUSAUFGABEN ---
+export async function fetchHomeworkTemplates() {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/homework/templates`, {
+        headers: headers,
+    });
+    return handleResponse(response);
+}
+
+export async function createHomeworkTemplate(data: any) {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/homework/templates`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+}
+
+export async function updateHomeworkTemplate(id: number, data: any) {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/homework/templates/${id}`, {
+        method: 'PUT',
+        headers: headers,
+        body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+}
+
+export async function deleteHomeworkTemplate(id: number) {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/homework/templates/${id}`, {
+        method: 'DELETE',
+        headers: headers,
+    });
+    return handleResponse(response);
+}
+
+export async function uploadHomeworkFiles(files: File[]) {
+    const headers = getAuthHeaders();
+    const formData = new FormData();
+    files.forEach(file => {
+        formData.append('files', file);
+    });
+
+    const response = await fetch(`${API_BASE_URL}/api/homework/upload`, {
+        method: 'POST',
+        headers: {
+            'Authorization': headers.Authorization,
+            'x-tenant-subdomain': headers['x-tenant-subdomain'],
+        },
+        body: formData,
+    });
+
+    return handleResponse(response);
+}
+
+export async function previewCertificate(template: any) {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/certificates/preview-sample`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(template),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Vorschau fehlgeschlagen (${response.status})`);
+    }
+
+    return response.blob();
+}
+
+export async function previewCertificateHtml(template: any) {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/certificates/preview-html`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(template),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTML-Vorschau fehlgeschlagen (${response.status})`);
+    }
+
+    return response.text();
+}
+
+export async function fetchCertificateLayouts() {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/certificates/layouts`, {
+        headers: headers,
+    });
+    return handleResponse(response);
+}

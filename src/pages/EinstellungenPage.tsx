@@ -93,6 +93,10 @@ import { TopupSection } from './settings/TopupSection';
 import { ModuleHub } from './settings/ModuleHub';
 import { RightsSection } from './settings/RightsSection';
 import { LegalSection } from './settings/LegalSection';
+import { CertificateBuilderModal } from '@/components/modals/CertificateBuilderModal';
+
+import { CertificatesSection } from './settings/CertificatesSection';
+import { HomeworkSection } from './settings/HomeworkSection';
 
 // --- TYPES (Frontend State) ---
 interface Service {
@@ -278,6 +282,13 @@ const AVAILABLE_MODULES: AppModule[] = [
     premiumOnly: true,
     icon: MessageCircle
   },
+  {
+    id: 'homework',
+    name: 'Hausaufgaben & Trainingsplan',
+    description: 'Erstelle Vorlagen und weise Kunden individuelle Hausaufgaben zu.',
+    premiumOnly: false,
+    icon: Calendar
+  },
   // {
   //   name: 'Dokumenten-Center',
   //   description: 'Stelle wichtige Unterlagen (AGB, Impfpass-Upload) bereit.',
@@ -297,6 +308,13 @@ const AVAILABLE_MODULES: AppModule[] = [
     description: 'Ermöglicht Kunden den automatischen Download von Rechnungen für ihre Aufladungen.',
     premiumOnly: true,
     icon: Activity
+  },
+  {
+    id: 'certificates',
+    name: 'Teilnahmebescheinigungen',
+    description: 'Erstelle automatische Zertifikate für Kursabschlüsse oder das Erreichen von neuen Leveln.',
+    premiumOnly: false,
+    icon: Award
   },
   {
     id: 'widgets',
@@ -460,6 +478,9 @@ export function EinstellungenPage() {
   const [showInvoicePreview, setShowInvoicePreview] = useState(false);
   const [invoicePreviewUrl, setInvoicePreviewUrl] = useState<string | null>(null);
   const [generatingPreview, setGeneratingPreview] = useState(false);
+
+  const [showCertificateModal, setShowCertificateModal] = useState(false);
+  const [certificateTemplates, setCertificateTemplates] = useState<any[]>([]);
 
   const isShortGoogleMapsUrl = (url: string) => {
     return url.includes('maps.app.goo.gl') || url.includes('goo.gl/maps');
@@ -888,6 +909,8 @@ export function EinstellungenPage() {
         });
       }
 
+      fetchCertificateTemplates();
+
     } catch (e) {
       console.error(e);
       toast({
@@ -982,6 +1005,56 @@ export function EinstellungenPage() {
   ]);
 
   // --- DATEN SPEICHERN ---
+  const fetchCertificateTemplates = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/certificates/templates`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setCertificateTemplates(data);
+      }
+    } catch (error) {
+      console.error('Error fetching certificates:', error);
+    }
+  }, []);
+
+  const saveCertificateTemplate = async (template: any) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/certificates/templates`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(template)
+      });
+      if (response.ok) {
+        toast({ title: 'Erfolg', description: 'Zertifikats-Vorlage gespeichert.' });
+        fetchCertificateTemplates();
+      } else {
+        throw new Error('Speichern fehlgeschlagen');
+      }
+    } catch (error) {
+      toast({ title: 'Fehler', description: 'Konnte Vorlage nicht speichern.', variant: 'destructive' });
+    }
+  };
+
+  const deleteCertificateTemplate = async (id: number) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/certificates/templates/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (response.ok) {
+        toast({ title: 'Erfolg', description: 'Vorlage gelöscht.' });
+        fetchCertificateTemplates();
+      }
+    } catch (error) {
+      toast({ title: 'Fehler', description: 'Konnte Vorlage nicht löschen.', variant: 'destructive' });
+    }
+  };
+
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
@@ -1362,7 +1435,11 @@ export function EinstellungenPage() {
                   {group.group}
                 </h3>
                 <div className="space-y-1">
-                  {group.items.map((item) => (
+                  {group.items.map((item) => {
+                    // Verstecke Menüpunkt, wenn er an ein Modul gebunden ist, das nicht aktiv ist
+                    if ('module' in item && item.module && !activeModules.includes(item.module as string)) return null;
+
+                    return (
                       <div key={item.id} className="space-y-1">
                         <div className="flex items-center gap-1">
                           <button
@@ -1434,7 +1511,8 @@ export function EinstellungenPage() {
                             </motion.div>
                         )}
                       </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
           ))}
@@ -1966,6 +2044,7 @@ export function EinstellungenPage() {
                       </motion.div>
                   )}
 
+
                   {/* Balance Section */}
                   {activeSection === 'topup' && (
                       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
@@ -2128,6 +2207,49 @@ export function EinstellungenPage() {
                         ) : (
                             /* Module Detail Settings */
                             <div className="space-y-6">
+                              {/* Certificates Module */}
+                              {selectedModuleId === 'certificates' && (
+                                  <div className="grid gap-6">
+                                    <Card>
+                                      <CardHeader className="pb-3 border-b mb-6">
+                                        <CardTitle className="flex items-center gap-2">
+                                          <Award size={20} />
+                                          Teilnahmebescheinigungen
+                                        </CardTitle>
+                                        <CardDescription>Automatische Zertifikate verwalten.</CardDescription>
+                                      </CardHeader>
+                                      <CardContent>
+                                        <CertificatesSection
+                                            certificateTemplates={certificateTemplates}
+                                            levels={levels}
+                                            services={services}
+                                            levelTerm={levelTerm}
+                                            deleteCertificateTemplate={deleteCertificateTemplate}
+                                            setShowCertificateModal={setShowCertificateModal}
+                                        />
+                                      </CardContent>
+                                    </Card>
+                                  </div>
+                              )}
+
+                              {/* Homework Module */}
+                              {selectedModuleId === 'homework' && (
+                                  <div className="grid gap-6">
+                                    <Card>
+                                      <CardHeader className="pb-3 border-b mb-6">
+                                        <CardTitle className="flex items-center gap-2">
+                                          <Calendar size={20} />
+                                          Hausaufgaben & Trainingsplan
+                                        </CardTitle>
+                                        <CardDescription>Erstelle Vorlagen für Übungen und Trainingspläne.</CardDescription>
+                                      </CardHeader>
+                                      <CardContent>
+                                        <HomeworkSection />
+                                      </CardContent>
+                                    </Card>
+                                  </div>
+                              )}
+
                               {/* Widgets Module */}
                               {selectedModuleId === 'widgets' && (
                                   <div className="grid gap-6">
@@ -3452,6 +3574,14 @@ export function EinstellungenPage() {
             </div>
           </SheetContent>
         </Sheet >
+
+        <CertificateBuilderModal
+          isOpen={showCertificateModal}
+          onClose={() => setShowCertificateModal(false)}
+          onSave={saveCertificateTemplate}
+          levels={levels}
+          trainingTypes={services}
+        />
 
         <Dialog open={showInvoicePreview} onOpenChange={setShowInvoicePreview}>
           <DialogContent className="max-w-4xl h-[90vh]">
