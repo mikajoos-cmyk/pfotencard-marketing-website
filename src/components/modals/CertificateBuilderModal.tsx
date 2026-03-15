@@ -410,7 +410,24 @@ export function CertificateBuilderModal({
           {/* Right Side: Preview */}
           <div className="bg-slate-100 p-8 flex flex-col items-center justify-center overflow-hidden border-l">
             <div className="w-full max-w-[420px] mb-4 flex justify-between items-center px-1">
-              {/* ... */}
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-slate-700 uppercase tracking-wider">Live-Vorschau</span>
+                <span className="text-[10px] text-slate-500 uppercase tracking-tight">DIN A4 Format (794 x 1123 px)</span>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 text-xs gap-2 bg-white"
+                onClick={handleDownloadPreview}
+                disabled={downloadingPreview}
+              >
+                {downloadingPreview ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Download className="h-3 w-3" />
+                )}
+                Muster PDF
+              </Button>
             </div>
             
             <div className="w-full max-w-[420px] shadow-2xl relative group bg-white h-[594px] overflow-hidden">
