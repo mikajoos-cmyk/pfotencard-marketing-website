@@ -28,18 +28,19 @@ interface CertificateBuilderModalProps {
   trainingTypes: any[];
 }
 
-const HTMLPreview = ({ template, triggerUpdate }: { template: any, triggerUpdate: number }) => {
+const HTMLPreview = ({ template, testData, triggerUpdate }: { template: any, testData: Record<string, string>, triggerUpdate: number }) => {
   const [html, setHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-
+  
   const loadPreview = useCallback(async () => {
     setLoading(true);
     try {
       const htmlContent = await previewCertificateHtml({
         ...template,
-        target_id: template.target_id ? parseInt(template.target_id) : 0
+        target_id: template.target_id ? parseInt(template.target_id) : 0,
+        preview_data: testData
       });
       setHtml(htmlContent);
     } catch (error) {
@@ -47,7 +48,7 @@ const HTMLPreview = ({ template, triggerUpdate }: { template: any, triggerUpdate
     } finally {
       setLoading(false);
     }
-  }, [template]);
+  }, [template, testData]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -56,59 +57,45 @@ const HTMLPreview = ({ template, triggerUpdate }: { template: any, triggerUpdate
     return () => clearTimeout(timer);
   }, [loadPreview, triggerUpdate]);
 
-  // Dynamische Skalierung basierend auf der tatsächlichen Container-Breite
   useEffect(() => {
     const updateScale = () => {
       if (containerRef.current) {
         const containerWidth = containerRef.current.clientWidth;
-        // A4 Breite bei 96 DPI in Pixeln ist exakt 794px
         setScale(containerWidth / 794);
       }
     };
-
     updateScale();
     window.addEventListener('resize', updateScale);
     return () => window.removeEventListener('resize', updateScale);
-  }, [html]); // Wird ausgelöst, sobald HTML geladen ist
+  }, [html]);
 
   if (loading && !html) {
     return (
-        <div className="w-full h-full flex flex-col items-center justify-center bg-white shadow-xl">
-          <Loader2 className="animate-spin text-primary mb-2" />
-          <span className="text-xs text-muted-foreground uppercase tracking-widest">Generiere Vorschau...</span>
-        </div>
+      <div className="w-full h-full flex flex-col items-center justify-center bg-white shadow-xl">
+        <Loader2 className="animate-spin text-primary mb-2" />
+        <span className="text-xs text-muted-foreground uppercase tracking-widest">Generiere Vorschau...</span>
+      </div>
     );
   }
 
   return (
-      <div ref={containerRef} className="w-full h-full relative overflow-hidden bg-white">
-        {html ? (
-            <div style={{
-              width: '794px',
-              height: '1123px',
-              transform: `scale(${scale})`,
-              transformOrigin: 'top left',
-              position: 'absolute',
-              top: 0,
-              left: 0
-            }}>
-              <iframe
-                  srcDoc={html}
-                  className="w-full h-full border-0 pointer-events-none"
-                  title="Vorschau"
-              />
-            </div>
-        ) : (
-            <div className="w-full h-full flex items-center justify-center text-muted-foreground italic">
-              Vorschau nicht verfügbar
-            </div>
-        )}
-        {loading && (
-            <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-10">
-              <Loader2 className="animate-spin text-primary" />
-            </div>
-        )}
-      </div>
+    <div ref={containerRef} className="w-full h-full relative overflow-hidden bg-white">
+      {html ? (
+        <div style={{ 
+          width: '794px', height: '1123px', transform: `scale(${scale})`, transformOrigin: 'top left',
+          position: 'absolute', top: 0, left: 0
+        }}>
+          <iframe srcDoc={html} className="w-full h-full border-0 pointer-events-none" title="Vorschau" />
+        </div>
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-muted-foreground italic">Vorschau nicht verfügbar</div>
+      )}
+      {loading && (
+        <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-10">
+          <Loader2 className="animate-spin text-primary" />
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -124,6 +111,10 @@ export function CertificateBuilderModal({
   const [downloadingPreview, setDownloadingPreview] = useState(false);
   const [layouts, setLayouts] = useState<any[]>([]);
   const [triggerUpdate, setTriggerUpdate] = useState(0);
+  
+  // NEU: State für die Testdaten
+  const [testData, setTestData] = useState<Record<string, string>>({});
+  
   const { toast } = useToast();
   
   const [template, setTemplate] = useState({
@@ -148,7 +139,8 @@ export function CertificateBuilderModal({
     try {
       const blob = await previewCertificate({
         ...template,
-        target_id: template.target_id ? parseInt(template.target_id) : 0
+        target_id: template.target_id ? parseInt(template.target_id) : 0,
+        preview_data: testData // NEU
       });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -334,39 +326,59 @@ export function CertificateBuilderModal({
               </div>
             </div>
             
-            <div className="pt-4 border-t">
-              <Label className="text-xs text-muted-foreground mb-2 block">Verfügbare Variablen im Layout:</Label>
-              <div className="flex flex-wrap gap-2">
-                {selectedLayout?.placeholders.map((p: string) => (
-                  <div key={p} className="px-2 py-1 bg-secondary text-secondary-foreground rounded text-[10px] font-mono">
-                    {'{' + p + '}'}
+            {/* NEU: Beschreibungen für die Platzhalter */}
+            {(() => {
+              const placeholderDescriptions: Record<string, string> = {
+                hundename: "aus Hunde-Profil",
+                kundenname: "aus Kunden-Profil",
+                datum: "Aktuelles Ausstellungsdatum",
+                hundeschule_name: "aus Einstellungen (Basis-Daten)",
+                kursname: "Name der Leistung / des Levels",
+                ort: "aus Einstellungen (Rechnungsadresse)",
+                kursleiter: "Name des bestätigenden Mitarbeiters"
+              };
+
+              return (
+                <div className="pt-6 border-t mt-4">
+                  <Label className="text-base font-bold text-foreground mb-1 block">Testdaten für die Vorschau</Label>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Im echten Betrieb werden diese Variablen automatisch befüllt. Hier kannst du sie testen:
+                  </p>
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    {selectedLayout?.placeholders.map((p: string) => (
+                      <div key={p} className="flex flex-col gap-1.5 p-3 bg-muted/30 border rounded-lg">
+                        <Label className="text-xs font-semibold flex items-center justify-between">
+                          <span className="font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">{'{' + p + '}'}</span>
+                          <span className="text-[10px] text-muted-foreground font-normal italic ml-2 text-right">
+                            {placeholderDescriptions[p] || "Automatischer Wert"}
+                          </span>
+                        </Label>
+                        <Input 
+                          type="text" 
+                          className="h-8 text-xs bg-background" 
+                          placeholder={`Musterwert für ${p}`}
+                          value={testData[p] || ''}
+                          onChange={(e) => {
+                            setTestData({ ...testData, [p]: e.target.value });
+                            setTriggerUpdate(prev => prev + 1);
+                          }}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Right Side: Preview */}
           <div className="bg-slate-100 p-8 flex flex-col items-center justify-center overflow-hidden border-l">
             <div className="w-full max-w-[420px] mb-4 flex justify-between items-center px-1">
-              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                Live-Vorschau (Exakt)
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-8 text-[10px] uppercase font-bold gap-2"
-                onClick={handleDownloadPreview}
-                disabled={downloadingPreview}
-              >
-                {downloadingPreview ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
-                Muster PDF
-              </Button>
+              {/* ... */}
             </div>
             
             <div className="w-full max-w-[420px] shadow-2xl relative group bg-white h-[594px] overflow-hidden">
-              <HTMLPreview template={template} triggerUpdate={triggerUpdate} />
+              <HTMLPreview template={template} testData={testData} triggerUpdate={triggerUpdate} />
             </div>
           </div>
         </div>
