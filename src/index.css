@@ -49,26 +49,6 @@
     scroll-behavior: smooth;
   }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    @apply font-sans text-foreground;
-    font-weight: 500;
-    letter-spacing: -0.025em;
-    line-height: 1.2;
-  }
-
-  p,
-  span,
-  div,
-  a {
-    @apply text-foreground;
-    line-height: 1.5;
-  }
-
   /* Custom Scrollbar */
   ::-webkit-scrollbar {
     width: 8px;
@@ -80,13 +60,11 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #22C55E;
-    border-radius: 4px;
+    @apply bg-primary rounded-full;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #16a34a;
-    /* darken green */
+    @apply bg-primary/80;
   }
 }
 

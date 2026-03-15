@@ -30,6 +30,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { BaseModal } from '@/components/ui/base-modal';
 import {
   Save,
   Upload,
@@ -45,7 +46,8 @@ import {
   Award,
   ChevronRight,
   Star,
-  Lock
+  Lock,
+  Loader2
 } from 'lucide-react';
 
 // Types
@@ -579,7 +581,7 @@ export function KonfigurationPage() {
           <Button
             size="lg"
             onClick={handleSaveSettings}
-            className="bg-primary text-primary-foreground hover:bg-secondary font-normal"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 font-normal"
           >
             <Save size={20} strokeWidth={1.5} className="mr-2" />
             Speichern
@@ -704,83 +706,78 @@ export function KonfigurationPage() {
                   <CardHeader>
                     <div className="flex justify-between items-center">
                       <CardTitle>Leistungen</CardTitle>
-                      <Dialog
-                        open={isServiceDialogOpen}
-                        onOpenChange={setIsServiceDialogOpen}
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setEditingService(null);
+                          setServiceForm({ name: '', category: 'training', price: 0 });
+                          setIsServiceDialogOpen(true);
+                        }}
                       >
-                        <DialogTrigger asChild>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setEditingService(null);
-                              setServiceForm({ name: '', category: 'training', price: 0 });
-                            }}
-                          >
-                            <Plus size={16} className="mr-2" />
-                            Leistung
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>
-                              {editingService ? 'Bearbeiten' : 'Neue Leistung'}
-                            </DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4 py-4">
-                            <div>
-                              <Label>Name</Label>
-                              <Input
-                                value={serviceForm.name}
-                                onChange={(e) =>
-                                  setServiceForm({ ...serviceForm, name: e.target.value })
-                                }
-                                className="mt-2"
-                              />
-                            </div>
-                            <div>
-                              <Label>Kategorie</Label>
-                              <Select
-                                value={serviceForm.category}
-                                onValueChange={(value: Service['category']) =>
-                                  setServiceForm({ ...serviceForm, category: value })
-                                }
-                              >
-                                <SelectTrigger className="mt-2">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="training">Training</SelectItem>
-                                  <SelectItem value="workshop">Workshop</SelectItem>
-                                  <SelectItem value="lecture">Vortrag</SelectItem>
-                                  <SelectItem value="exam">Prüfung</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <Label>Preis (€)</Label>
-                              <Input
-                                type="number"
-                                value={serviceForm.price}
-                                onChange={(e) =>
-                                  setServiceForm({
-                                    ...serviceForm,
-                                    price: parseFloat(e.target.value) || 0,
-                                  })
-                                }
-                                className="mt-2"
-                              />
-                            </div>
-                          </div>
-                          <DialogFooter>
+                        <Plus size={16} className="mr-2" />
+                        Leistung
+                      </Button>
+                      <BaseModal
+                        isOpen={isServiceDialogOpen}
+                        onClose={setIsServiceDialogOpen}
+                        title={editingService ? 'Bearbeiten' : 'Neue Leistung'}
+                        footer={
+                          <>
                             <Button variant="outline" onClick={() => setIsServiceDialogOpen(false)}>
                               Abbrechen
                             </Button>
                             <Button onClick={handleAddService}>
                               {editingService ? 'Speichern' : 'Hinzufügen'}
                             </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
+                          </>
+                        }
+                      >
+                        <div className="space-y-4">
+                          <div>
+                            <Label>Name</Label>
+                            <Input
+                              value={serviceForm.name}
+                              onChange={(e) =>
+                                setServiceForm({ ...serviceForm, name: e.target.value })
+                              }
+                              className="mt-2"
+                            />
+                          </div>
+                          <div>
+                            <Label>Kategorie</Label>
+                            <Select
+                              value={serviceForm.category}
+                              onValueChange={(value: Service['category']) =>
+                                setServiceForm({ ...serviceForm, category: value })
+                              }
+                            >
+                              <SelectTrigger className="mt-2">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="training">Training</SelectItem>
+                                <SelectItem value="workshop">Workshop</SelectItem>
+                                <SelectItem value="lecture">Vortrag</SelectItem>
+                                <SelectItem value="exam">Prüfung</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Preis (€)</Label>
+                            <Input
+                              type="number"
+                              value={serviceForm.price}
+                              onChange={(e) =>
+                                setServiceForm({
+                                  ...serviceForm,
+                                  price: parseFloat(e.target.value) || 0,
+                                })
+                              }
+                              className="mt-2"
+                            />
+                          </div>
+                        </div>
+                      </BaseModal>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -932,72 +929,29 @@ export function KonfigurationPage() {
                         )}
                       </div>
 
-                      <Dialog
-                        open={isRequirementDialogOpen && currentLevelId === level.id}
-                        onOpenChange={(open) => {
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          setCurrentLevelId(level.id);
+                          setRequirementForm({ serviceId: '', quantity: 1 });
+                          setIsRequirementDialogOpen(true);
+                        }}
+                      >
+                        <Plus size={16} className="mr-2" />
+                        Anforderung hinzufügen
+                      </Button>
+
+                      <BaseModal
+                        isOpen={isRequirementDialogOpen && currentLevelId === level.id}
+                        onClose={(open) => {
                           setIsRequirementDialogOpen(open);
                           if (open) setCurrentLevelId(level.id);
                         }}
-                      >
-                        <DialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() => {
-                              setCurrentLevelId(level.id);
-                              setRequirementForm({ serviceId: '', quantity: 1 });
-                            }}
-                          >
-                            <Plus size={16} className="mr-2" />
-                            Anforderung hinzufügen
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Neue Anforderung</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4 py-4">
-                            <div>
-                              <Label>Anzahl</Label>
-                              <Input
-                                type="number"
-                                min="1"
-                                value={requirementForm.quantity}
-                                onChange={(e) =>
-                                  setRequirementForm({
-                                    ...requirementForm,
-                                    quantity: parseInt(e.target.value) || 1,
-                                  })
-                                }
-                                className="mt-2"
-                              />
-                            </div>
-                            <div>
-                              <Label>Leistung</Label>
-                              <Select
-                                value={requirementForm.serviceId}
-                                onValueChange={(value) =>
-                                  setRequirementForm({
-                                    ...requirementForm,
-                                    serviceId: value,
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="mt-2">
-                                  <SelectValue placeholder="Leistung auswählen" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {config.services.map((service) => (
-                                    <SelectItem key={service.id} value={service.id}>
-                                      {service.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                          <DialogFooter>
+                        title="Neue Anforderung"
+                        footer={
+                          <>
                             <Button
                               variant="outline"
                               onClick={() => setIsRequirementDialogOpen(false)}
@@ -1010,9 +964,50 @@ export function KonfigurationPage() {
                             >
                               Hinzufügen
                             </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
+                          </>
+                        }
+                      >
+                        <div className="space-y-4">
+                          <div>
+                            <Label>Anzahl</Label>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={requirementForm.quantity}
+                              onChange={(e) =>
+                                setRequirementForm({
+                                  ...requirementForm,
+                                  quantity: parseInt(e.target.value) || 1,
+                                })
+                              }
+                              className="mt-2"
+                            />
+                          </div>
+                          <div>
+                            <Label>Leistung</Label>
+                            <Select
+                              value={requirementForm.serviceId}
+                              onValueChange={(value) =>
+                                setRequirementForm({
+                                  ...requirementForm,
+                                  serviceId: value,
+                                })
+                              }
+                            >
+                              <SelectTrigger className="mt-2">
+                                <SelectValue placeholder="Leistung auswählen" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {config.services.map((service) => (
+                                  <SelectItem key={service.id} value={service.id}>
+                                    {service.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </BaseModal>
                     </CardContent>
                   </Card>
                 ))}
