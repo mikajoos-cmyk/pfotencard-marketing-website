@@ -26,6 +26,7 @@ import {
   getInvoicePreview,
   fetchCertificateTemplates,
   createCertificateTemplate,
+  updateCertificateTemplate,
   deleteCertificateTemplate
 } from '@/lib/api';
 import {
@@ -1038,8 +1039,13 @@ export function EinstellungenPage() {
       }
       setEditingCertificateTemplate(null);
       fetchCertificateTemplatesData();
-    } catch (error) {
-      toast({ title: 'Fehler', description: 'Konnte Vorlage nicht speichern.', variant: 'destructive' });
+    } catch (error: any) {
+      toast({ 
+        title: 'Fehler', 
+        description: error.message || 'Konnte Vorlage nicht speichern.', 
+        variant: 'destructive' 
+      });
+      throw error; // Wichtig, damit das Modal nicht schließt
     }
   };
 

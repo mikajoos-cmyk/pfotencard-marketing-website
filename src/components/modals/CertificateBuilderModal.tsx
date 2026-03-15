@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -122,6 +123,7 @@ export function CertificateBuilderModal({
   const [template, setTemplate] = useState({
     name: '',
     title: 'Teilnahmebescheinigung',
+    body_text: '',
     layout_id: 'layout_professional',
     trigger_type: 'course_completed',
     target_id: '',
@@ -150,6 +152,7 @@ export function CertificateBuilderModal({
           ...initialTemplate,
           target_id: initialTemplate.target_id?.toString() || '',
           images: initialTemplate.images || {},
+          body_text: initialTemplate.body_text || '',
         });
         if (initialTemplate.preview_data) {
           setTestData(initialTemplate.preview_data);
@@ -159,6 +162,7 @@ export function CertificateBuilderModal({
         setTemplate({
           name: '',
           title: 'Teilnahmebescheinigung',
+          body_text: '',
           layout_id: 'layout_professional',
           trigger_type: 'course_completed',
           target_id: '',
@@ -172,9 +176,14 @@ export function CertificateBuilderModal({
           setLayouts(data);
           // Falls wir ein NEUES Template erstellen, wende direkt die Defaults vom Standard-Layout an
           if (!initialTemplate && data.length > 0) {
+            const defaultLayoutId = 'layout_professional';
+            const defaultLayout = data.find(l => l.id === defaultLayoutId) || data[0];
+            
             setTemplate(prev => ({
               ...prev,
-              images: applyLayoutDefaults(prev.layout_id, {}, data)
+              layout_id: defaultLayout.id,
+              images: applyLayoutDefaults(defaultLayout.id, {}, data),
+              body_text: defaultLayout.default_texts?.[prev.trigger_type] || ''
             }));
           }
         })
@@ -215,7 +224,7 @@ export function CertificateBuilderModal({
       });
       onClose();
     } catch (error) {
-      toast({ title: 'Fehler', description: 'Die Vorlage konnte nicht gespeichert werden.', variant: 'destructive' });
+      console.error("Save failed", error);
     } finally {
       setLoading(false);
     }
@@ -284,6 +293,7 @@ export function CertificateBuilderModal({
               </div>
             </div>
 
+
             <div className="space-y-4">
               <Label>Layout auswählen</Label>
               <div className="grid grid-cols-4 gap-3">
@@ -314,7 +324,10 @@ export function CertificateBuilderModal({
                 <div className="space-y-3">
                   <Select
                     value={template.trigger_type}
-                    onValueChange={(val) => setTemplate({ ...template, trigger_type: val, target_id: '' })}
+                    onValueChange={(val) => {
+                      setTemplate({ ...template, trigger_type: val, target_id: '' });
+                      setTriggerUpdate(p => p + 1);
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Trigger wählen" />
