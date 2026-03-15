@@ -383,3 +383,66 @@ export async function fetchCertificateLayouts() {
     });
     return handleResponse(response);
 }
+
+export async function fetchEmployees() {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/certificates/employees`, {
+        headers: headers,
+    });
+    return handleResponse(response);
+}
+
+export async function fetchSignatures() {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/certificates/signatures`, {
+        headers: headers,
+    });
+    return handleResponse(response);
+}
+
+export async function saveSignatures(signatures: Record<string, string>) {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/certificates/signatures`, {
+        method: 'PUT',
+        headers: headers,
+        body: JSON.stringify(signatures),
+    });
+    return handleResponse(response);
+}
+
+export async function fetchCertificateTemplates() {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/certificates/templates`, {
+        headers: headers,
+    });
+    return handleResponse(response);
+}
+
+export async function createCertificateTemplate(data: any) {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/certificates/templates`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+}
+
+export async function updateCertificateTemplate(id: number, data: any) {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/certificates/templates/${id}`, {
+        method: 'PUT',
+        headers: headers,
+        body: JSON.stringify(data),
+    });
+    return handleResponse(response);
+}
+
+export async function deleteCertificateTemplate(id: number) {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/certificates/templates/${id}`, {
+        method: 'DELETE',
+        headers: headers,
+    });
+    return handleResponse(response);
+}

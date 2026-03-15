@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Award, Upload, Loader2, Download } from 'lucide-react';
+import { Award, Upload, Loader2, Download, Trash2 } from 'lucide-react';
 import { uploadImage, previewCertificate, previewCertificateHtml, fetchCertificateLayouts } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
@@ -172,21 +172,25 @@ export function CertificateBuilderModal({
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, slotId: string) => {
-    const file = e.target.files?.[0];
+  const handleImageUpload = async (slotId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (!file) return;
 
-    setUploading(slotId);
+    setUploading(slotId); // Setzt den Lade-Status gezielt für diesen Slot
     try {
       const { url } = await uploadImage(file);
+
       setTemplate(prev => ({
         ...prev,
-        images: { ...prev.images, [slotId]: url }
+        images: {
+          ...prev.images,
+          [slotId]: url
+        }
       }));
-      setTriggerUpdate(p => p + 1);
-      toast({ title: 'Erfolg', description: 'Bild erfolgreich hochgeladen.' });
+      setTriggerUpdate(prev => prev + 1);
     } catch (error) {
-      toast({ title: 'Upload fehlgeschlagen', description: 'Das Bild konnte nicht hochgeladen werden.', variant: 'destructive' });
+      console.error("Upload failed", error);
+      toast({ title: "Fehler beim Upload", variant: "destructive" });
     } finally {
       setUploading(null);
     }
@@ -297,32 +301,64 @@ export function CertificateBuilderModal({
                   </Select>
                 </div>
               </div>
+            </div>
 
-              <div className="space-y-4">
-                <Label>Bilder (Layout spezifisch)</Label>
-                <div className="grid grid-cols-1 gap-3">
-                  {selectedLayout?.image_slots.map((slot: any) => (
-                    <div key={slot.id} className="flex flex-col gap-1">
-                      <Label className="text-[10px] uppercase text-muted-foreground">{slot.label}</Label>
-                      <Button variant="outline" size="sm" className="relative h-9 justify-start gap-2 overflow-hidden" disabled={uploading === slot.id}>
-                        {uploading === slot.id ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-                        {template.images[slot.id] ? 'Ändern' : 'Hochladen'}
+            {/* DYNAMISCHER BEREICH: Bilder & Logos */}
+            <div className="pt-6 border-t mt-4">
+              <Label className="text-base font-bold text-foreground mb-4 block">Bilder & Logos</Label>
+              <div className="grid grid-cols-1 gap-4">
+                {selectedLayout?.image_slots?.map((slot: { id: string, label: string }) => (
+                  <div key={slot.id} className="flex flex-col gap-2 p-3 bg-muted/30 border rounded-lg">
+                    <Label className="text-sm font-semibold">{slot.label}</Label>
+                    
+                    {template.images?.[slot.id] ? (
+                      <div className="flex items-center justify-between gap-4 bg-white p-2 rounded border">
+                        <img 
+                          src={template.images[slot.id]} 
+                          alt={slot.label} 
+                          className="h-10 w-auto object-contain bg-slate-50 rounded" 
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => {
+                            const newImages = { ...template.images };
+                            delete newImages[slot.id];
+                            setTemplate({ ...template, images: newImages });
+                            setTriggerUpdate(prev => prev + 1);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" /> Entfernen
+                        </Button>
+                      </div>
+                    ) : (
+                      <div>
                         <input
                           type="file"
-                          className="absolute inset-0 opacity-0 cursor-pointer"
-                          accept="image/*"
-                          onChange={(e) => handleFileChange(e, slot.id)}
+                          id={`upload-${slot.id}`}
+                          className="hidden"
+                          accept="image/png, image/jpeg"
+                          onChange={(e) => handleImageUpload(slot.id, e)}
                         />
-                      </Button>
-                      {template.images[slot.id] && (
-                        <div className="text-[8px] truncate text-green-600">✓ Hochgeladen</div>
-                      )}
-                    </div>
-                  ))}
-                  {(!selectedLayout || selectedLayout.image_slots.length === 0) && (
-                    <div className="text-xs text-muted-foreground italic">Keine Bilder für dieses Layout erforderlich.</div>
-                  )}
-                </div>
+                        <Label
+                          htmlFor={`upload-${slot.id}`}
+                          className={`flex items-center justify-center gap-2 px-4 py-2 bg-white border hover:bg-slate-50 text-slate-700 rounded-md cursor-pointer text-sm font-medium transition-colors w-full ${uploading === slot.id ? 'opacity-50 pointer-events-none' : ''}`}
+                        >
+                          {uploading === slot.id ? (
+                            <span className="animate-pulse flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/> Lädt...</span>
+                          ) : (
+                            <><Upload className="h-4 w-4" /> {slot.label} hochladen</>
+                          )}
+                        </Label>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {(!selectedLayout?.image_slots || selectedLayout.image_slots.length === 0) && (
+                  <p className="text-sm text-muted-foreground italic">Dieses Layout benötigt keine spezifischen Bilder.</p>
+                )}
               </div>
             </div>
             

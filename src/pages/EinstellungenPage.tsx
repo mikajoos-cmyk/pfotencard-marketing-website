@@ -15,7 +15,19 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { getOrCreatePublicToken, API_BASE_URL, fetchAppConfig, saveSettings, uploadImage, fetchUsers, updateUser, getInvoicePreview } from '@/lib/api';
+import {
+  getOrCreatePublicToken,
+  API_BASE_URL,
+  fetchAppConfig,
+  saveSettings,
+  uploadImage,
+  fetchUsers,
+  updateUser,
+  getInvoicePreview,
+  fetchCertificateTemplates,
+  createCertificateTemplate,
+  deleteCertificateTemplate
+} from '@/lib/api';
 import {
   Save,
   Upload,
@@ -909,7 +921,7 @@ export function EinstellungenPage() {
         });
       }
 
-      fetchCertificateTemplates();
+      fetchCertificateTemplatesData();
 
     } catch (e) {
       console.error(e);
@@ -1005,51 +1017,30 @@ export function EinstellungenPage() {
   ]);
 
   // --- DATEN SPEICHERN ---
-  const fetchCertificateTemplates = useCallback(async () => {
+  const fetchCertificateTemplatesData = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/certificates/templates`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setCertificateTemplates(data);
-      }
+      const data = await fetchCertificateTemplates();
+      setCertificateTemplates(data);
     } catch (error) {
       console.error('Error fetching certificates:', error);
     }
   }, []);
 
-  const saveCertificateTemplate = async (template: any) => {
+  const saveCertificateTemplateAction = async (template: any) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/certificates/templates`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(template)
-      });
-      if (response.ok) {
-        toast({ title: 'Erfolg', description: 'Zertifikats-Vorlage gespeichert.' });
-        fetchCertificateTemplates();
-      } else {
-        throw new Error('Speichern fehlgeschlagen');
-      }
+      await createCertificateTemplate(template);
+      toast({ title: 'Erfolg', description: 'Zertifikats-Vorlage gespeichert.' });
+      fetchCertificateTemplatesData();
     } catch (error) {
       toast({ title: 'Fehler', description: 'Konnte Vorlage nicht speichern.', variant: 'destructive' });
     }
   };
 
-  const deleteCertificateTemplate = async (id: number) => {
+  const deleteCertificateTemplateAction = async (id: number) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/certificates/templates/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (response.ok) {
-        toast({ title: 'Erfolg', description: 'Vorlage gelöscht.' });
-        fetchCertificateTemplates();
-      }
+      await deleteCertificateTemplate(id);
+      toast({ title: 'Erfolg', description: 'Vorlage gelöscht.' });
+      fetchCertificateTemplatesData();
     } catch (error) {
       toast({ title: 'Fehler', description: 'Konnte Vorlage nicht löschen.', variant: 'destructive' });
     }
@@ -2224,7 +2215,7 @@ export function EinstellungenPage() {
                                             levels={levels}
                                             services={services}
                                             levelTerm={levelTerm}
-                                            deleteCertificateTemplate={deleteCertificateTemplate}
+                                            deleteCertificateTemplate={deleteCertificateTemplateAction}
                                             setShowCertificateModal={setShowCertificateModal}
                                         />
                                       </CardContent>
@@ -3578,7 +3569,7 @@ export function EinstellungenPage() {
         <CertificateBuilderModal
           isOpen={showCertificateModal}
           onClose={() => setShowCertificateModal(false)}
-          onSave={saveCertificateTemplate}
+          onSave={saveCertificateTemplateAction}
           levels={levels}
           trainingTypes={services}
         />

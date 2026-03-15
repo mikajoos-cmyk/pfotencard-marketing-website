@@ -415,7 +415,7 @@ export const ModuleHub = React.memo(({
                     levels={levels}
                     services={services}
                     levelTerm={levelTerm}
-                    deleteCertificateTemplate={deleteCertificateTemplate}
+                    deleteCertificateTemplate={deleteCertificateTemplateAction}
                     setShowCertificateModal={setShowCertificateModal}
                   />
                 </CardContent>
