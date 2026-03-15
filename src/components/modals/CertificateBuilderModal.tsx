@@ -31,7 +31,9 @@ interface CertificateBuilderModalProps {
 const HTMLPreview = ({ template, triggerUpdate }: { template: any, triggerUpdate: number }) => {
   const [html, setHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
   const loadPreview = useCallback(async () => {
     setLoading(true);
     try {
@@ -54,40 +56,59 @@ const HTMLPreview = ({ template, triggerUpdate }: { template: any, triggerUpdate
     return () => clearTimeout(timer);
   }, [loadPreview, triggerUpdate]);
 
+  // Dynamische Skalierung basierend auf der tatsächlichen Container-Breite
+  useEffect(() => {
+    const updateScale = () => {
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.clientWidth;
+        // A4 Breite bei 96 DPI in Pixeln ist exakt 794px
+        setScale(containerWidth / 794);
+      }
+    };
+
+    updateScale();
+    window.addEventListener('resize', updateScale);
+    return () => window.removeEventListener('resize', updateScale);
+  }, [html]); // Wird ausgelöst, sobald HTML geladen ist
+
   if (loading && !html) {
     return (
-      <div className="aspect-[1/1.414] bg-white shadow-xl border flex flex-col items-center justify-center w-full h-full">
-        <Loader2 className="animate-spin text-primary mb-2" />
-        <span className="text-xs text-muted-foreground uppercase tracking-widest">Generiere Vorschau...</span>
-      </div>
+        <div className="w-full h-full flex flex-col items-center justify-center bg-white shadow-xl">
+          <Loader2 className="animate-spin text-primary mb-2" />
+          <span className="text-xs text-muted-foreground uppercase tracking-widest">Generiere Vorschau...</span>
+        </div>
     );
   }
 
   return (
-    <div className="aspect-[1/1.414] bg-white shadow-xl border relative overflow-hidden w-full h-full group">
-      {html ? (
-        <iframe 
-          srcDoc={html} 
-          className="w-full h-full border-0 origin-top" 
-          style={{ 
-            width: '210mm', 
-            height: '297mm', 
-            transform: 'scale(0.53)', // Scale down to fit the preview container
-            transformOrigin: 'top left' 
-          }}
-          title="Vorschau" 
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center text-muted-foreground italic">
-          Vorschau nicht verfügbar
-        </div>
-      )}
-      {loading && (
-        <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-10">
-          <Loader2 className="animate-spin text-primary" />
-        </div>
-      )}
-    </div>
+      <div ref={containerRef} className="w-full h-full relative overflow-hidden bg-white">
+        {html ? (
+            <div style={{
+              width: '794px',
+              height: '1123px',
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+              position: 'absolute',
+              top: 0,
+              left: 0
+            }}>
+              <iframe
+                  srcDoc={html}
+                  className="w-full h-full border-0 pointer-events-none"
+                  title="Vorschau"
+              />
+            </div>
+        ) : (
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground italic">
+              Vorschau nicht verfügbar
+            </div>
+        )}
+        {loading && (
+            <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-10">
+              <Loader2 className="animate-spin text-primary" />
+            </div>
+        )}
+      </div>
   );
 };
 
