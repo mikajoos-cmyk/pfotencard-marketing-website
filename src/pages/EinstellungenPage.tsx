@@ -492,6 +492,7 @@ export function EinstellungenPage() {
   const [generatingPreview, setGeneratingPreview] = useState(false);
 
   const [showCertificateModal, setShowCertificateModal] = useState(false);
+  const [editingCertificateTemplate, setEditingCertificateTemplate] = useState<any | null>(null); // NEU
   const [certificateTemplates, setCertificateTemplates] = useState<any[]>([]);
 
   const isShortGoogleMapsUrl = (url: string) => {
@@ -1028,8 +1029,14 @@ export function EinstellungenPage() {
 
   const saveCertificateTemplateAction = async (template: any) => {
     try {
-      await createCertificateTemplate(template);
-      toast({ title: 'Erfolg', description: 'Zertifikats-Vorlage gespeichert.' });
+      if (editingCertificateTemplate) {
+        await updateCertificateTemplate(editingCertificateTemplate.id, template);
+        toast({ title: 'Erfolg', description: 'Zertifikats-Vorlage aktualisiert.' });
+      } else {
+        await createCertificateTemplate(template);
+        toast({ title: 'Erfolg', description: 'Zertifikats-Vorlage gespeichert.' });
+      }
+      setEditingCertificateTemplate(null);
       fetchCertificateTemplatesData();
     } catch (error) {
       toast({ title: 'Fehler', description: 'Konnte Vorlage nicht speichern.', variant: 'destructive' });
@@ -2217,6 +2224,10 @@ export function EinstellungenPage() {
                                             levelTerm={levelTerm}
                                             deleteCertificateTemplate={deleteCertificateTemplateAction}
                                             setShowCertificateModal={setShowCertificateModal}
+                                            onEditCertificateTemplate={(tpl) => {
+                                              setEditingCertificateTemplate(tpl);
+                                              setShowCertificateModal(true);
+                                            }}
                                         />
                                       </CardContent>
                                     </Card>
@@ -3568,10 +3579,14 @@ export function EinstellungenPage() {
 
         <CertificateBuilderModal
           isOpen={showCertificateModal}
-          onClose={() => setShowCertificateModal(false)}
+          onClose={() => {
+            setShowCertificateModal(false);
+            setEditingCertificateTemplate(null);
+          }}
           onSave={saveCertificateTemplateAction}
           levels={levels}
           trainingTypes={services}
+          initialTemplate={editingCertificateTemplate}
         />
 
         <Dialog open={showInvoicePreview} onOpenChange={setShowInvoicePreview}>

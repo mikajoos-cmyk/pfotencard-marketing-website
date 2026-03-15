@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Award, Trash2, Layers, Briefcase, Upload, User } from 'lucide-react';
+import { Plus, Award, Trash2, Layers, Briefcase, Upload, User, Pencil } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { fetchEmployees, fetchSignatures, saveSignatures, uploadImage } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
@@ -14,6 +14,7 @@ interface CertificatesSectionProps {
   levelTerm: string;
   deleteCertificateTemplate: (id: number) => void;
   setShowCertificateModal: (show: boolean) => void;
+  onEditCertificateTemplate: (template: any) => void; // NEU
 }
 
 export const CertificatesSection = ({
@@ -22,7 +23,8 @@ export const CertificatesSection = ({
   services,
   levelTerm,
   deleteCertificateTemplate,
-  setShowCertificateModal
+  setShowCertificateModal,
+  onEditCertificateTemplate // NEU
 }: CertificatesSectionProps) => {
   const [employees, setEmployees] = useState<{id: string, name: string}[]>([]);
   const [signatures, setSignatures] = useState<Record<string, string>>({});
@@ -89,9 +91,14 @@ export const CertificatesSection = ({
                   <Award className="text-primary" size={18} />
                   {tpl.name}
                 </span>
-                <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteCertificateTemplate(tpl.id)}>
-                  <Trash2 size={14} className="text-destructive" />
-                </Button>
+                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEditCertificateTemplate(tpl)}>
+                    <Pencil size={14} className="text-slate-500" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteCertificateTemplate(tpl.id)}>
+                    <Trash2 size={14} className="text-destructive" />
+                  </Button>
+                </div>
               </CardTitle>
               <CardDescription className="flex items-center gap-1 text-xs">
                 {tpl.trigger_type === 'level_achieved' ? (

@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Award, Upload, Loader2, Download, Trash2 } from 'lucide-react';
+import { Award, Upload, Loader2, Download, Trash2, Link } from 'lucide-react';
 import { uploadImage, previewCertificate, previewCertificateHtml, fetchCertificateLayouts } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
@@ -26,6 +26,7 @@ interface CertificateBuilderModalProps {
   onSave: (template: any) => void;
   levels: any[];
   trainingTypes: any[];
+  initialTemplate?: any; // NEU: Für Bearbeitung
 }
 
 const HTMLPreview = ({ template, testData, triggerUpdate }: { template: any, testData: Record<string, string>, triggerUpdate: number }) => {
@@ -105,6 +106,7 @@ export function CertificateBuilderModal({
   onSave,
   levels,
   trainingTypes,
+  initialTemplate,
 }: CertificateBuilderModalProps) {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -126,13 +128,59 @@ export function CertificateBuilderModal({
     images: {} as Record<string, string>,
   });
 
+  // Hilfsfunktion um Default-Referenzen aus dem Layout anzuwenden
+  const applyLayoutDefaults = useCallback((layoutId: string, currentImages: Record<string, string>, allLayouts: any[]) => {
+    const layout = allLayouts.find(l => l.id === layoutId);
+    if (!layout || !layout.image_slots) return currentImages;
+
+    const newImages = { ...currentImages };
+    layout.image_slots.forEach((slot: any) => {
+      // Wenn der Slot leer ist und ein Default existiert, wende ihn an
+      if (!newImages[slot.id] && slot.default_ref) {
+        newImages[slot.id] = `ref:${slot.default_ref}`;
+      }
+    });
+    return newImages;
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
+      if (initialTemplate) {
+        setTemplate({
+          ...initialTemplate,
+          target_id: initialTemplate.target_id?.toString() || '',
+          images: initialTemplate.images || {},
+        });
+        if (initialTemplate.preview_data) {
+          setTestData(initialTemplate.preview_data);
+        }
+      } else {
+        // Reset for NEW
+        setTemplate({
+          name: '',
+          title: 'Teilnahmebescheinigung',
+          layout_id: 'layout_professional',
+          trigger_type: 'course_completed',
+          target_id: '',
+          images: {},
+        });
+        setTestData({});
+      }
+
       fetchCertificateLayouts()
-        .then(setLayouts)
+        .then(data => {
+          setLayouts(data);
+          // Falls wir ein NEUES Template erstellen, wende direkt die Defaults vom Standard-Layout an
+          if (!initialTemplate && data.length > 0) {
+            setTemplate(prev => ({
+              ...prev,
+              images: applyLayoutDefaults(prev.layout_id, {}, data)
+            }));
+          }
+        })
         .catch(err => toast({ title: "Fehler", description: "Layouts konnten nicht geladen werden.", variant: "destructive" }));
     }
-  }, [isOpen, toast]);
+  }, [isOpen, initialTemplate, toast, applyLayoutDefaults]);
 
   const handleDownloadPreview = async () => {
     setDownloadingPreview(true);
@@ -162,7 +210,8 @@ export function CertificateBuilderModal({
     try {
       await onSave({
         ...template,
-        target_id: parseInt(template.target_id)
+        target_id: parseInt(template.target_id),
+        preview_data: testData // Testdaten mitspeichern für spätere Bearbeitung
       });
       onClose();
     } catch (error) {
@@ -247,7 +296,8 @@ export function CertificateBuilderModal({
                       template.layout_id === layout.id ? 'ring-2 ring-primary ring-offset-2' : ''
                     }`}
                     onClick={() => {
-                      setTemplate({ ...template, layout_id: layout.id });
+                      const newImages = applyLayoutDefaults(layout.id, template.images, layouts);
+                      setTemplate({ ...template, layout_id: layout.id, images: newImages });
                       setTriggerUpdate(p => p + 1);
                     }}
                   >
@@ -307,54 +357,100 @@ export function CertificateBuilderModal({
             <div className="pt-6 border-t mt-4">
               <Label className="text-base font-bold text-foreground mb-4 block">Bilder & Logos</Label>
               <div className="grid grid-cols-1 gap-4">
-                {selectedLayout?.image_slots?.map((slot: { id: string, label: string }) => (
-                  <div key={slot.id} className="flex flex-col gap-2 p-3 bg-muted/30 border rounded-lg">
-                    <Label className="text-sm font-semibold">{slot.label}</Label>
-                    
-                    {template.images?.[slot.id] ? (
-                      <div className="flex items-center justify-between gap-4 bg-white p-2 rounded border">
-                        <img 
-                          src={template.images[slot.id]} 
-                          alt={slot.label} 
-                          className="h-10 w-auto object-contain bg-slate-50 rounded" 
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => {
-                            const newImages = { ...template.images };
-                            delete newImages[slot.id];
-                            setTemplate({ ...template, images: newImages });
-                            setTriggerUpdate(prev => prev + 1);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" /> Entfernen
-                        </Button>
-                      </div>
-                    ) : (
-                      <div>
-                        <input
-                          type="file"
-                          id={`upload-${slot.id}`}
-                          className="hidden"
-                          accept="image/png, image/jpeg"
-                          onChange={(e) => handleImageUpload(slot.id, e)}
-                        />
-                        <Label
-                          htmlFor={`upload-${slot.id}`}
-                          className={`flex items-center justify-center gap-2 px-4 py-2 bg-white border hover:bg-slate-50 text-slate-700 rounded-md cursor-pointer text-sm font-medium transition-colors w-full ${uploading === slot.id ? 'opacity-50 pointer-events-none' : ''}`}
-                        >
-                          {uploading === slot.id ? (
-                            <span className="animate-pulse flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/> Lädt...</span>
+                {selectedLayout?.image_slots?.map((slot: { id: string, label: string, allow_variables?: boolean }) => {
+                  const imageValue = template.images?.[slot.id];
+                  const isReference = typeof imageValue === 'string' && imageValue.startsWith('ref:');
+                  const referenceVar = isReference ? imageValue.substring(4) : '';
+                  const variablesAllowed = slot.allow_variables !== false; // Default true
+
+                  return (
+                    <div key={slot.id} className="flex flex-col gap-2 p-3 bg-muted/30 border rounded-lg">
+                      <Label className="text-sm font-semibold">{slot.label}</Label>
+                      
+                      {imageValue ? (
+                        <div className="flex items-center justify-between gap-4 bg-white p-2 rounded border">
+                          {isReference ? (
+                            <div className="flex items-center gap-2 text-primary font-medium text-sm px-2 py-1 bg-primary/5 rounded border border-primary/20 flex-1">
+                              <Link size={14} />
+                              Dynamisch: <span className="font-mono text-xs">{'{' + referenceVar + '}'}</span>
+                            </div>
                           ) : (
-                            <><Upload className="h-4 w-4" /> {slot.label} hochladen</>
+                            <img 
+                              src={imageValue} 
+                              alt={slot.label} 
+                              className="h-10 w-auto object-contain bg-slate-50 rounded" 
+                            />
                           )}
-                        </Label>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => {
+                              const newImages = { ...template.images };
+                              delete newImages[slot.id];
+                              setTemplate({ ...template, images: newImages });
+                              setTriggerUpdate(prev => prev + 1);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" /> Entfernen
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className={`grid grid-cols-1 ${variablesAllowed ? 'md:grid-cols-2' : ''} gap-3 items-end`}>
+                          <div className="space-y-1">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">Bilddatei</span>
+                            <input
+                              type="file"
+                              id={`upload-${slot.id}`}
+                              className="hidden"
+                              accept="image/png, image/jpeg"
+                              onChange={(e) => handleImageUpload(slot.id, e)}
+                            />
+                            <Label
+                              htmlFor={`upload-${slot.id}`}
+                              className={`flex items-center justify-center gap-2 h-9 px-3 bg-white border hover:bg-slate-50 text-slate-700 rounded-md cursor-pointer text-xs font-medium transition-colors w-full ${uploading === slot.id ? 'opacity-50 pointer-events-none' : ''}`}
+                            >
+                              {uploading === slot.id ? (
+                                <span className="animate-pulse flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin"/>...</span>
+                              ) : (
+                                <><Upload className="h-3 w-3" /> Upload</>
+                              )}
+                            </Label>
+                          </div>
+
+                          {variablesAllowed && (
+                            <div className="space-y-1">
+                              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tighter">Oder Variable</span>
+                              <Select
+                                onValueChange={(val) => {
+                                  if (val === "none") return;
+                                  setTemplate(prev => ({
+                                    ...prev,
+                                    images: { ...prev.images, [slot.id]: `ref:${val}` }
+                                  }));
+                                  setTriggerUpdate(prev => prev + 1);
+                                }}
+                              >
+                                <SelectTrigger className="h-9 text-xs bg-white w-full">
+                                  <SelectValue placeholder="Verknüpfen..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="kursleiter">Kursleiter (Unterschrift)</SelectItem>
+                                  <SelectItem value="hundeschule_name">Hundeschule (Logo)</SelectItem>
+                                  <SelectItem value="kundenname">Kunde</SelectItem>
+                                  <SelectItem value="hundename">Hund</SelectItem>
+                                  <SelectItem value="kursname">Kurs/Level</SelectItem>
+                                  <SelectItem value="ort">Ort</SelectItem>
+                                  <SelectItem value="datum">Datum</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
                 {(!selectedLayout?.image_slots || selectedLayout.image_slots.length === 0) && (
                   <p className="text-sm text-muted-foreground italic">Dieses Layout benötigt keine spezifischen Bilder.</p>
