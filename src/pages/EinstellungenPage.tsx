@@ -2739,17 +2739,16 @@ export function EinstellungenPage() {
                                         </div>
                                         <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
                                           <div className="space-y-0.5">
-                                            <Label className="font-medium">Automatische Abrechnung</Label>
-                                            <p className="text-xs text-muted-foreground italic">Termine werden automatisch vom Guthaben abgezogen</p>
+                                            <Label className="font-medium text-sm">Automatisierung (Abrechnung & Levelaufstieg)</Label>
+                                            <p className="text-[10px] text-muted-foreground italic leading-tight">Termine werden automatisch abgerechnet und Mitglieder steigen bei erfüllten Anforderungen automatisch auf.</p>
                                           </div>
-                                          <Switch checked={autoBillingEnabled} onCheckedChange={setAutoBillingEnabled} />
-                                        </div>
-                                        <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
-                                          <div className="space-y-0.5">
-                                            <Label className="font-medium">Automatischer Levelaufstieg</Label>
-                                            <p className="text-xs text-muted-foreground italic">Mitglieder steigen bei erfüllten Anforderungen automatisch auf</p>
-                                          </div>
-                                          <Switch checked={autoProgressEnabled} onCheckedChange={setAutoProgressEnabled} />
+                                          <Switch 
+                                            checked={autoBillingEnabled && autoProgressEnabled} 
+                                            onCheckedChange={(val) => {
+                                              setAutoBillingEnabled(val);
+                                              setAutoProgressEnabled(val);
+                                            }} 
+                                          />
                                         </div>
                                       </CardContent>
                                     </Card>
