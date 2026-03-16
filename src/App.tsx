@@ -117,7 +117,7 @@ function AppContent() {
 
           {/* Geschützte Routen */}
           <Route
-            path="/einstellungen/:section?"
+            path="/einstellungen/:section?/:moduleId?"
             element={
               <ProtectedRoute>
                 <EinstellungenPage />

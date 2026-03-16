@@ -25,7 +25,9 @@ export default function SuperAdminPackages() {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [formData, setFormData] = useState({
         plan_name: '',
+        package_type: 'base',
         price_monthly: 0,
+        price_yearly: 0,
         allowed_modules: ['news', 'documents'],
         max_customers: null as number | null,
         top_up_fee_percent: 0,
@@ -73,6 +75,7 @@ export default function SuperAdminPackages() {
         const payload = {
             ...formData,
             price_monthly: Number(formData.price_monthly),
+            price_yearly: Number(formData.price_yearly),
             max_customers: formData.max_customers === null ? null : Number(formData.max_customers),
             top_up_fee_percent: Number(formData.top_up_fee_percent),
             additional_cost_per_customer: Number(formData.additional_cost_per_customer)
@@ -103,7 +106,9 @@ export default function SuperAdminPackages() {
         setEditingId(null);
         setFormData({ 
             plan_name: '', 
+            package_type: 'base',
             price_monthly: 0, 
+            price_yearly: 0,
             allowed_modules: ['news', 'documents'], 
             max_customers: null, 
             top_up_fee_percent: 0,
@@ -116,7 +121,9 @@ export default function SuperAdminPackages() {
         setEditingId(pkg.id);
         setFormData({
             plan_name: pkg.plan_name,
+            package_type: pkg.package_type || 'base',
             price_monthly: pkg.price_monthly,
+            price_yearly: pkg.price_yearly || 0,
             allowed_modules: pkg.allowed_modules || [],
             max_customers: pkg.max_customers,
             top_up_fee_percent: pkg.top_up_fee_percent || 0,
@@ -146,11 +153,15 @@ export default function SuperAdminPackages() {
     };
 
     const availableModules = [
+        { id: 'status_display', label: 'Statusanzeige' },
+        { id: 'calendar', label: 'Kalender & Terminbuchung' },
         { id: 'news', label: 'News & Updates' },
-        { id: 'documents', label: 'Dokumente' },
-        { id: 'calendar', label: 'Terminbuchung & Kalender' },
         { id: 'chat', label: 'Chat-System' },
-        { id: 'wallet_topup', label: 'Guthaben selbst aufladen' }
+        { id: 'homework', label: 'Hausaufgaben & Trainingsplan' },
+        { id: 'balance_topup', label: 'Guthaben-Aufladung' },
+        { id: 'invoice_download', label: 'Rechnungs-Download' },
+        { id: 'certificates', label: 'Teilnahmebescheinigungen' },
+        { id: 'widgets', label: 'Website-Integration (Widgets)' }
     ];
 
     const availableFeatures = [
@@ -204,6 +215,17 @@ export default function SuperAdminPackages() {
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                             <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1 text-slate-500 uppercase text-[10px] tracking-wider font-bold">Paket-Typ</label>
+                                <select 
+                                    value={formData.package_type}
+                                    onChange={e => setFormData({...formData, package_type: e.target.value})}
+                                    className="w-full px-4 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                                >
+                                    <option value="base">Basis-Paket</option>
+                                    <option value="addon">Add-on</option>
+                                </select>
+                            </div>
+                            <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1 text-slate-500 uppercase text-[10px] tracking-wider font-bold">Plan Name</label>
                                 <input 
                                     type="text" 
@@ -226,43 +248,59 @@ export default function SuperAdminPackages() {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1 text-slate-500 uppercase text-[10px] tracking-wider font-bold">Max. Kunden (0=Unbegrenzt)</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1 text-slate-500 uppercase text-[10px] tracking-wider font-bold">Preis (jährlich)</label>
                                 <div className="relative">
-                                    <Layers className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                    <Euro className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                     <input 
                                         type="number" 
-                                        value={formData.max_customers || ''}
-                                        onChange={e => setFormData({...formData, max_customers: e.target.value ? parseInt(e.target.value) : null})}
+                                        value={formData.price_yearly}
+                                        onChange={e => setFormData({...formData, price_yearly: parseFloat(e.target.value)})}
                                         className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                                     />
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1 text-slate-500 uppercase text-[10px] tracking-wider font-bold">Aufladegebühr (%)</label>
-                                <div className="relative">
-                                    <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                    <input 
-                                        type="number" 
-                                        step="0.1"
-                                        value={formData.top_up_fee_percent}
-                                        onChange={e => setFormData({...formData, top_up_fee_percent: parseFloat(e.target.value)})}
-                                        className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1 text-slate-500 uppercase text-[10px] tracking-wider font-bold">Kosten pro weiterem Kunden (€)</label>
-                                <div className="relative">
-                                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                    <input 
-                                        type="number" 
-                                        step="0.01"
-                                        value={formData.additional_cost_per_customer}
-                                        onChange={e => setFormData({...formData, additional_cost_per_customer: parseFloat(e.target.value)})}
-                                        className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                                    />
-                                </div>
-                            </div>
+                            {formData.package_type === 'base' && (
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1 text-slate-500 uppercase text-[10px] tracking-wider font-bold">Max. Kunden (0=Unbegrenzt)</label>
+                                        <div className="relative">
+                                            <Layers className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                            <input 
+                                                type="number" 
+                                                value={formData.max_customers || ''}
+                                                onChange={e => setFormData({...formData, max_customers: e.target.value ? parseInt(e.target.value) : null})}
+                                                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1 text-slate-500 uppercase text-[10px] tracking-wider font-bold">Aufladegebühr (%)</label>
+                                        <div className="relative">
+                                            <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                            <input 
+                                                type="number" 
+                                                step="0.1"
+                                                value={formData.top_up_fee_percent}
+                                                onChange={e => setFormData({...formData, top_up_fee_percent: parseFloat(e.target.value)})}
+                                                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1 text-slate-500 uppercase text-[10px] tracking-wider font-bold">Kosten pro weiterem Kunden (€)</label>
+                                        <div className="relative">
+                                            <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                            <input 
+                                                type="number" 
+                                                step="0.01"
+                                                value={formData.additional_cost_per_customer}
+                                                onChange={e => setFormData({...formData, additional_cost_per_customer: parseFloat(e.target.value)})}
+                                                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
@@ -285,25 +323,27 @@ export default function SuperAdminPackages() {
                                     ))}
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-                                    <Shield className="w-4 h-4 text-primary" />
-                                    Zusätzliche Features
-                                </label>
-                                <div className="space-y-2">
-                                    {availableFeatures.map(feat => (
-                                        <label key={feat.id} className="flex items-center p-3 border border-slate-100 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors border-l-4 border-l-transparent hover:border-l-indigo-500">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={!!formData.features[feat.id]}
-                                                onChange={() => toggleFeature(feat.id)}
-                                                className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
-                                            />
-                                            <span className="ml-3 text-sm font-medium text-slate-700">{feat.label}</span>
-                                        </label>
-                                    ))}
+                            {formData.package_type === 'base' && (
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                        <Shield className="w-4 h-4 text-primary" />
+                                        Zusätzliche Features
+                                    </label>
+                                    <div className="space-y-2">
+                                        {availableFeatures.map(feat => (
+                                            <label key={feat.id} className="flex items-center p-3 border border-slate-100 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors border-l-4 border-l-transparent hover:border-l-indigo-500">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={!!formData.features[feat.id]}
+                                                    onChange={() => toggleFeature(feat.id)}
+                                                    className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                                                />
+                                                <span className="ml-3 text-sm font-medium text-slate-700">{feat.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">

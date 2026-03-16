@@ -170,7 +170,7 @@ export function CheckoutPage() {
 
         try {
             const token = localStorage.getItem('pfotencard_token');
-            const res = await fetch(`${API_BASE_URL}/api/stripe/create-subscription?cycle=${cycle}`, {
+            const res = await fetch(`${API_BASE_URL}/api/stripe/create-subscription`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -180,6 +180,8 @@ export function CheckoutPage() {
                 body: JSON.stringify({
                     subdomain,
                     plan: plan.toLowerCase(),
+                    cycle: cycle.toLowerCase(),
+                    addons: [], // Vorerst leer, kann später dynamisch befüllt werden
                     billing_details: billingData,
                     trial_allowed: false
                 })

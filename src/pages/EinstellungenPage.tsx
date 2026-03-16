@@ -397,7 +397,7 @@ type PlanType = 'starter' | 'pro' | 'enterprise' | 'verband';
 export function EinstellungenPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { section } = useParams<{ section?: string }>();
+  const { section, moduleId } = useParams<{ section?: string; moduleId?: string }>();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -538,6 +538,16 @@ export function EinstellungenPage() {
   const setActiveSection = (newSection: string) => {
     navigate(`/einstellungen/${newSection}`);
   };
+
+  useEffect(() => {
+    if (activeSection === 'modules' && moduleId) {
+      setSelectedModuleId(moduleId);
+      setCurrentView('module-settings');
+    } else if (activeSection === 'modules' && !moduleId) {
+      setSelectedModuleId(null);
+      setCurrentView('overview');
+    }
+  }, [activeSection, moduleId]);
 
   const [currentView, setCurrentView] = useState<'overview' | 'module-settings'>('overview');
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
@@ -748,8 +758,10 @@ export function EinstellungenPage() {
     };
 
     const timer = setTimeout(() => {
-      iframeRef.current?.contentWindow?.postMessage(message, '*');
-    }, 100);
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(message, '*');
+      }
+    }, 150);
 
     return () => clearTimeout(timer);
   }, [showPreview, primaryColor, secondaryColor, backgroundColor, sidebarColor, customPrimaryColor, customSecondaryColor, customBackgroundColor, customSidebarColor, schoolName, levelTerm, vipTerm, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp, activeModules, colorRules]);
@@ -1448,11 +1460,10 @@ export function EinstellungenPage() {
                         <div className="flex items-center gap-1">
                           <button
                               onClick={() => {
-                                setActiveSection(item.id);
-                                setCurrentView('overview');
+                                navigate(`/einstellungen/${item.id}`);
                                 setIsMobileMenuOpen(false);
                               }}
-                              className={`flex-1 flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all ${activeSection === item.id && currentView === 'overview'
+                              className={`flex-1 flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all ${activeSection === item.id && !moduleId
                                   ? 'bg-primary text-primary-foreground shadow-sm'
                                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                               }`}
@@ -1495,11 +1506,9 @@ export function EinstellungenPage() {
                                         key={modId}
                                         onClick={() => {
                                           if (modId === 'balance_topup') {
-                                            setActiveSection('topup');
+                                            navigate('/einstellungen/topup');
                                           } else {
-                                            setActiveSection('modules');
-                                            setSelectedModuleId(modId);
-                                            setCurrentView('module-settings');
+                                            navigate(`/einstellungen/modules/${modId}`);
                                           }
                                           setIsMobileMenuOpen(false);
                                         }}
@@ -2188,8 +2197,7 @@ export function EinstellungenPage() {
                                                   size="sm"
                                                   className="w-full mt-4 h-9 font-medium border-primary/20 hover:bg-primary/10 text-primary transition-colors hover:text-primary"
                                                   onClick={() => {
-                                                    setSelectedModuleId(module.id);
-                                                    setCurrentView('module-settings');
+                                                    navigate(`/einstellungen/modules/${module.id}`);
                                                   }}
                                               >
                                                 <Settings size={14} className="mr-2" />
@@ -2986,7 +2994,7 @@ export function EinstellungenPage() {
 
 
                               {/* Generic Placeholder for other modules */}
-                              {!['calendar', 'invoice_download', 'widgets'].includes(selectedModuleId || '') && (
+                              {!['calendar', 'invoice_download', 'widgets', 'homework', 'certificates'].includes(selectedModuleId || '') && (
                                   <Card className="border-dashed">
                                     <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                                       <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-4">
@@ -2996,7 +3004,7 @@ export function EinstellungenPage() {
                                       <p className="text-sm text-muted-foreground max-w-xs mt-2">
                                         Für dieses Modul sind aktuell keine weiteren Einstellungen erforderlich.
                                       </p>
-                                      <Button variant="outline" className="mt-6" onClick={() => setCurrentView('overview')}>
+                                      <Button variant="outline" className="mt-6" onClick={() => navigate('/einstellungen/modules')}>
                                         Zurück zur Übersicht
                                       </Button>
                                     </CardContent>
@@ -3513,7 +3521,7 @@ export function EinstellungenPage() {
                         <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-24 h-6 bg-gray-900 rounded-b-xl z-10" />
                         <iframe
                             ref={iframeRef}
-                            src={PREVIEW_APP_URL}
+                            src={getPreviewUrl()}
                             title="App Preview Desktop"
                             className="w-full h-full bg-white border-0"
                             onLoad={() => setSyncTrigger(prev => prev + 1)}
@@ -3567,7 +3575,7 @@ export function EinstellungenPage() {
                       <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-20 h-4 bg-gray-900 rounded-b-xl z-10" />
                       <iframe
                           ref={isPreviewMobileOpen ? iframeRef : null}
-                          src={PREVIEW_APP_URL}
+                          src={getPreviewUrl()}
                           title="App Preview Mobile"
                           className="w-full h-full bg-white border-0"
                           onLoad={() => setSyncTrigger(prev => prev + 1)}
