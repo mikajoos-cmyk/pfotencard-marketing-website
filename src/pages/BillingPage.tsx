@@ -2,7 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { checkTenantStatus, API_BASE_URL, fetchInvoices, reactivateSubscription, type Invoice } from '@/lib/api';
+import { checkTenantStatus, API_BASE_URL, fetchInvoices, type Invoice } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText, FileCheck, Shield, Eye, Users, Coins } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
@@ -64,13 +65,15 @@ export function BillingPage() {
         if (!confirm("Möchtest du dein Abo wirklich zum Laufzeitende kündigen?")) return;
         setCanceling(true);
         try {
-            const token = localStorage.getItem('pfotencard_token');
-            const subdomain = localStorage.getItem('pfotencard_subdomain');
-            const res = await fetch(`${API_BASE_URL}/api/stripe/cancel`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'x-tenant-subdomain': subdomain || '' }
+            const { error } = await supabase.functions.invoke('manage-subscription', {
+                body: {
+                    action: 'cancel',
+                    tenantId: status?.tenant_id
+                }
             });
-            if (!res.ok) throw new Error("Fehler");
+
+            if (error) throw error;
+            
             toast({ title: "Gekündigt", description: "Dein Abo läuft zum Ende des Zeitraums aus." });
             await fetchBillingData();
         } catch (e) {
@@ -83,7 +86,15 @@ export function BillingPage() {
     const handleReactivateSubscription = async () => {
         setReactivating(true);
         try {
-            await reactivateSubscription();
+            const { error } = await supabase.functions.invoke('manage-subscription', {
+                body: {
+                    action: 'reactivate',
+                    tenantId: status?.tenant_id
+                }
+            });
+
+            if (error) throw error;
+            
             toast({ title: "Reaktiviert", description: "Dein Abo wurde erfolgreich reaktiviert." });
             await fetchBillingData();
         } catch (e) {
