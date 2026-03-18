@@ -13,6 +13,7 @@ import {
   Package as PackageIcon,
   Layers as LayersIcon
 } from 'lucide-react';
+import { PLAN_MODULES, PLAN_FEATURES } from '@/lib/planConfig';
 
 interface DBPackage {
   id: number;
@@ -22,7 +23,7 @@ interface DBPackage {
   price_yearly: number;
   additional_cost_per_customer: number;
   allowed_modules: string[];
-  max_customers: number | null;
+  included_customers: number;
   top_up_fee_percent: number;
   features: Record<string, boolean>;
 }
@@ -50,81 +51,71 @@ export function PricingTableSection({
       try {
         const dbPackages: DBPackage[] = await fetchPackages();
         
-        // Mapping von DB-Struktur auf UI-Struktur
         const uiPlans = dbPackages.map(pkg => {
-          const isYearly = billingCycle === 'yearly';
-          const monthlyPrice = pkg.price_monthly;
-          const yearlyPrice = pkg.price_yearly || Math.round(monthlyPrice * 10);
           const isAddon = pkg.package_type === 'addon';
-
-          // Features zusammenstellen
-          const features = [];
           
-          if (!isAddon) {
-            features.push({ 
-                name: pkg.max_customers ? `Bis zu ${pkg.max_customers} aktive Kunden` : 'Unbegrenzte Kunden', 
-                included: true 
-            });
+          // 1. Vererbung prüfen
+          let inheritedPlanName = null;
+          let inheritedModules: string[] = [];
+          let inheritedFeatures: Record<string, boolean> = {};
+
+          const inheritsKey = Object.keys(pkg.features || {}).find(k => k.startsWith('inherits_') && pkg.features[k]);
+          if (inheritsKey) {
+              const parentName = inheritsKey.replace('inherits_', '');
+              const parentPkg = dbPackages.find((p: any) => p.plan_name.toLowerCase() === parentName.toLowerCase());
+              if (parentPkg) {
+                  inheritedPlanName = parentPkg.plan_name;
+                  inheritedModules = parentPkg.allowed_modules || [];
+                  inheritedFeatures = parentPkg.features || {};
+              }
           }
 
-          features.push({ name: 'Dokumente Modul', included: pkg.allowed_modules.includes('documents') });
+          // 2. Delta berechnen (Nur das anzeigen, was neu ist)
+          const featuresToDisplay = [];
           
-          if (!isAddon) {
-            features.push({ 
-                name: `Guthaben aufladen (${pkg.top_up_fee_percent}% Gebühr)`, 
-                included: pkg.allowed_modules.includes('wallet_topup') 
-            });
+          if (inheritedPlanName) {
+              featuresToDisplay.push({ 
+                  name: `Alles aus ${inheritedPlanName.charAt(0).toUpperCase() + inheritedPlanName.slice(1)}, plus:`, 
+                  included: true, 
+                  isHighlight: true 
+              });
           }
 
-          features.push({ name: 'Automatisierung (Abrechnung & Levelaufstieg)', included: pkg.features.automation });
-          features.push({ name: 'Digitale Wertkarten', included: pkg.features.digital_vouchers });
-          features.push({ name: 'White-Label (Dein Branding)', included: pkg.features.white_label });
-          features.push({ name: 'Chat-System', included: pkg.allowed_modules.includes('chat') });
-          features.push({ name: 'News & Updates', included: pkg.allowed_modules.includes('news') });
-          features.push({ name: 'Terminbuchung & Kalender', included: pkg.allowed_modules.includes('calendar') });
-          features.push({ name: 'Wartelisten-Funktion', included: pkg.features.waitlist });
-          features.push({ name: 'Prioritäts-Support', included: pkg.features.priority_support });
-          features.push({ name: 'Hausaufgaben & Trainingsplan', included: pkg.allowed_modules.includes('homework') });
-          features.push({ name: 'Teilnahmebescheinigungen', included: pkg.allowed_modules.includes('certificates') });
-          features.push({ name: 'Website-Widgets', included: pkg.allowed_modules.includes('widgets') });
-          features.push({ name: 'Rechnungs-Download', included: pkg.allowed_modules.includes('invoice_download') });
-          features.push({ name: 'Guthaben-Aufladung', included: pkg.allowed_modules.includes('balance_topup') });
-          features.push({ name: 'Statusanzeige', included: pkg.allowed_modules.includes('status_display') });
+          if (!isAddon) {
+             featuresToDisplay.push({ name: 'Unbegrenzte Kunden', included: true });
+          }
+
+          // Neue Module finden
+          const myNewModules = (pkg.allowed_modules || []).filter((m: string) => !inheritedModules.includes(m));
+          myNewModules.forEach((mId: string) => {
+              const def = PLAN_MODULES.find(m => m.id === mId);
+              if (def) featuresToDisplay.push({ name: def.label, included: true });
+          });
+
+          // Neue Features finden
+          const myNewFeatures = Object.keys(pkg.features || {}).filter(k => pkg.features[k] && !k.startsWith('inherits_') && !inheritedFeatures[k]);
+          myNewFeatures.forEach(fId => {
+              const def = PLAN_FEATURES.find(f => f.id === fId);
+              if (def) featuresToDisplay.push({ name: def.label, included: true });
+          });
 
           return {
             name: pkg.plan_name.charAt(0).toUpperCase() + pkg.plan_name.slice(1),
             dbName: pkg.plan_name,
             packageType: pkg.package_type,
-            description: getPlanDescription(pkg.plan_name, pkg.package_type),
-            monthlyPrice,
-            yearlyPrice,
+            monthlyPrice: pkg.price_monthly,
+            yearlyPrice: pkg.price_yearly || Math.round(pkg.price_monthly * 10),
             featured: pkg.plan_name.toLowerCase() === 'pro',
-            additionalCost: isAddon ? null : (pkg.max_customers 
-                ? `${pkg.additional_cost_per_customer.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} pro weiterem Kunden/Monat`
-                : 'Keine Zusatzkosten für Kunden'),
-            features: features.filter(f => f.included) // Nur inkludierte Features zeigen
+            additionalCost: isAddon ? null : `${pkg.additional_cost_per_customer.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} pro weiterem Kunden/Monat`,
+            features: featuresToDisplay
           };
         });
 
-        // Sortierung: starter, pro, enterprise
-        const order = ['starter', 'pro', 'enterprise'];
-        uiPlans.sort((a, b) => {
-            const idxA = order.indexOf(a.dbName.toLowerCase());
-            const idxB = order.indexOf(b.dbName.toLowerCase());
-            if (idxA === -1 && idxB === -1) return 0;
-            if (idxA === -1) return 1;
-            if (idxB === -1) return -1;
-            return idxA - idxB;
-        });
-
+        // Sortieren
+        uiPlans.sort((a, b) => a.monthlyPrice - b.monthlyPrice);
         setPlans(uiPlans);
-      } catch (error) {
-        console.error("Fehler beim Laden der Pakete:", error);
-      } finally {
-        setIsLoading(false);
-      }
+      } catch (error) { console.error("Fehler beim Laden der Pakete:", error); } finally { setIsLoading(false); }
     }
-
     loadPackages();
   }, [billingCycle]);
 
@@ -323,12 +314,8 @@ function PlanCard({ plan, index, billingCycle, currentPlan, upcomingPlan, isUpgr
             {isAddon ? 'Enthaltene Features' : 'Highlights'}
         </div>
         {plan.features.map((feature: any, featureIndex: number) => (
-          <div key={featureIndex} className="flex items-start gap-3">
-            {feature.included ? (
-              <CheckIcon size={20} strokeWidth={2} className={`${isAddon ? 'text-indigo-600' : 'text-primary'} flex-shrink-0 mt-0.5`} />
-            ) : (
-              <XIcon size={20} strokeWidth={2} className="text-muted-foreground/40 flex-shrink-0 mt-0.5" />
-            )}
+          <div key={featureIndex} className={`flex items-start gap-3 ${feature.isHighlight ? 'bg-amber-50 text-amber-800 p-2 rounded-md font-medium border border-amber-200 mt-4 mb-2' : ''}`}>
+            {!feature.isHighlight && <CheckIcon size={20} strokeWidth={2} className={`${isAddon ? 'text-indigo-600' : 'text-primary'} flex-shrink-0 mt-0.5`} />}
             <span
               className={`text-sm font-body ${feature.included ? 'text-foreground' : 'text-muted-foreground'
                 }`}

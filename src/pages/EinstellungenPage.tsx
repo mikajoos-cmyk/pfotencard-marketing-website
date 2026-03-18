@@ -27,7 +27,8 @@ import {
   fetchCertificateTemplates,
   createCertificateTemplate,
   updateCertificateTemplate,
-  deleteCertificateTemplate
+  deleteCertificateTemplate,
+  fetchPackages
 } from '@/lib/api';
 import {
   Save,
@@ -107,6 +108,7 @@ import { ModuleHub } from './settings/ModuleHub';
 import { RightsSection } from './settings/RightsSection';
 import { LegalSection } from './settings/LegalSection';
 import { CertificateBuilderModal } from '@/components/modals/CertificateBuilderModal';
+import { PLAN_MODULES, PLAN_FEATURES } from '@/lib/planConfig';
 
 import { CertificatesSection } from './settings/CertificatesSection';
 import { HomeworkSection } from './settings/HomeworkSection';
@@ -375,21 +377,6 @@ const NAVIGATION = [
   }
 ];
 
-// Feature Matrix definieren
-const PLAN_FEATURES: Record<string, { branding: boolean; modules: string[] }> = {
-  starter: {
-    branding: false,
-    modules: [],
-  },
-  pro: {
-    branding: true,
-    modules: ['news', 'chat', 'balance_topup', 'invoice_download'],
-  },
-  enterprise: {
-    branding: true,
-    modules: ['news', 'chat', 'calendar', 'balance_topup', 'invoice_download'],
-  }
-};
 
 // Helper Type
 type PlanType = 'starter' | 'pro' | 'enterprise' | 'verband';
@@ -402,6 +389,9 @@ export function EinstellungenPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<PlanType>('starter'); // Default
+  const [tenantAllowedModules, setTenantAllowedModules] = useState<string[]>([]);
+  const [currentPlanFeatures, setCurrentPlanFeatures] = useState<Record<string, boolean>>({});
+  const [packages, setPackages] = useState<any[]>([]);
 
   const [schoolName, setSchoolName] = useState('');
   const [supportEmail, setSupportEmail] = useState('');
@@ -491,6 +481,26 @@ export function EinstellungenPage() {
   const [showInvoicePreview, setShowInvoicePreview] = useState(false);
   const [invoicePreviewUrl, setInvoicePreviewUrl] = useState<string | null>(null);
   const [generatingPreview, setGeneratingPreview] = useState(false);
+
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyToClipboard = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      toast({
+        title: "Kopiert!",
+        description: "In die Zwischenablage kopiert.",
+      });
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Fehler",
+        description: "Kopieren fehlgeschlagen.",
+      });
+    }
+  };
 
   const [showCertificateModal, setShowCertificateModal] = useState(false);
   const [editingCertificateTemplate, setEditingCertificateTemplate] = useState<any | null>(null); // NEU
@@ -767,14 +777,11 @@ export function EinstellungenPage() {
   }, [showPreview, primaryColor, secondaryColor, backgroundColor, sidebarColor, customPrimaryColor, customSecondaryColor, customBackgroundColor, customSidebarColor, schoolName, levelTerm, vipTerm, syncTrigger, levels, services, hasLogo, previewLogo, previewViewMode, previewRole, topUpOptions, allowCustomTopUp, activeModules, colorRules]);
 
   const isFeatureAllowed = (feature: 'branding' | string, type: 'module' | 'setting' = 'module') => {
-    const planKey = currentPlan === 'verband' ? 'enterprise' : currentPlan;
-    const rules = PLAN_FEATURES[planKey as keyof typeof PLAN_FEATURES] || PLAN_FEATURES.starter;
-
     if (type === 'setting' && feature === 'branding') {
-      return rules.branding;
+        return !!currentPlanFeatures['white_label'];
     }
     if (type === 'module') {
-      return rules.modules.includes(feature);
+        return tenantAllowedModules.includes(feature);
     }
     return false;
   };
@@ -835,6 +842,15 @@ export function EinstellungenPage() {
       const config = await fetchAppConfig();
       const t = config.tenant;
 
+      // Pakete laden für dynamische Berechtigungen
+      let dbPackages: any[] = [];
+      try {
+        dbPackages = await fetchPackages();
+        setPackages(dbPackages);
+      } catch (err) {
+        console.error("Fehler beim Laden der Pakete:", err);
+      }
+
       setSchoolName(t.name);
       setSupportEmail(t.support_email || '');
       setSubdomain(t.subdomain);
@@ -842,6 +858,36 @@ export function EinstellungenPage() {
       let plan = (t.plan || 'starter').toLowerCase();
       if (plan === 'verband') plan = 'enterprise';
       setCurrentPlan(plan as PlanType);
+
+      // --- Dynamische Modul- & Feature-Auflösung ---
+      let allowedModules: string[] = [];
+      let allFeatures: Record<string, boolean> = {};
+
+      const currentPkg = dbPackages.find((p: any) => p.plan_name.toLowerCase() === plan.toLowerCase());
+      if (currentPkg) {
+          allowedModules = [...(currentPkg.allowed_modules || [])];
+          allFeatures = { ...(currentPkg.features || {}) };
+
+          // Vererbung auflösen (max 10 Ebenen Sicherheit)
+          let parentPkgName = Object.keys(currentPkg.features || {}).find(k => k.startsWith('inherits_') && currentPkg.features[k])?.replace('inherits_', '');
+          let safety = 0;
+          while (parentPkgName && safety < 10) {
+              safety++;
+              const pName = parentPkgName; // local shadow
+              const parentPkg = dbPackages.find((p: any) => p.plan_name.toLowerCase() === pName.toLowerCase());
+              if (parentPkg) {
+                  (parentPkg.allowed_modules || []).forEach((m: string) => {
+                      if (!allowedModules.includes(m)) allowedModules.push(m);
+                  });
+                  Object.entries(parentPkg.features || {}).forEach(([k, v]) => {
+                      if (v && !allFeatures[k]) allFeatures[k] = true;
+                  });
+                  parentPkgName = Object.keys(parentPkg.features || {}).find(k => k.startsWith('inherits_') && parentPkg.features[k])?.replace('inherits_', '');
+              } else {
+                  parentPkgName = null;
+              }
+          }
+      }
 
       const branding = t.config?.branding || {};
       const wording = t.config?.wording || {};
@@ -859,6 +905,11 @@ export function EinstellungenPage() {
       setTopUpOptions(balance.top_up_options || []);
       setAllowCustomTopUp(balance.allow_custom_top_up !== undefined ? balance.allow_custom_top_up : true);
       setActiveModules(t.config?.active_modules || ['news', 'documents']);
+      
+      // Wir priorisieren die dynamisch ermittelten Module, falls vorhanden
+      setTenantAllowedModules(allowedModules.length > 0 ? allowedModules : (t.config?.allowed_modules || []));
+      setCurrentPlanFeatures(allFeatures);
+
       setAutoBillingEnabled(t.config?.auto_billing_enabled || false);
       setAutoProgressEnabled(t.config?.auto_progress_enabled || false);
 
@@ -2147,75 +2198,44 @@ export function EinstellungenPage() {
                   {activeSection === 'modules' && (
                       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
                         {currentView === 'overview' ? (
-                            <div className="space-y-6">
-                              <div className="flex flex-col gap-2">
-                                <h2 className="text-2xl font-bold tracking-tight">App-Module</h2>
-                                <p className="text-muted-foreground text-sm max-w-2xl">
-                                  Aktiviere oder deaktiviere Funktionen für deine Kunden. Aktive Module können über "⚙️ Einstellungen" konfiguriert werden.
-                                </p>
-                              </div>
-
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {AVAILABLE_MODULES.map((module) => {
-                                  const isActive = activeModules.includes(module.id);
-                                  // const isAllowed = isFeatureAllowed(module.id);
-
-                                  return (
-                                      <Card key={module.id} className={`transition-all duration-200 ${isActive ? 'ring-1 ring-primary/20 bg-primary/5 shadow-sm' : 'hover:border-primary/50 opacity-90'}`}>
-                                        <CardHeader className="p-4 pb-2">
-                                          <div className="flex justify-between items-start">
-                                            <div className={`p-2 rounded-lg ${isActive ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                                              <module.icon size={20} />
-                                            </div>
-                                            <div className="flex flex-col items-end gap-2">
-                                              <Switch
-                                                  checked={isActive}
-                                                  disabled={
-                                                      module.comingSoon ||
-                                                      (module.id === 'invoice_download' && !isInvoiceDataComplete())
-                                                  }
-                                                  onCheckedChange={(val) => {
-                                                    if (val) setActiveModules([...activeModules, module.id]);
-                                                    else setActiveModules(activeModules.filter(id => id !== module.id));
-                                                  }}
-                                              />
-                                              {module.comingSoon && <span className="text-[10px] bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Coming Soon</span>}
-                                              {module.id === 'invoice_download' && !isInvoiceDataComplete() && !isActive && (
-                                                  <span className="text-[10px] text-destructive font-medium">Daten unvollständig</span>
-                                              )}
-                                            </div>
-                                          </div>
-                                          <div className="mt-3">
-                                            <CardTitle className="text-base">{module.name}</CardTitle>
-                                            <CardDescription className="text-xs mt-1 leading-relaxed">{module.description}</CardDescription>
-                                          </div>
-                                        </CardHeader>
-                                        <CardContent className="p-4 pt-0">
-                                          {(isActive || module.id === 'invoice_download') && (
-                                              <Button
-                                                  variant="outline"
-                                                  size="sm"
-                                                  className="w-full mt-4 h-9 font-medium border-primary/20 hover:bg-primary/10 text-primary transition-colors hover:text-primary"
-                                                  onClick={() => {
-                                                    navigate(`/einstellungen/modules/${module.id}`);
-                                                  }}
-                                              >
-                                                <Settings size={14} className="mr-2" />
-                                                Einstellungen
-                                              </Button>
-                                          )}
-                                          {/* {module.premiumOnly && !isAllowed && !isActive && (
-                                    <div className="mt-4 p-2 bg-amber-500/5 rounded border border-amber-500/10 flex items-center justify-between">
-                                      <span className="text-[10px] font-semibold text-amber-600 uppercase flex items-center gap-1"><Lock size={10} /> Nur Pro/Enterprise</span>
-                                      <Button variant="ghost" size="sm" className="h-6 text-[10px] text-amber-700 hover:text-amber-800 p-0" onClick={() => window.open(`/preise?subdomain=${subdomain}`, '_self')}>Upgrade</Button>
-                                    </div>
-                                  )} */}
-                                        </CardContent>
-                                      </Card>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                            <ModuleHub
+                                currentView="overview"
+                                setCurrentView={() => {}}
+                                selectedModuleId={null}
+                                setSelectedModuleId={(id) => id && navigate(`/einstellungen/modules/${id}`)}
+                                activeModules={activeModules}
+                                setActiveModules={setActiveModules}
+                                tenantAllowedModules={tenantAllowedModules}
+                                AVAILABLE_MODULES={AVAILABLE_MODULES}
+                                isInvoiceDataComplete={isInvoiceDataComplete}
+                                // ... andere Props falls nötig ...
+                                widgetType={widgetType}
+                                setWidgetType={setWidgetType}
+                                widgetLayout={widgetLayout}
+                                setWidgetLayout={setWidgetLayout}
+                                widgetLimit={widgetLimit}
+                                setWidgetLimit={setWidgetLimit}
+                                widgetHeight={widgetHeight}
+                                setWidgetHeight={setWidgetHeight}
+                                subdomain={subdomain}
+                                copyToClipboard={copyToClipboard}
+                                copiedId={copiedId}
+                                defaultDuration={defaultDuration}
+                                setDefaultDuration={setDefaultDuration}
+                                defaultMaxParticipants={defaultMaxParticipants}
+                                setDefaultMaxParticipants={setDefaultMaxParticipants}
+                                cancelationPeriodHours={cancelationPeriodHours}
+                                setCancelationPeriodHours={setCancelationPeriodHours}
+                                colorRules={colorRules}
+                                setColorRules={setColorRules}
+                                services={services}
+                                certificateTemplates={certificateTemplates}
+                                levels={levels}
+                                levelTerm={levelTerm}
+                                currentPlanFeatures={currentPlanFeatures}
+                                deleteCertificateTemplate={deleteCertificateTemplateAction}
+                                setShowCertificateModal={setShowCertificateModal}
+                            />
                         ) : (
                             /* Module Detail Settings */
                             <div className="space-y-6">
@@ -2726,11 +2746,17 @@ export function EinstellungenPage() {
                                       <CardContent className="space-y-4">
                                         <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
                                           <div className="space-y-0.5">
-                                            <Label className="font-medium">Warteliste aktivieren</Label>
+                                            <div className="flex items-center gap-2">
+                                                <Label className="font-medium">Warteliste aktivieren</Label>
+                                                {!currentPlanFeatures['waitlist'] && (
+                                                    <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-medium">Nicht im Paket</span>
+                                                )}
+                                            </div>
                                             <p className="text-xs text-muted-foreground italic">Kunden können sich bei vollen Terminen auf eine Warteliste setzen.</p>
                                           </div>
                                           <Switch
                                               checked={activeModules.includes('waitlist')}
+                                              disabled={!currentPlanFeatures['waitlist']}
                                               onCheckedChange={(val) => {
                                                 if (val) setActiveModules([...activeModules, 'waitlist']);
                                                 else setActiveModules(activeModules.filter(mId => mId !== 'waitlist'));
@@ -2739,11 +2765,17 @@ export function EinstellungenPage() {
                                         </div>
                                         <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border border-border">
                                           <div className="space-y-0.5">
-                                            <Label className="font-medium text-sm">Automatisierung (Abrechnung & Levelaufstieg)</Label>
+                                            <div className="flex items-center gap-2">
+                                                <Label className="font-medium text-sm">Automatisierung (Abrechnung & Levelaufstieg)</Label>
+                                                {!currentPlanFeatures['automation'] && (
+                                                    <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded font-medium">Nicht im Paket</span>
+                                                )}
+                                            </div>
                                             <p className="text-[10px] text-muted-foreground italic leading-tight">Termine werden automatisch abgerechnet und Mitglieder steigen bei erfüllten Anforderungen automatisch auf.</p>
                                           </div>
                                           <Switch 
                                             checked={autoBillingEnabled && autoProgressEnabled} 
+                                            disabled={!currentPlanFeatures['automation']}
                                             onCheckedChange={(val) => {
                                               setAutoBillingEnabled(val);
                                               setAutoProgressEnabled(val);

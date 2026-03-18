@@ -32,6 +32,7 @@ interface ModuleHubProps {
   setSelectedModuleId: (id: string | null) => void;
   activeModules: string[];
   setActiveModules: (modules: string[]) => void;
+  tenantAllowedModules?: string[]; // NEU
   AVAILABLE_MODULES: AppModule[];
   isInvoiceDataComplete: () => boolean;
   widgetType: string;
@@ -57,6 +58,7 @@ interface ModuleHubProps {
   certificateTemplates: any[];
   levels: any[];
   levelTerm: string;
+  currentPlanFeatures?: Record<string, boolean>; // NEU
   deleteCertificateTemplate: (id: number) => void;
   setShowCertificateModal: (show: boolean) => void;
 }
@@ -68,6 +70,7 @@ export const ModuleHub = React.memo(({
   setSelectedModuleId,
   activeModules,
   setActiveModules,
+  tenantAllowedModules = [], // NEU
   AVAILABLE_MODULES,
   isInvoiceDataComplete,
   widgetType,
@@ -93,6 +96,7 @@ export const ModuleHub = React.memo(({
   certificateTemplates,
   levels,
   levelTerm,
+  currentPlanFeatures = {}, // NEU
   deleteCertificateTemplate,
   setShowCertificateModal
 }: ModuleHubProps) => {
@@ -110,6 +114,13 @@ export const ModuleHub = React.memo(({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {AVAILABLE_MODULES.map((module) => {
               const isActive = activeModules.includes(module.id);
+              let isLockedByPlan = !tenantAllowedModules.includes(module.id);
+              
+              // Spezialfall: Einige IDs könnten als Feature in planConfig.ts stehen
+              if (isLockedByPlan && currentPlanFeatures[module.id]) {
+                isLockedByPlan = false;
+              }
+
               return (
                 <Card key={module.id} className={`transition-all duration-200 ${isActive ? 'ring-1 ring-primary/20 bg-primary/5 shadow-sm' : 'hover:border-primary/50 opacity-90'}`}>
                   <CardHeader className="p-4 pb-2">
@@ -118,19 +129,25 @@ export const ModuleHub = React.memo(({
                         <module.icon size={20} />
                       </div>
                       <div className="flex flex-col items-end gap-2">
-                        <Switch
-                          checked={isActive}
-                          disabled={
-                            module.comingSoon ||
-                            (module.id === 'invoice_download' && !isInvoiceDataComplete())
-                          }
-                          onCheckedChange={(val) => {
-                            if (val) setActiveModules([...activeModules, module.id]);
-                            else setActiveModules(activeModules.filter(id => id !== module.id));
-                          }}
-                        />
+                        {isLockedByPlan ? (
+                            <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-1 rounded font-bold uppercase flex items-center gap-1">
+                                🔒 Upgrade nötig
+                            </span>
+                        ) : (
+                            <Switch
+                              checked={isActive}
+                              disabled={
+                                module.comingSoon ||
+                                (module.id === 'invoice_download' && !isInvoiceDataComplete())
+                              }
+                              onCheckedChange={(val) => {
+                                if (val) setActiveModules([...activeModules, module.id]);
+                                else setActiveModules(activeModules.filter(id => id !== module.id));
+                              }}
+                            />
+                        )}
                         {module.comingSoon && <span className="text-[10px] bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Coming Soon</span>}
-                        {module.id === 'invoice_download' && !isInvoiceDataComplete() && !isActive && (
+                        {module.id === 'invoice_download' && !isInvoiceDataComplete() && !isActive && !isLockedByPlan && (
                           <span className="text-[10px] text-destructive font-medium">Daten unvollständig</span>
                         )}
                       </div>
@@ -141,7 +158,7 @@ export const ModuleHub = React.memo(({
                     </div>
                   </CardHeader>
                   <CardContent className="p-4 pt-0">
-                    {(isActive || module.id === 'invoice_download') && (
+                    {isActive && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -154,6 +171,12 @@ export const ModuleHub = React.memo(({
                         <Settings size={14} className="mr-2" />
                         Einstellungen
                       </Button>
+                    )}
+                    {isLockedByPlan && (
+                      <div className="mt-4 p-2 bg-amber-500/5 rounded border border-amber-500/10 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-amber-600 uppercase flex items-center gap-1">Upgrade erforderlich</span>
+                        <Button variant="ghost" size="sm" className="h-6 text-[10px] text-amber-700 hover:text-amber-800 p-0" onClick={() => window.location.href = '/preise'}>Details</Button>
+                      </div>
                     )}
                   </CardContent>
                 </Card>
