@@ -560,7 +560,7 @@ export function BillingPage() {
                                         )}
 
                                         <p className="text-xs text-muted-foreground">
-                                            {status?.max_customers 
+                                            {status?.max_customers && status.max_customers > 0
                                                 ? `In deinem ${planName}-Plan sind ${status.max_customers} Kunden enthalten. ` 
                                                 : `In deinem ${planName}-Plan sind unbegrenzt Kunden enthalten. `}
                                             {status?.additional_cost_per_customer > 0 && 
@@ -604,7 +604,7 @@ export function BillingPage() {
                                         </div>
 
                                         <p className="text-xs text-muted-foreground">
-                                            Wenn deine Kunden ihr Guthaben selbstständig (z.B. via Stripe/PayPal) aufladen, fällt eine Service Gebühr von {(status?.top_up_fee_percent || 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% pro Aufladung an (entspricht {(status?.top_up_fee_fixed || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} bei einer Standardaufladung). Bei manuellen Aufladungen durch dich entstehen keine zusätzlichen Pfotencard-Gebühren.
+                                            Wenn deine Kunden ihr Guthaben selbstständig (z.B. via Stripe/PayPal) aufladen, fällt eine Service Gebühr von {(status?.top_up_fee_percent || 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% pro Aufladung an. Bei manuellen Aufladungen durch dich entstehen keine zusätzlichen Pfotencard-Gebühren.
                                         </p>
                                     </div>
                                 </CardContent>

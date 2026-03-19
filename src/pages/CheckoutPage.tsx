@@ -33,6 +33,7 @@ export function CheckoutPage() {
     const billingCycle = searchParams.get('cycle') || 'monthly';
     const [clientSecret, setClientSecret] = useState<string | null>(null);
     const [intentType, setIntentType] = useState<'payment' | 'setup'>('payment');
+    const [preview, setPreview] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const { hotelProfile, isLoading: authLoading } = useAuth();
@@ -49,6 +50,8 @@ export function CheckoutPage() {
                         plan: planId,
                         billingCycle: billingCycle,
                         action: 'create_intent'
+                        // Adresse wird hier noch nicht gesendet, da sie im Initial-Load noch nicht vom User geändert wurde
+                        // Falls sie schon da ist, wird sie vom Backend aus der DB geladen
                     }
                 });
 
@@ -57,6 +60,7 @@ export function CheckoutPage() {
 
                 setClientSecret(data.clientSecret);
                 setIntentType(data.intentType || 'payment');
+                setPreview(data.preview);
             } catch (err: any) {
                 console.error('Error creating intent:', err);
                 setError(err.message || 'Fehler beim Initialisieren der Zahlung.');
@@ -72,7 +76,7 @@ export function CheckoutPage() {
             setLoading(false);
             setError("Profil konnte nicht geladen werden. Bitte melden Sie sich erneut an.");
         }
-    }, [planId, billingCycle, hotelProfile, authLoading]);
+    }, [planId, billingCycle, hotelProfile?.subdomain, authLoading]);
 
     if (authLoading || (loading && !error)) {
         return (
@@ -123,6 +127,7 @@ export function CheckoutPage() {
                             planName={planName} 
                             intentType={intentType} 
                             clientSecret={clientSecret}
+                            initialPreview={preview}
                         />
                     </Elements>
                 </div>
@@ -143,6 +148,7 @@ export function CheckoutForm({
                                  clientSecret,
                                  isEligibleForTrial = false,
                                  isContinuingTrial = false,
+                                 initialPreview = null,
                              }: {
     planId: string;
     planName: string;
@@ -151,6 +157,7 @@ export function CheckoutForm({
     clientSecret: string;
     isEligibleForTrial?: boolean;
     isContinuingTrial?: boolean;
+    initialPreview?: any;
 }) {
     const stripe = useStripe();
     const elements = useElements();
@@ -158,6 +165,7 @@ export function CheckoutForm({
     const { hotelProfile } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [preview, setPreview] = useState<any>(initialPreview);
 
     const [selectedMethod, setSelectedMethod] = useState<string>(
         savedMethods.length > 0 ? savedMethods[0].id : 'new'
@@ -181,10 +189,74 @@ export function CheckoutForm({
     const [promoDetails, setPromoDetails] = useState<any>(null);
     const [promoError, setPromoError] = useState<string | null>(null);
 
+    const [isSavingAddress, setIsSavingAddress] = useState(false);
+
+    // Automatisches Speichern der Adresse wenn sie sich ändert (Debounced)
+    useEffect(() => {
+        if (!hotelProfile) return;
+        
+        const timer = setTimeout(async () => {
+            // Nur speichern wenn sich wirklich was geändert hat im Vergleich zum Profil
+            const hasChanged = 
+                address.street !== (hotelProfile.street || '') ||
+                address.city !== (hotelProfile.city || '') ||
+                address.postcode !== ((hotelProfile as any).postcode || '') ||
+                address.countryCode !== (getCountryCode(hotelProfile.country || 'DE')) ||
+                vatId !== (hotelProfile.vat_id || '');
+
+            if (hasChanged) {
+                setIsSavingAddress(true);
+                try {
+                    const { data } = await supabase.functions.invoke('create-subscription-intent', {
+                        headers: { 'x-tenant-subdomain': hotelProfile.subdomain || '' },
+                        body: {
+                            action: 'create_intent',
+                            plan: planId,
+                            address,
+                            vatId,
+                            promoCodeId: promoDetails?.id
+                        }
+                    });
+                    if (data?.preview) {
+                        setPreview(data.preview);
+                    }
+                } catch (e) {
+                    console.error("Error updating preview:", e);
+                } finally {
+                    setIsSavingAddress(false);
+                }
+            }
+        }, 2000);
+
+        return () => clearTimeout(timer);
+    }, [address, vatId, hotelProfile?.subdomain]);
+
     const planDetails = PLAN_DETAILS[planId as SubscriptionPlan];
     const basePrice = planDetails?.price || 0;
 
     const calculateFinalPrice = () => {
+        if (preview) {
+            console.log("[CHECKOUT] Received Preview from Stripe:", preview);
+            
+            // Trennung von regulären Posten und Prorationen
+            const regularItems = preview.lines?.filter((l: any) => !l.proration) || [];
+            const prorationItems = preview.lines?.filter((l: any) => l.proration) || [];
+            
+            const regularSubtotal = regularItems.reduce((sum: number, l: any) => sum + l.amount, 0) / 100;
+            const prorationSubtotal = prorationItems.reduce((sum: number, l: any) => sum + l.amount, 0) / 100;
+            
+            return {
+                subtotal: regularSubtotal,
+                proration: prorationSubtotal,
+                discount: (preview.subtotal - preview.total + preview.tax) / 100,
+                netPrice: (preview.total - preview.tax) / 100,
+                taxAmount: preview.tax / 100,
+                totalPrice: preview.amount_due / 100,
+                isGermany: address.countryCode === 'DE' || preview.tax > 0,
+                hasProration: prorationItems.length > 0
+            };
+        }
+
         let price = basePrice;
         if (promoDetails) {
             if (promoDetails.percent_off) {
@@ -235,6 +307,25 @@ export function CheckoutForm({
                     title: "Erfolg",
                     description: `Gutschein "${data.name}" angewendet!`,
                 });
+                
+                // Nach Gutschein-Anwendung Vorschau aktualisieren
+                try {
+                    const { data: intentData } = await supabase.functions.invoke('create-subscription-intent', {
+                        headers: { 'x-tenant-subdomain': hotelProfile?.subdomain || '' },
+                        body: {
+                            action: 'create_intent',
+                            plan: planId,
+                            address,
+                            vatId,
+                            promoCodeId: data.id // Hier die ID des Gutscheins nutzen
+                        }
+                    });
+                    if (intentData?.preview) {
+                        setPreview(intentData.preview);
+                    }
+                } catch (e) {
+                    console.error("Error updating preview after promo:", e);
+                }
             } else {
                 setPromoError(data?.message || 'Gutscheincode ungültig.');
             }
@@ -252,7 +343,7 @@ export function CheckoutForm({
 
         setIsLoading(true);
         setError(null);
-        const returnUrl = `${window.location.origin}/hotel/dashboard`;
+        const returnUrl = `${window.location.origin}/billing`;
 
         const { error: submitValidationError } = await elements.submit();
         if (submitValidationError) {
@@ -292,7 +383,7 @@ export function CheckoutForm({
 
                 setTimeout(() => {
                     window.location.href = returnUrl;
-                    if (window.location.pathname === '/hotel/dashboard') {
+                    if (window.location.pathname === '/billing') {
                         window.location.reload();
                     }
                 }, 1000);
@@ -454,7 +545,22 @@ export function CheckoutForm({
             </div>
 
             <div className="space-y-4">
-                <h3 className="font-medium text-sm">Rechnungsadresse</h3>
+                <div className="flex items-center justify-between">
+                    <h3 className="font-medium text-sm">Rechnungsadresse</h3>
+                    <div className="flex items-center space-x-2">
+                        {isSavingAddress ? (
+                            <div className="flex items-center text-xs text-muted-foreground animate-pulse">
+                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                Speichere...
+                            </div>
+                        ) : (
+                            <div className="flex items-center text-xs text-green-600">
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Gespeichert
+                            </div>
+                        )}
+                    </div>
+                </div>
 
                 <div className="space-y-4">
                     <div className="space-y-2">
@@ -468,7 +574,7 @@ export function CheckoutForm({
                                     city: selectedAddress.city,
                                     postcode: selectedAddress.postcode,
                                     country: selectedAddress.country,
-                                    countryCode: selectedAddress.countryCode || selectedAddress.country,
+                                    countryCode: selectedAddress.countryCode || getCountryCode(selectedAddress.country),
                                 });
                                 setAddressSearchValue('');
                             }}
@@ -609,8 +715,15 @@ export function CheckoutForm({
                 <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                         <span className="text-muted-foreground">Paket: {planName}</span>
-                        <span>{basePrice.toFixed(2)} €</span>
+                        <span>{priceBreakdown.subtotal.toFixed(2)} €</span>
                     </div>
+
+                    {priceBreakdown.hasProration && (
+                        <div className="flex justify-between text-muted-foreground italic">
+                            <span>Verrechnung bisherige Nutzung</span>
+                            <span>{priceBreakdown.proration > 0 ? '+' : ''}{priceBreakdown.proration.toFixed(2)} €</span>
+                        </div>
+                    )}
 
                     {priceBreakdown.discount > 0 && (
                         <div className="flex justify-between text-primary">
