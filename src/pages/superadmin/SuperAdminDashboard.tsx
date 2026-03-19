@@ -183,7 +183,7 @@ export default function SuperAdminDashboard() {
                                                 tenant.plan === 'pro' ? 'bg-blue-100 text-blue-800' :
                                                 'bg-slate-100 text-slate-800'
                                             }`}>
-                                                {tenant.plan.toUpperCase()}
+                                                {(tenant.plan || 'kein paket').toUpperCase()}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">

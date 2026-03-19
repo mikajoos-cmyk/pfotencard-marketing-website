@@ -1,3 +1,4 @@
+// src/pages/CheckoutPage.tsx
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useStripe, useElements, PaymentElement, Elements } from '@stripe/react-stripe-js';
@@ -31,6 +32,9 @@ export function CheckoutPage() {
     const navigate = useNavigate();
     const planId = searchParams.get('plan') || 'starter';
     const billingCycle = searchParams.get('cycle') || 'monthly';
+    const addonsParam = searchParams.get('addons');
+    const addons = addonsParam ? addonsParam.split(',') : [];
+    
     const [clientSecret, setClientSecret] = useState<string | null>(null);
     const [intentType, setIntentType] = useState<'payment' | 'setup'>('payment');
     const [preview, setPreview] = useState<any>(null);
@@ -48,6 +52,7 @@ export function CheckoutPage() {
                     },
                     body: {
                         plan: planId,
+                        addons: addons,
                         billingCycle: billingCycle,
                         action: 'create_intent'
                         // Adresse wird hier noch nicht gesendet, da sie im Initial-Load noch nicht vom User geändert wurde
@@ -114,24 +119,24 @@ export function CheckoutPage() {
                 </div>
 
                 <div className="bg-card border rounded-xl shadow-sm p-6 md:p-8">
-                    <Elements 
-                        stripe={stripePromise} 
-                        options={{ 
+                    <Elements
+                        stripe={stripePromise}
+                        options={{
                             clientSecret,
                             appearance: { theme: 'stripe' },
                             locale: 'de'
                         }}
                     >
-                        <CheckoutForm 
-                            planId={planId} 
-                            planName={planName} 
-                            intentType={intentType} 
+                        <CheckoutForm
+                            planId={planId}
+                            planName={planName}
+                            intentType={intentType}
                             clientSecret={clientSecret}
                             initialPreview={preview}
                         />
                     </Elements>
                 </div>
-                
+
                 <p className="mt-8 text-center text-xs text-muted-foreground px-4">
                     Ihre Daten werden verschlüsselt übertragen. Durch den Abschluss des Abonnements akzeptieren Sie unsere AGB und Datenschutzbestimmungen.
                 </p>
@@ -194,10 +199,10 @@ export function CheckoutForm({
     // Automatisches Speichern der Adresse wenn sie sich ändert (Debounced)
     useEffect(() => {
         if (!hotelProfile) return;
-        
+
         const timer = setTimeout(async () => {
             // Nur speichern wenn sich wirklich was geändert hat im Vergleich zum Profil
-            const hasChanged = 
+            const hasChanged =
                 address.street !== (hotelProfile.street || '') ||
                 address.city !== (hotelProfile.city || '') ||
                 address.postcode !== ((hotelProfile as any).postcode || '') ||
@@ -237,23 +242,49 @@ export function CheckoutForm({
     const calculateFinalPrice = () => {
         if (preview) {
             console.log("[CHECKOUT] Received Preview from Stripe:", preview);
-            
-            // Trennung von regulären Posten und Prorationen
+
             const regularItems = preview.lines?.filter((l: any) => !l.proration) || [];
             const prorationItems = preview.lines?.filter((l: any) => l.proration) || [];
-            
-            const regularSubtotal = regularItems.reduce((sum: number, l: any) => sum + l.amount, 0) / 100;
-            const prorationSubtotal = prorationItems.reduce((sum: number, l: any) => sum + l.amount, 0) / 100;
-            
+
+            const hasProration = prorationItems.length > 0;
+
+            // Wenn Prorationen existieren (z.B. Upgrade), wird nur über diese sofort abgerechnet.
+            // Die regulären Posten für die nächste Periode erscheinen erst auf der nächsten Rechnung.
+            // Daher zeigen wir hier nur die Proration-Items an.
+            const displayedLines = hasProration ? prorationItems : regularItems;
+
+            const subtotal = displayedLines.reduce((sum: number, l: any) => sum + l.amount, 0) / 100;
+
+            const isGermany = address.countryCode === 'DE' || address.country === 'Germany' || address.country === 'Deutschland';
+
+            let netPrice = subtotal;
+            let taxAmount = 0;
+            let totalPrice = subtotal;
+
+            // Preise sind in Stripe meist als brutto konfiguriert (inclusive tax)
+            if (isGermany) {
+                netPrice = subtotal / 1.19;
+                taxAmount = subtotal - netPrice;
+            } else if (preview.tax > 0 && !hasProration) {
+                taxAmount = preview.tax / 100;
+                netPrice = subtotal;
+                totalPrice = subtotal + taxAmount;
+            }
+
+            if (totalPrice < 0) {
+                totalPrice = 0;
+            }
+
             return {
-                subtotal: regularSubtotal,
-                proration: prorationSubtotal,
-                discount: (preview.subtotal - preview.total + preview.tax) / 100,
-                netPrice: (preview.total - preview.tax) / 100,
-                taxAmount: preview.tax / 100,
-                totalPrice: preview.amount_due / 100,
-                isGermany: address.countryCode === 'DE' || preview.tax > 0,
-                hasProration: prorationItems.length > 0
+                lines: displayedLines,
+                subtotal,
+                proration: hasProration ? subtotal : 0,
+                discount: 0,
+                netPrice,
+                taxAmount,
+                totalPrice,
+                isGermany,
+                hasProration
             };
         }
 
@@ -266,19 +297,21 @@ export function CheckoutForm({
             }
         }
 
-        // Steuerberechnung (19% für Deutschland)
         const isGermany = address.countryCode === 'DE' || address.country === 'Germany' || address.country === 'Deutschland';
         const taxRate = isGermany ? 0.19 : 0;
         const taxAmount = price * taxRate;
         const totalPrice = price + taxAmount;
 
         return {
+            lines: null,
             subtotal: basePrice,
+            proration: 0,
             discount: basePrice - price,
             netPrice: price,
             taxAmount: taxAmount,
             totalPrice: totalPrice,
-            isGermany
+            isGermany,
+            hasProration: false
         };
     };
 
@@ -307,7 +340,7 @@ export function CheckoutForm({
                     title: "Erfolg",
                     description: `Gutschein "${data.name}" angewendet!`,
                 });
-                
+
                 // Nach Gutschein-Anwendung Vorschau aktualisieren
                 try {
                     const { data: intentData } = await supabase.functions.invoke('create-subscription-intent', {
@@ -364,6 +397,7 @@ export function CheckoutForm({
                     body: {
                         action: 'finalize_subscription',
                         plan: planId,
+                        addons: addons,
                         paymentMethodId: selectedMethod,
                         vatId,
                         address,
@@ -442,6 +476,7 @@ export function CheckoutForm({
                     body: {
                         action: 'finalize_subscription',
                         plan: planId,
+                        addons: addons,
                         vatId,
                         address,
                         promoCodeId: promoDetails?.promoCodeId,
@@ -713,39 +748,69 @@ export function CheckoutForm({
             <div className="mt-6 pt-6 border-t space-y-3">
                 <h3 className="font-medium text-sm">Zusammenfassung</h3>
                 <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                        <span className="text-muted-foreground">Paket: {planName}</span>
-                        <span>{priceBreakdown.subtotal.toFixed(2)} €</span>
-                    </div>
 
-                    {priceBreakdown.hasProration && (
-                        <div className="flex justify-between text-muted-foreground italic">
-                            <span>Verrechnung bisherige Nutzung</span>
-                            <span>{priceBreakdown.proration > 0 ? '+' : ''}{priceBreakdown.proration.toFixed(2)} €</span>
-                        </div>
-                    )}
+                    {preview && priceBreakdown.lines ? (
+                        <>
+                            {/* Exakte Positionen aus der Stripe Rechnungsvorschau */}
+                            <div className="space-y-2 pb-2">
+                                {priceBreakdown.lines.map((line: any, index: number) => (
+                                    <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
+                                        <span className="pr-4">{line.description}</span>
+                                        <span className="whitespace-nowrap">{(line.amount / 100).toFixed(2)} €</span>
+                                    </div>
+                                ))}
+                            </div>
 
-                    {priceBreakdown.discount > 0 && (
-                        <div className="flex justify-between text-primary">
-                            <span>Rabatt</span>
-                            <span>-{priceBreakdown.discount.toFixed(2)} €</span>
-                        </div>
-                    )}
+                            {priceBreakdown.discount > 0 && (
+                                <div className="flex justify-between text-primary pt-2 border-t">
+                                    <span>Rabatt</span>
+                                    <span>-{priceBreakdown.discount.toFixed(2)} €</span>
+                                </div>
+                            )}
 
-                    <div className="flex justify-between font-medium pt-2 border-t">
-                        <span>Netto-Betrag</span>
-                        <span>{priceBreakdown.netPrice.toFixed(2)} €</span>
-                    </div>
+                            <div className="flex justify-between font-medium pt-2 border-t">
+                                <span>Netto-Betrag</span>
+                                <span>{priceBreakdown.netPrice.toFixed(2)} €</span>
+                            </div>
 
-                    {priceBreakdown.isGermany && (
-                        <div className="flex justify-between text-muted-foreground">
-                            <span>MwSt. (19%)</span>
-                            <span>{priceBreakdown.taxAmount.toFixed(2)} €</span>
-                        </div>
+                            {priceBreakdown.taxAmount > 0 && (
+                                <div className="flex justify-between text-muted-foreground">
+                                    <span>MwSt.</span>
+                                    <span>{priceBreakdown.taxAmount.toFixed(2)} €</span>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        /* Fallback, falls die Stripe-Vorschau noch lädt / nicht verfügbar ist */
+                        <>
+                            <div className="flex justify-between text-muted-foreground text-sm pb-1">
+                                <span>Paket: {planName}</span>
+                                <span>{priceBreakdown.subtotal.toFixed(2)} €</span>
+                            </div>
+
+                            {priceBreakdown.discount > 0 && (
+                                <div className="flex justify-between text-primary">
+                                    <span>Rabatt</span>
+                                    <span>-{priceBreakdown.discount.toFixed(2)} €</span>
+                                </div>
+                            )}
+
+                            <div className="flex justify-between font-medium pt-2 border-t">
+                                <span>Netto-Betrag</span>
+                                <span>{priceBreakdown.netPrice.toFixed(2)} €</span>
+                            </div>
+
+                            {priceBreakdown.isGermany && (
+                                <div className="flex justify-between text-muted-foreground">
+                                    <span>MwSt. (19%)</span>
+                                    <span>{priceBreakdown.taxAmount.toFixed(2)} €</span>
+                                </div>
+                            )}
+                        </>
                     )}
 
                     <div className="flex justify-between text-lg font-bold pt-2 border-t text-primary">
-                        <span>Gesamtbetrag</span>
+                        <span>Zu zahlen</span>
                         <span>{priceBreakdown.totalPrice.toFixed(2)} €</span>
                     </div>
 
@@ -781,7 +846,7 @@ export function CheckoutForm({
                         : isContinuingTrial
                             ? 'Testzeitraum fortsetzen'
                             : isEligibleForTrial
-                                ? '90 Tage kostenlos starten'
+                                ? '14 Tage kostenlos starten'
                                 : 'Kostenpflichtig abonnieren'
                 )}
             </Button>

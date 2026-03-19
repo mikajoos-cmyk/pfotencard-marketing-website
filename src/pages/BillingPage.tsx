@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { useToast } from '@/hooks/use-toast';
 import { checkTenantStatus, API_BASE_URL, fetchInvoices, type Invoice } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
-import { Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText, FileCheck, Shield, Eye, Users, Coins } from 'lucide-react';
+import { Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText, FileCheck, Shield, Eye, Users, Coins, Layers } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
 import { PricingTableSection } from '@/components/pricing/PricingTableSection';
@@ -378,6 +378,27 @@ export function BillingPage() {
                                 <p className="text-sm text-muted-foreground">Wähle jetzt einen Plan, um Pfotencard danach weiterzunutzen.</p>
                             </div>
                         )}
+
+                        <div className="flex flex-col items-center justify-center p-8 bg-primary/5 border border-primary/20 rounded-xl text-center mb-4">
+                            <Layers className="w-12 h-12 text-primary mb-4" />
+                            <h3 className="text-xl font-bold mb-2">Abo individuell konfigurieren</h3>
+                            <p className="text-muted-foreground mb-6 max-w-md">
+                                Nutze unseren Konfigurator, um dein Basis-Paket und Zusatzmodule (wie Buchhaltung oder Branding) optimal zusammenzustellen.
+                            </p>
+                            <Button size="lg" className="px-8 font-bold" onClick={() => navigate('/upgrade')}>
+                                <ArrowRight className="w-5 h-5 mr-2" /> Abo konfigurieren
+                            </Button>
+                        </div>
+
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                <div className="w-full border-t border-muted"></div>
+                            </div>
+                            <div className="relative flex justify-center text-sm uppercase">
+                                <span className="bg-background px-2 text-muted-foreground">Oder direkt wählen</span>
+                            </div>
+                        </div>
+
                         <div className="flex justify-center">
                             <Tabs value={billingCycle} onValueChange={(v) => setBillingCycle(v as any)} className="w-full max-w-[400px]">
                                 <TabsList className="grid w-full grid-cols-2">
@@ -492,8 +513,8 @@ export function BillingPage() {
                                     <Button variant="default" className="gap-2" onClick={openCustomerPortal}>
                                         <ExternalLink className="w-4 h-4" /> Rechnungen
                                     </Button>
-                                    <Button variant="outline" className="bg-background" onClick={() => navigate('/preise')}>
-                                        Plan ändern
+                                    <Button variant="default" className="bg-primary text-primary-foreground gap-2" onClick={() => navigate('/upgrade')}>
+                                        <ArrowRight className="w-4 h-4" /> Upgrade & Module
                                     </Button>
                                     {isCancelled ? (
                                         <Button variant="default" className="ml-auto" onClick={handleReactivateSubscription} disabled={reactivating}>
