@@ -65,7 +65,11 @@ export function BillingPage() {
         if (!confirm("Möchtest du dein Abo wirklich zum Laufzeitende kündigen?")) return;
         setCanceling(true);
         try {
+            const token = localStorage.getItem('pfotencard_token');
             const { error } = await supabase.functions.invoke('manage-subscription', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
                 body: {
                     action: 'cancel',
                     tenantId: status?.tenant_id
@@ -86,7 +90,11 @@ export function BillingPage() {
     const handleReactivateSubscription = async () => {
         setReactivating(true);
         try {
+            const token = localStorage.getItem('pfotencard_token');
             const { error } = await supabase.functions.invoke('manage-subscription', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
                 body: {
                     action: 'reactivate',
                     tenantId: status?.tenant_id

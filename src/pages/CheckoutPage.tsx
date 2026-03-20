@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { fetchPackages } from '@/lib/api';
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { VatIdInput } from "@/components/ui/VatIdInput";
@@ -18,6 +19,18 @@ import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 import { getCountryCode } from "@/lib/country-mapping";
 
 export type SubscriptionPlan = 'starter' | 'pro' | 'enterprise';
+
+export interface DBPackage {
+  id: number;
+  plan_name: string;
+  package_type: 'base' | 'addon';
+  price_monthly: number;
+  price_yearly: number;
+  allowed_modules: string[];
+  included_customers: number;
+  additional_cost_per_customer: number;
+  features: Record<string, boolean>;
+}
 
 export const PLAN_DETAILS: Record<SubscriptionPlan, { name: string; price: number }> = {
     starter: { name: 'Starter', price: 29 },
@@ -38,17 +51,32 @@ export function CheckoutPage() {
     const [clientSecret, setClientSecret] = useState<string | null>(null);
     const [intentType, setIntentType] = useState<'payment' | 'setup'>('payment');
     const [preview, setPreview] = useState<any>(null);
+    const [packages, setPackages] = useState<DBPackage[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const { hotelProfile, isLoading: authLoading } = useAuth();
 
     useEffect(() => {
+        const loadInitialData = async () => {
+            try {
+                const pkgs = await fetchPackages();
+                setPackages(pkgs);
+            } catch (err) {
+                console.error('Error fetching packages:', err);
+            }
+        };
+        loadInitialData();
+    }, []);
+
+    useEffect(() => {
         const createIntent = async () => {
             try {
                 setLoading(true);
+                const token = localStorage.getItem('pfotencard_token');
                 const { data, error: functionError } = await supabase.functions.invoke('create-subscription-intent', {
                     headers: {
-                        'x-tenant-subdomain': hotelProfile?.subdomain || ''
+                        'x-tenant-subdomain': hotelProfile?.subdomain || '',
+                        'Authorization': `Bearer ${token}`
                     },
                     body: {
                         plan: planId,
@@ -133,6 +161,9 @@ export function CheckoutPage() {
                             intentType={intentType}
                             clientSecret={clientSecret}
                             initialPreview={preview}
+                            addons={addons}
+                            billingCycle={billingCycle}
+                            packages={packages}
                         />
                     </Elements>
                 </div>
@@ -154,6 +185,9 @@ export function CheckoutForm({
                                  isEligibleForTrial = false,
                                  isContinuingTrial = false,
                                  initialPreview = null,
+                                 addons = [],
+                                 billingCycle = 'monthly',
+                                 packages = [],
                              }: {
     planId: string;
     planName: string;
@@ -163,6 +197,9 @@ export function CheckoutForm({
     isEligibleForTrial?: boolean;
     isContinuingTrial?: boolean;
     initialPreview?: any;
+    addons?: string[];
+    billingCycle?: string;
+    packages?: DBPackage[];
 }) {
     const stripe = useStripe();
     const elements = useElements();
@@ -212,11 +249,17 @@ export function CheckoutForm({
             if (hasChanged) {
                 setIsSavingAddress(true);
                 try {
+                    const token = localStorage.getItem('pfotencard_token');
                     const { data } = await supabase.functions.invoke('create-subscription-intent', {
-                        headers: { 'x-tenant-subdomain': hotelProfile.subdomain || '' },
+                        headers: { 
+                            'x-tenant-subdomain': hotelProfile.subdomain || '',
+                            'Authorization': `Bearer ${token}`
+                        },
                         body: {
                             action: 'create_intent',
                             plan: planId,
+                            addons: addons,
+                            billingCycle: billingCycle,
                             address,
                             vatId,
                             promoCodeId: promoDetails?.id
@@ -288,7 +331,14 @@ export function CheckoutForm({
             };
         }
 
-        let price = basePrice;
+        let totalBasePrice = basePrice;
+        const addonsPrice = (addons || []).reduce((sum, addonName) => {
+            const pkg = packages.find(p => p.plan_name === addonName);
+            if (!pkg) return sum;
+            return sum + (billingCycle === 'yearly' ? pkg.price_yearly : pkg.price_monthly);
+        }, 0);
+
+        let price = totalBasePrice + addonsPrice;
         if (promoDetails) {
             if (promoDetails.percent_off) {
                 price = price * (1 - promoDetails.percent_off / 100);
@@ -304,9 +354,9 @@ export function CheckoutForm({
 
         return {
             lines: null,
-            subtotal: basePrice,
+            subtotal: totalBasePrice + addonsPrice,
             proration: 0,
-            discount: basePrice - price,
+            discount: (totalBasePrice + addonsPrice) - price,
             netPrice: price,
             taxAmount: taxAmount,
             totalPrice: totalPrice,
@@ -325,7 +375,11 @@ export function CheckoutForm({
         setPromoDetails(null);
 
         try {
+            const token = localStorage.getItem('pfotencard_token');
             const { data, error: functionError } = await supabase.functions.invoke('validate-promo-code', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
                 body: {
                     code: promoCode.trim(),
                     plan: planId
@@ -343,11 +397,17 @@ export function CheckoutForm({
 
                 // Nach Gutschein-Anwendung Vorschau aktualisieren
                 try {
+                    const token = localStorage.getItem('pfotencard_token');
                     const { data: intentData } = await supabase.functions.invoke('create-subscription-intent', {
-                        headers: { 'x-tenant-subdomain': hotelProfile?.subdomain || '' },
+                        headers: { 
+                            'x-tenant-subdomain': hotelProfile?.subdomain || '',
+                            'Authorization': `Bearer ${token}`
+                        },
                         body: {
                             action: 'create_intent',
                             plan: planId,
+                            addons: addons,
+                            billingCycle: billingCycle,
                             address,
                             vatId,
                             promoCodeId: data.id // Hier die ID des Gutscheins nutzen
@@ -390,14 +450,17 @@ export function CheckoutForm({
         // =====================================
         if (selectedMethod !== 'new') {
             try {
+                const token = localStorage.getItem('pfotencard_token');
                 const { data, error: finalizeError } = await supabase.functions.invoke('create-subscription-intent', {
                     headers: {
-                        'x-tenant-subdomain': hotelProfile?.subdomain || ''
+                        'x-tenant-subdomain': hotelProfile?.subdomain || '',
+                        'Authorization': `Bearer ${token}`
                     },
                     body: {
                         action: 'finalize_subscription',
                         plan: planId,
                         addons: addons,
+                        billingCycle: billingCycle,
                         paymentMethodId: selectedMethod,
                         vatId,
                         address,
@@ -469,14 +532,17 @@ export function CheckoutForm({
                         ? (typeof paymentIntent.payment_method === 'string' ? paymentIntent.payment_method : paymentIntent.payment_method.id)
                         : undefined;
 
+                const token = localStorage.getItem('pfotencard_token');
                 const { data, error: finalizeError } = await supabase.functions.invoke('create-subscription-intent', {
                     headers: {
-                        'x-tenant-subdomain': hotelProfile?.subdomain || ''
+                        'x-tenant-subdomain': hotelProfile?.subdomain || '',
+                        'Authorization': `Bearer ${token}`
                     },
                     body: {
                         action: 'finalize_subscription',
                         plan: planId,
                         addons: addons,
+                        billingCycle: billingCycle,
                         vatId,
                         address,
                         promoCodeId: promoDetails?.promoCodeId,
@@ -753,12 +819,15 @@ export function CheckoutForm({
                         <>
                             {/* Exakte Positionen aus der Stripe Rechnungsvorschau */}
                             <div className="space-y-2 pb-2">
-                                {priceBreakdown.lines.map((line: any, index: number) => (
-                                    <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
-                                        <span className="pr-4">{line.description}</span>
-                                        <span className="whitespace-nowrap">{(line.amount / 100).toFixed(2)} €</span>
-                                    </div>
-                                ))}
+                                {priceBreakdown.lines
+                                    .filter((line: any) => line.amount !== 0)
+                                    .map((line: any, index: number) => (
+                                        <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
+                                            <span className="pr-4">{line.description}</span>
+                                            <span className="whitespace-nowrap">{(line.amount / 100).toFixed(2)} €</span>
+                                        </div>
+                                    ))
+                                }
                             </div>
 
                             {priceBreakdown.discount > 0 && (
@@ -785,8 +854,20 @@ export function CheckoutForm({
                         <>
                             <div className="flex justify-between text-muted-foreground text-sm pb-1">
                                 <span>Paket: {planName}</span>
-                                <span>{priceBreakdown.subtotal.toFixed(2)} €</span>
+                                <span>{basePrice.toFixed(2)} €</span>
                             </div>
+
+                            {addons.map(addonName => {
+                                const pkg = packages.find(p => p.plan_name === addonName);
+                                const price = pkg ? (billingCycle === 'yearly' ? pkg.price_yearly : pkg.price_monthly) : 0;
+                                if (price === 0) return null;
+                                return (
+                                    <div key={addonName} className="flex justify-between text-muted-foreground text-sm pb-1">
+                                        <span className="capitalize">Modul: {addonName}</span>
+                                        <span>{price.toFixed(2)} €</span>
+                                    </div>
+                                );
+                            })}
 
                             {priceBreakdown.discount > 0 && (
                                 <div className="flex justify-between text-primary">

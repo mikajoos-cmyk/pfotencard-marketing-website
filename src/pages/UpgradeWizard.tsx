@@ -86,7 +86,12 @@ export function UpgradeWizard() {
     if (!tenantStatus?.tenant_id) return;
     setIsLoadingPreview(true);
     try {
+      const token = localStorage.getItem('pfotencard_token');
+      console.log("Starte Preisvorschau...", { selectedPlan, selectedAddons, billingCycle });
       const { data, error } = await supabase.functions.invoke('manage-subscription', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
         body: {
           action: 'preview_upgrade',
           tenantId: tenantStatus.tenant_id,
@@ -95,8 +100,15 @@ export function UpgradeWizard() {
           cycle: billingCycle
         }
       });
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase function error:", error);
+        throw error;
+      }
+      console.log("Preisvorschau empfangen:", data);
       setPreviewData(data);
+      if (data?.error) {
+        toast({ title: "Hinweis", description: "Standardpreise werden angezeigt (Vorschau eingeschränkt)." });
+      }
     } catch (err: any) {
       console.error("Fehler bei Preisvorschau", err);
       toast({ variant: "destructive", title: "Vorschau fehlgeschlagen", description: err.message || "Stripe konnte die Vorschau nicht berechnen." });
@@ -113,11 +125,20 @@ export function UpgradeWizard() {
   }, [currentStep]);
 
   const handleFinalUpgrade = async () => {
-    if (!tenantStatus?.tenant_id) return;
+    if (!tenantStatus?.tenant_id) {
+      console.error("Keine Tenant ID vorhanden");
+      return;
+    }
+    
     setIsProcessing(true);
     try {
-      if (!tenantStatus?.stripe_subscription_id) {
-        // NEUKUNDE: Zum Checkout weiterleiten
+      const hasActiveSub = !!(tenantStatus?.stripe_subscription_id && 
+                           tenantStatus?.stripe_subscription_status && 
+                           !['canceled', 'incomplete_expired'].includes(tenantStatus.stripe_subscription_status));
+
+      if (!hasActiveSub) {
+        // NEUKUNDE oder REAKTIVIERUNG: Zum Checkout weiterleiten
+        console.log("Navigiere zum Checkout für Neukunde / Reaktivierung...");
         const params = new URLSearchParams({
           plan: selectedPlan,
           cycle: billingCycle
@@ -125,11 +146,19 @@ export function UpgradeWizard() {
         if (selectedAddons.length > 0) {
           params.set('addons', selectedAddons.join(','));
         }
-        navigate(`/checkout?${params.toString()}`);
+        
+        const checkoutUrl = `/checkout?${params.toString()}`;
+        console.log("Navigiere zu:", checkoutUrl);
+        navigate(checkoutUrl);
         return;
       }
 
+      console.log("Führe Upgrade für Bestandskunde aus...");
+      const token = localStorage.getItem('pfotencard_token');
       const { data, error } = await supabase.functions.invoke('manage-subscription', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
         body: {
           action: 'update_subscription',
           tenantId: tenantStatus.tenant_id,
@@ -396,19 +425,35 @@ export function UpgradeWizard() {
                     <CardTitle className="text-lg">Zusammenfassung</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {previewData && previewData.lines ? (
+                    {previewData && previewData.lines && previewData.lines.length > 0 ? (
                       <>
                         <div className="space-y-2 pb-2">
-                          {previewData.lines.map((line: any, index: number) => (
-                            <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
-                              <span className="pr-4">{line.description}</span>
-                              <span className="whitespace-nowrap">{(line.amount / 100).toFixed(2)} €</span>
-                            </div>
-                          ))}
+                          {previewData.lines
+                            .filter((line: any) => !line.proration && line.amount !== 0)
+                            .map((line: any, index: number) => (
+                              <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
+                                <span className="pr-4">{line.description}</span>
+                                <span className="whitespace-nowrap">{(line.amount / 100).toFixed(2)} €</span>
+                              </div>
+                            ))
+                          }
                         </div>
-                        <div className="pt-2 flex justify-between font-bold text-lg border-t">
-                          <span>Gesamt ({billingCycle === 'yearly' ? 'pro Jahr' : 'pro Monat'})</span>
-                          <span>{previewData.amountDueNextMonth?.toFixed(2) || '0.00'} €</span>
+                        
+                        <div className="pt-4 space-y-2 border-t">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Netto-Betrag</span>
+                            <span>{previewData.netDueNextMonth?.toFixed(2) || '0.00'} €</span>
+                          </div>
+                          {previewData.taxDueNextMonth > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">MwSt.</span>
+                              <span>{previewData.taxDueNextMonth?.toFixed(2) || '0.00'} €</span>
+                            </div>
+                          )}
+                          <div className="pt-2 flex justify-between font-bold text-lg border-t text-primary">
+                            <span>Zu zahlen ({billingCycle === 'yearly' ? 'pro Jahr' : 'pro Monat'})</span>
+                            <span>{previewData.amountDueNextMonth?.toFixed(2) || '0.00'} €</span>
+                          </div>
                         </div>
                       </>
                     ) : (
@@ -423,31 +468,56 @@ export function UpgradeWizard() {
                             })()}
                           </span>
                         </div>
-                        {selectedAddons.map(addonName => (
-                          <div key={addonName} className="flex justify-between items-center pb-2 border-b">
-                            <span>Modul: <span className="font-medium capitalize">{addonName}</span></span>
-                            <span className="text-muted-foreground">
-                              {(() => {
-                                const p = packages.find(pkg => pkg.plan_name === addonName);
-                                if (!p) return '0.00 €';
-                                return (billingCycle === 'yearly' ? p.price_yearly : p.price_monthly).toFixed(2) + ' €';
-                              })()}
-                            </span>
-                          </div>
-                        ))}
-                        <div className="pt-2 flex justify-between font-bold text-lg">
-                          <span>Gesamt ({billingCycle === 'yearly' ? 'pro Jahr' : 'pro Monat'})</span>
-                          <span>
-                            {(() => {
-                              const base = packages.find(p => p.plan_name === selectedPlan);
-                              const basePrice = base ? (billingCycle === 'yearly' ? base.price_yearly : base.price_monthly) : 0;
-                              const addonsPrice = selectedAddons.reduce((sum, addonName) => {
-                                const p = packages.find(pkg => pkg.plan_name === addonName);
-                                return sum + (p ? (billingCycle === 'yearly' ? p.price_yearly : p.price_monthly) : 0);
-                              }, 0);
-                              return (basePrice + addonsPrice).toFixed(2) + ' €';
-                            })()}
-                          </span>
+                        {selectedAddons
+                          .filter(addonName => {
+                            const p = packages.find(pkg => pkg.plan_name === addonName);
+                            const price = p ? (billingCycle === 'yearly' ? p.price_yearly : p.price_monthly) : 0;
+                            return price > 0;
+                          })
+                          .map(addonName => (
+                            <div key={addonName} className="flex justify-between items-center pb-2 border-b">
+                              <span>Modul: <span className="font-medium capitalize">{addonName}</span></span>
+                              <span className="text-muted-foreground">
+                                {(() => {
+                                  const p = packages.find(pkg => pkg.plan_name === addonName);
+                                  if (!p) return '0.00 €';
+                                  return (billingCycle === 'yearly' ? p.price_yearly : p.price_monthly).toFixed(2) + ' €';
+                                })()}
+                              </span>
+                            </div>
+                          ))
+                        }
+                        <div className="pt-4 space-y-2">
+                          {/* Fallback-Berechnung für Netto/MwSt */}
+                          {(() => {
+                            const base = packages.find(p => p.plan_name === selectedPlan);
+                            const basePrice = base ? (billingCycle === 'yearly' ? base.price_yearly : base.price_monthly) : 0;
+                            const addonsPrice = selectedAddons.reduce((sum, addonName) => {
+                              const p = packages.find(pkg => pkg.plan_name === addonName);
+                              return sum + (p ? (billingCycle === 'yearly' ? p.price_yearly : p.price_monthly) : 0);
+                            }, 0);
+                            const total = basePrice + addonsPrice;
+                            const net = total / 1.19;
+                            const tax = total - net;
+
+                            return (
+                              <>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">Netto-Betrag</span>
+                                  <span>{net.toFixed(2)} €</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-muted-foreground">MwSt. (19%)</span>
+                                  <span>{tax.toFixed(2)} €</span>
+                                </div>
+                                <div className="pt-2 flex justify-between font-bold text-lg border-t text-primary">
+                                  <span>Zu zahlen ({billingCycle === 'yearly' ? 'pro Jahr' : 'pro Monat'})</span>
+                                  <span>{total.toFixed(2)} €</span>
+                                </div>
+                              </>
+                            );
+                          })()}
+                          <p className="text-[10px] text-muted-foreground italic text-right">Preise inkl. MwSt.</p>
                         </div>
                       </>
                     )}
@@ -479,8 +549,23 @@ export function UpgradeWizard() {
                     ) : (
                       <div className="text-center">
                         <div className="text-4xl font-bold text-primary mb-1">
-                          {previewData ? `${previewData.amountDueToday.toFixed(2)} €` : '...'}
+                          {previewData ? `${previewData.amountDueToday.toFixed(2)} €` : '0.00 €'}
                         </div>
+                        {(() => {
+                           const hasActiveSub = !!(tenantStatus?.stripe_subscription_id && 
+                                                tenantStatus?.stripe_subscription_status && 
+                                                !['canceled', 'incomplete_expired'].includes(tenantStatus.stripe_subscription_status));
+                           return hasActiveSub && previewData && previewData.amountDueToday > 0;
+                        })() && (
+                          <div className="text-[10px] text-orange-600 font-medium mb-1 uppercase tracking-wider">
+                            Anteilige Kosten (einmalig)
+                          </div>
+                        )}
+                        {previewData && previewData.taxDueToday > 0 && (
+                          <p className="text-[10px] text-muted-foreground">
+                            (davon {previewData.taxDueToday.toFixed(2)} € MwSt.)
+                          </p>
+                        )}
                         <p className="text-sm text-muted-foreground">inkl. MwSt.</p>
                         
                         <div className="mt-6 text-left space-y-3">
@@ -500,8 +585,11 @@ export function UpgradeWizard() {
                     <Button 
                       className="w-full" 
                       size="lg" 
-                      onClick={handleFinalUpgrade}
-                      disabled={isLoadingPreview || isProcessing}
+                      onClick={() => {
+                        console.log("Button clicked!");
+                        handleFinalUpgrade();
+                      }}
+                      disabled={isLoadingPreview || isProcessing || !tenantStatus?.tenant_id}
                     >
                       {isProcessing ? (
                         <>
@@ -509,9 +597,12 @@ export function UpgradeWizard() {
                           Wird verarbeitet...
                         </>
                       ) : (
-                        tenantStatus?.stripe_subscription_id 
-                          ? "Jetzt zahlungspflichtig upgraden"
-                          : "Weiter zur Kasse"
+                        (() => {
+                          const hasActiveSub = !!(tenantStatus?.stripe_subscription_id && 
+                                               tenantStatus?.stripe_subscription_status && 
+                                               !['canceled', 'incomplete_expired'].includes(tenantStatus.stripe_subscription_status));
+                          return hasActiveSub ? "Jetzt zahlungspflichtig upgraden" : "Weiter zur Kasse";
+                        })()
                       )}
                     </Button>
                   </CardFooter>

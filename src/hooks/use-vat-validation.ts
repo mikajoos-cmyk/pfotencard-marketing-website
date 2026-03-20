@@ -36,7 +36,11 @@ export function useVatValidation() {
     setIsValid(true);
 
     try {
+      const token = localStorage.getItem('pfotencard_token');
       const { data, error } = await supabase.functions.invoke('validate-vat', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
         body: { vatId: cleanId }
       });
 
