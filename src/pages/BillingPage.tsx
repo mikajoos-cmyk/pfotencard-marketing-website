@@ -2,8 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { checkTenantStatus, API_BASE_URL, fetchInvoices, reactivateSubscription, type Invoice } from '@/lib/api';
-import { Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText, FileCheck, Shield, Eye, Users, Coins } from 'lucide-react';
+import { checkTenantStatus, API_BASE_URL, fetchInvoices, type Invoice } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
+import { Check, Loader2, ExternalLink, ShieldCheck as ShieldCheckIcon, Info, ArrowRight, Wallet, AlertTriangle, Download, FileText, FileCheck, Shield, Eye, Users, Coins, Layers } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useNavigate } from 'react-router-dom';
 import { PricingTableSection } from '@/components/pricing/PricingTableSection';
@@ -65,12 +66,18 @@ export function BillingPage() {
         setCanceling(true);
         try {
             const token = localStorage.getItem('pfotencard_token');
-            const subdomain = localStorage.getItem('pfotencard_subdomain');
-            const res = await fetch(`${API_BASE_URL}/api/stripe/cancel`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'x-tenant-subdomain': subdomain || '' }
+            const { error } = await supabase.functions.invoke('manage-subscription', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
+                body: {
+                    action: 'cancel',
+                    tenantId: status?.tenant_id
+                }
             });
-            if (!res.ok) throw new Error("Fehler");
+
+            if (error) throw error;
+            
             toast({ title: "Gekündigt", description: "Dein Abo läuft zum Ende des Zeitraums aus." });
             await fetchBillingData();
         } catch (e) {
@@ -83,7 +90,19 @@ export function BillingPage() {
     const handleReactivateSubscription = async () => {
         setReactivating(true);
         try {
-            await reactivateSubscription();
+            const token = localStorage.getItem('pfotencard_token');
+            const { error } = await supabase.functions.invoke('manage-subscription', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
+                body: {
+                    action: 'reactivate',
+                    tenantId: status?.tenant_id
+                }
+            });
+
+            if (error) throw error;
+            
             toast({ title: "Reaktiviert", description: "Dein Abo wurde erfolgreich reaktiviert." });
             await fetchBillingData();
         } catch (e) {
@@ -367,6 +386,27 @@ export function BillingPage() {
                                 <p className="text-sm text-muted-foreground">Wähle jetzt einen Plan, um Pfotencard danach weiterzunutzen.</p>
                             </div>
                         )}
+
+                        <div className="flex flex-col items-center justify-center p-8 bg-primary/5 border border-primary/20 rounded-xl text-center mb-4">
+                            <Layers className="w-12 h-12 text-primary mb-4" />
+                            <h3 className="text-xl font-bold mb-2">Abo individuell konfigurieren</h3>
+                            <p className="text-muted-foreground mb-6 max-w-md">
+                                Nutze unseren Konfigurator, um dein Basis-Paket und Zusatzmodule (wie Buchhaltung oder Branding) optimal zusammenzustellen.
+                            </p>
+                            <Button size="lg" className="px-8 font-bold" onClick={() => navigate('/upgrade')}>
+                                <ArrowRight className="w-5 h-5 mr-2" /> Abo konfigurieren
+                            </Button>
+                        </div>
+
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                <div className="w-full border-t border-muted"></div>
+                            </div>
+                            <div className="relative flex justify-center text-sm uppercase">
+                                <span className="bg-background px-2 text-muted-foreground">Oder direkt wählen</span>
+                            </div>
+                        </div>
+
                         <div className="flex justify-center">
                             <Tabs value={billingCycle} onValueChange={(v) => setBillingCycle(v as any)} className="w-full max-w-[400px]">
                                 <TabsList className="grid w-full grid-cols-2">
@@ -481,8 +521,8 @@ export function BillingPage() {
                                     <Button variant="default" className="gap-2" onClick={openCustomerPortal}>
                                         <ExternalLink className="w-4 h-4" /> Rechnungen
                                     </Button>
-                                    <Button variant="outline" className="bg-background" onClick={() => navigate('/preise')}>
-                                        Plan ändern
+                                    <Button variant="default" className="bg-primary text-primary-foreground gap-2" onClick={() => navigate('/upgrade')}>
+                                        <ArrowRight className="w-4 h-4" /> Upgrade & Module
                                     </Button>
                                     {isCancelled ? (
                                         <Button variant="default" className="ml-auto" onClick={handleReactivateSubscription} disabled={reactivating}>
@@ -549,7 +589,7 @@ export function BillingPage() {
                                         )}
 
                                         <p className="text-xs text-muted-foreground">
-                                            {status?.max_customers 
+                                            {status?.max_customers && status.max_customers > 0
                                                 ? `In deinem ${planName}-Plan sind ${status.max_customers} Kunden enthalten. ` 
                                                 : `In deinem ${planName}-Plan sind unbegrenzt Kunden enthalten. `}
                                             {status?.additional_cost_per_customer > 0 && 
@@ -593,7 +633,7 @@ export function BillingPage() {
                                         </div>
 
                                         <p className="text-xs text-muted-foreground">
-                                            Wenn deine Kunden ihr Guthaben selbstständig (z.B. via Stripe/PayPal) aufladen, fällt eine Service Gebühr von {(status?.top_up_fee_percent || 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% pro Aufladung an (entspricht {(status?.top_up_fee_fixed || 0).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} bei einer Standardaufladung). Bei manuellen Aufladungen durch dich entstehen keine zusätzlichen Pfotencard-Gebühren.
+                                            Wenn deine Kunden ihr Guthaben selbstständig (z.B. via Stripe/PayPal) aufladen, fällt eine Service Gebühr von {(status?.top_up_fee_percent || 0).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% pro Aufladung an. Bei manuellen Aufladungen durch dich entstehen keine zusätzlichen Pfotencard-Gebühren.
                                         </p>
                                     </div>
                                 </CardContent>

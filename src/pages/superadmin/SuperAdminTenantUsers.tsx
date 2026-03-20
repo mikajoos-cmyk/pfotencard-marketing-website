@@ -171,7 +171,7 @@ export default function SuperAdminTenantUsers() {
                                                 user.role === 'mitarbeiter' ? 'bg-blue-100 text-blue-800' :
                                                 'bg-slate-100 text-slate-800'
                                             }`}>
-                                                {user.role.toUpperCase()}
+                                                {(user.role || 'gast').toUpperCase()}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">

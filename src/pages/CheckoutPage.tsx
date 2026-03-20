@@ -1,368 +1,952 @@
-import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
+// src/pages/CheckoutPage.tsx
+import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import type { Stripe } from '@stripe/stripe-js';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { useStripe, useElements, PaymentElement, Elements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { API_BASE_URL } from '@/lib/api';
-import { Loader2, ShieldCheck, CheckCircle2, ArrowRight, Building, MapPin, User, Cookie } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Loader2, CreditCard, Building2, Wallet, Tag, CheckCircle2, XCircle, MapPin, Clock, Info } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { fetchPackages } from '@/lib/api';
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { VatIdInput } from "@/components/ui/VatIdInput";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
 
-// Stripe wird jetzt erst geladen, wenn die Cookies akzeptiert wurden
-let stripePromise: Promise<Stripe | null> | null = null;
+import { getCountryCode } from "@/lib/country-mapping";
 
-const getStripe = async () => {
-    if (!stripePromise && localStorage.getItem('cookie-consent-seen') === 'true') {
-        const { loadStripe } = await import('@stripe/stripe-js');
-        stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
-    }
-    return stripePromise;
+export type SubscriptionPlan = 'starter' | 'pro' | 'enterprise';
+
+export interface DBPackage {
+  id: number;
+  plan_name: string;
+  package_type: 'base' | 'addon';
+  price_monthly: number;
+  price_yearly: number;
+  allowed_modules: string[];
+  included_customers: number;
+  additional_cost_per_customer: number;
+  features: Record<string, boolean>;
+}
+
+export const PLAN_DETAILS: Record<SubscriptionPlan, { name: string; price: number }> = {
+    starter: { name: 'Starter', price: 29 },
+    pro: { name: 'Pro', price: 59 },
+    enterprise: { name: 'Enterprise', price: 99 },
 };
 
-// Dynamisches Laden der Stripe-Komponenten
-const LazyElements = lazy(async () => {
-    const { Elements } = await import('@stripe/react-stripe-js');
-    return { default: Elements };
-});
-
-const LazyPaymentElement = lazy(async () => {
-    const { PaymentElement } = await import('@stripe/react-stripe-js');
-    return { default: PaymentElement };
-});
-
-function StripeFormWrapper({ clientSecret, amountDue }: { clientSecret: string, amountDue: number | null }) {
-    // Wir importieren die Hooks dynamisch
-    const [stripeHooks, setStripeHooks] = useState<{ useStripe: any, useElements: any } | null>(null);
-
-    useEffect(() => {
-        import('@stripe/react-stripe-js').then(mod => {
-            setStripeHooks({ useStripe: mod.useStripe, useElements: mod.useElements });
-        });
-    }, []);
-
-    if (!stripeHooks) return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-
-    return <CheckoutFormInner clientSecret={clientSecret} amountDue={amountDue} hooks={stripeHooks} />;
-}
-
-function CheckoutFormInner({ clientSecret, amountDue, hooks }: { clientSecret: string, amountDue: number | null, hooks: any }) {
-    const stripe = hooks.useStripe();
-    const elements = hooks.useElements();
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [isElementLoaded, setIsElementLoaded] = useState(false);
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!stripe || !elements || !isElementLoaded) return;
-
-        setIsProcessing(true);
-        const returnUrl = `${window.location.origin}/einstellungen?subscription_success=true`;
-
-        let result;
-        if (clientSecret.startsWith('seti_')) {
-            result = await stripe.confirmSetup({ elements, confirmParams: { return_url: returnUrl } });
-        } else {
-            result = await stripe.confirmPayment({ elements, confirmParams: { return_url: returnUrl } });
-        }
-
-        if (result.error) {
-            setErrorMessage(result.error.message || "Ein Fehler ist aufgetreten.");
-            setIsProcessing(false);
-        }
-    };
-
-    const buttonText = amountDue !== null && amountDue > 0 
-        ? `Zahlungspflichtig bestellen (${amountDue.toFixed(2).replace('.', ',')} €)` 
-        : "Zahlungsmethode bestätigen";
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-6">
-            <Suspense fallback={<div className="h-40 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
-                <LazyPaymentElement onReady={() => setIsElementLoaded(true)} />
-            </Suspense>
-            {errorMessage && (
-                <div className="text-red-500 text-sm text-center bg-red-50 p-3 rounded-md border border-red-100">
-                    {errorMessage}
-                </div>
-            )}
-            <Button disabled={isProcessing || !stripe || !elements || !isElementLoaded} className="w-full h-12 text-base shadow-lg">
-                {isProcessing ? <><Loader2 className="h-5 w-5 animate-spin mr-2" /> Verarbeitung...</> : buttonText}
-            </Button>
-        </form>
-    );
-}
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '');
 
 export function CheckoutPage() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const plan = searchParams.get('plan') || 'pro';
-    const cycle = searchParams.get('cycle') || 'monthly';
-    const subdomain = localStorage.getItem('pfotencard_subdomain');
-
-    const [step, setStep] = useState<'billing' | 'payment' | 'success'>('billing');
+    const planId = searchParams.get('plan') || 'starter';
+    const billingCycle = searchParams.get('cycle') || 'monthly';
+    const addonsParam = searchParams.get('addons');
+    const addons = addonsParam ? addonsParam.split(',') : [];
+    
     const [clientSecret, setClientSecret] = useState<string | null>(null);
-    const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
-    const [errorMsg, setErrorMsg] = useState<string | null>(null);
-    const [amountDue, setAmountDue] = useState<number | null>(null); // <-- NEU
-    const [hasCookieConsent, setHasCookieConsent] = useState(localStorage.getItem('cookie-consent-seen') === 'true');
+    const [intentType, setIntentType] = useState<'payment' | 'setup'>('payment');
+    const [preview, setPreview] = useState<any>(null);
+    const [packages, setPackages] = useState<DBPackage[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const { hotelProfile, isLoading: authLoading } = useAuth();
 
     useEffect(() => {
-        const handleConsentUpdate = () => {
-            setHasCookieConsent(localStorage.getItem('cookie-consent-seen') === 'true');
+        const loadInitialData = async () => {
+            try {
+                const pkgs = await fetchPackages();
+                setPackages(pkgs);
+            } catch (err) {
+                console.error('Error fetching packages:', err);
+            }
         };
-        window.addEventListener('cookie-consent-updated', handleConsentUpdate);
-        return () => window.removeEventListener('cookie-consent-updated', handleConsentUpdate);
+        loadInitialData();
     }, []);
 
-    // Form State für Rechnungsdaten
-    const [billingData, setBillingData] = useState({
-        company_name: '',
-        name: '',
-        address_line1: '',
-        postal_code: '',
-        city: '',
-        country: 'DE',
-        vat_id: ''
+    useEffect(() => {
+        const createIntent = async () => {
+            try {
+                setLoading(true);
+                const token = localStorage.getItem('pfotencard_token');
+                const { data, error: functionError } = await supabase.functions.invoke('create-subscription-intent', {
+                    headers: {
+                        'x-tenant-subdomain': hotelProfile?.subdomain || '',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: {
+                        plan: planId,
+                        addons: addons,
+                        billingCycle: billingCycle,
+                        action: 'create_intent'
+                        // Adresse wird hier noch nicht gesendet, da sie im Initial-Load noch nicht vom User geändert wurde
+                        // Falls sie schon da ist, wird sie vom Backend aus der DB geladen
+                    }
+                });
+
+                if (functionError) throw functionError;
+                if (data.error) throw new Error(data.error);
+
+                setClientSecret(data.clientSecret);
+                setIntentType(data.intentType || 'payment');
+                setPreview(data.preview);
+            } catch (err: any) {
+                console.error('Error creating intent:', err);
+                setError(err.message || 'Fehler beim Initialisieren der Zahlung.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (hotelProfile) {
+            createIntent();
+        } else if (!authLoading) {
+            // Wenn Auth fertig geladen ist aber kein Profil da ist
+            setLoading(false);
+            setError("Profil konnte nicht geladen werden. Bitte melden Sie sich erneut an.");
+        }
+    }, [planId, billingCycle, hotelProfile?.subdomain, authLoading]);
+
+    if (authLoading || (loading && !error)) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="ml-2">Lade Bezahlmodul...</span>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center">
+                <XCircle className="h-12 w-12 text-destructive mb-4" />
+                <h1 className="text-xl font-bold mb-2">Hoppla!</h1>
+                <p className="text-muted-foreground mb-6">{error}</p>
+                <Button onClick={() => navigate('/billing')}>Zurück zur Übersicht</Button>
+            </div>
+        );
+    }
+
+    if (!clientSecret) return null;
+
+    const planName = PLAN_DETAILS[planId as SubscriptionPlan]?.name || planId;
+
+    return (
+        <main className="pt-24 pb-12 bg-background min-h-screen">
+            <div className="container mx-auto px-4 max-w-2xl">
+                <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-sans font-bold text-foreground mb-2">Checkout</h1>
+                        <p className="text-muted-foreground">Sichere Bezahlung via Stripe</p>
+                    </div>
+                    <div className="flex gap-2">
+                        {searchParams.get('from') === 'upgrade' && (
+                            <Button variant="outline" onClick={() => navigate(`/upgrade`)}>Zurück zur Auswahl</Button>
+                        )}
+                        <Button variant="ghost" onClick={() => navigate('/billing')}>Abbrechen</Button>
+                    </div>
+                </div>
+
+                <div className="bg-card border rounded-xl shadow-sm p-6 md:p-8">
+                    <Elements
+                        stripe={stripePromise}
+                        options={{
+                            clientSecret,
+                            appearance: { theme: 'stripe' },
+                            locale: 'de'
+                        }}
+                    >
+                        <CheckoutForm
+                            planId={planId}
+                            planName={planName}
+                            intentType={intentType}
+                            clientSecret={clientSecret}
+                            initialPreview={preview}
+                            addons={addons}
+                            billingCycle={billingCycle}
+                            packages={packages}
+                        />
+                    </Elements>
+                </div>
+
+                <p className="mt-8 text-center text-xs text-muted-foreground px-4">
+                    Ihre Daten werden verschlüsselt übertragen. Durch den Abschluss des Abonnements akzeptieren Sie unsere AGB und Datenschutzbestimmungen.
+                </p>
+            </div>
+        </main>
+    );
+}
+
+export function CheckoutForm({
+                                 planId,
+                                 planName,
+                                 intentType,
+                                 savedMethods = [],
+                                 clientSecret,
+                                 isEligibleForTrial = false,
+                                 isContinuingTrial = false,
+                                 initialPreview = null,
+                                 addons = [],
+                                 billingCycle = 'monthly',
+                                 packages = [],
+                             }: {
+    planId: string;
+    planName: string;
+    intentType: string;
+    savedMethods?: any[];
+    clientSecret: string;
+    isEligibleForTrial?: boolean;
+    isContinuingTrial?: boolean;
+    initialPreview?: any;
+    addons?: string[];
+    billingCycle?: string;
+    packages?: DBPackage[];
+}) {
+    const stripe = useStripe();
+    const elements = useElements();
+    const { toast } = useToast();
+    const { hotelProfile } = useAuth();
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [preview, setPreview] = useState<any>(initialPreview);
+
+    const [selectedMethod, setSelectedMethod] = useState<string>(
+        savedMethods.length > 0 ? savedMethods[0].id : 'new'
+    );
+    const [vatId, setVatId] = useState(hotelProfile?.vat_id || '');
+    const [hasVatError, setHasVatError] = useState(false);
+    const [isVatValidating, setIsVatValidating] = useState(false);
+
+    // Address states
+    const [addressSearchValue, setAddressSearchValue] = useState('');
+    const [address, setAddress] = useState({
+        street: hotelProfile?.street || '',
+        city: hotelProfile?.city || '',
+        postcode: (hotelProfile as any)?.postcode || '',
+        country: hotelProfile?.country || 'DE',
+        countryCode: getCountryCode(hotelProfile?.country || 'DE'),
     });
 
-    // --- FIX 3: Lade existierende Rechnungsdaten beim Start ---
+    const [promoCode, setPromoCode] = useState('');
+    const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+    const [promoDetails, setPromoDetails] = useState<any>(null);
+    const [promoError, setPromoError] = useState<string | null>(null);
+
+    const [isSavingAddress, setIsSavingAddress] = useState(false);
+
+    // Automatisches Speichern der Adresse wenn sie sich ändert (Debounced)
     useEffect(() => {
-        if (!subdomain) return;
-        async function fetchConfig() {
-            try {
-                const token = localStorage.getItem('pfotencard_token');
-                const res = await fetch(`${API_BASE_URL}/api/config`, {
-                    headers: { 'x-tenant-subdomain': subdomain, 'Authorization': `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    const legal = data.tenant?.config?.legal_settings;
-                    
-                    if (legal) {
-                        const useBilling = legal.separate_billing_address;
-                        
-                        setBillingData(prev => ({
-                            ...prev,
-                            company_name: (useBilling ? legal.billing_company_name : legal.company_name) || prev.company_name,
-                            name: legal.owner_name || legal.representative || prev.name,
-                            address_line1: (useBilling 
-                                ? `${legal.billing_street || ''} ${legal.billing_house_number || ''}`.trim()
-                                : `${legal.street || ''} ${legal.house_number || ''}`.trim()) || prev.address_line1,
-                            postal_code: (useBilling ? legal.billing_zip_code : legal.zip_code) || prev.postal_code,
-                            city: (useBilling ? legal.billing_city : legal.city) || prev.city,
-                            vat_id: legal.vat_id || prev.vat_id
-                        }));
+        if (!hotelProfile) return;
+
+        const timer = setTimeout(async () => {
+            // Nur speichern wenn sich wirklich was geändert hat im Vergleich zum Profil
+            const hasChanged =
+                address.street !== (hotelProfile.street || '') ||
+                address.city !== (hotelProfile.city || '') ||
+                address.postcode !== ((hotelProfile as any).postcode || '') ||
+                address.countryCode !== (getCountryCode(hotelProfile.country || 'DE')) ||
+                vatId !== (hotelProfile.vat_id || '');
+
+            if (hasChanged) {
+                setIsSavingAddress(true);
+                try {
+                    const token = localStorage.getItem('pfotencard_token');
+                    const { data } = await supabase.functions.invoke('create-subscription-intent', {
+                        headers: { 
+                            'x-tenant-subdomain': hotelProfile.subdomain || '',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: {
+                            action: 'create_intent',
+                            plan: planId,
+                            addons: addons,
+                            billingCycle: billingCycle,
+                            address,
+                            vatId,
+                            promoCodeId: promoDetails?.id
+                        }
+                    });
+                    if (data?.preview) {
+                        setPreview(data.preview);
                     }
+                } catch (e) {
+                    console.error("Error updating preview:", e);
+                } finally {
+                    setIsSavingAddress(false);
                 }
-            } catch (e) {
-                console.error("Konnte existierende Rechnungsdaten nicht laden", e);
+            }
+        }, 2000);
+
+        return () => clearTimeout(timer);
+    }, [address, vatId, hotelProfile?.subdomain]);
+
+    const planDetails = PLAN_DETAILS[planId as SubscriptionPlan];
+    const basePrice = planDetails?.price || 0;
+
+    const calculateFinalPrice = () => {
+        if (preview && preview.amountDueToday !== undefined) {
+            console.log("[CHECKOUT] Received Preview from Stripe:", preview);
+
+            const hasActiveSub = !!(hotelProfile?.stripe_subscription_id && 
+                                 hotelProfile?.stripe_subscription_status && 
+                                 !['canceled', 'incomplete_expired'].includes(hotelProfile.stripe_subscription_status));
+
+            const isGermany = address.countryCode === 'DE' || address.country === 'Germany' || address.country === 'Deutschland';
+
+            return {
+                lines: preview.lines || [],
+                subtotal: preview.netDueToday,
+                proration: preview.amountDueToday, // In diesem Kontext ist proration das was heute fällig ist
+                discount: 0,
+                netPrice: preview.netDueToday,
+                taxAmount: preview.taxDueToday,
+                totalPrice: preview.amountDueToday,
+                isGermany,
+                hasProration: (preview.lines || []).some((l: any) => l.proration),
+                hasActiveSub
+            };
+        }
+
+        // Fallback-Logik für den Fall, dass keine Vorschau da ist (z.B. Offline oder Fehler)
+        const base = packages.find(p => p.plan_name === planId);
+        const basePrice = base ? (billingCycle === 'yearly' ? base.price_yearly : base.price_monthly) : 0;
+        
+        const addonsPrice = (addons || []).reduce((sum, addonName) => {
+            const pkg = packages.find(p => p.plan_name === addonName);
+            if (!pkg) return sum;
+            return sum + (billingCycle === 'yearly' ? pkg.price_yearly : pkg.price_monthly);
+        }, 0);
+
+        let netPrice = basePrice + addonsPrice;
+        if (promoDetails) {
+            if (promoDetails.percent_off) {
+                netPrice = netPrice * (1 - promoDetails.percent_off / 100);
+            } else if (promoDetails.amount_off) {
+                netPrice = Math.max(0, netPrice - promoDetails.amount_off / 100);
             }
         }
-        fetchConfig();
-    }, [subdomain]);
 
-    const handleBillingSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setStatus('loading');
-        setErrorMsg(null);
+        const hasActiveSub = !!(hotelProfile?.stripe_subscription_id && 
+                             hotelProfile?.stripe_subscription_status && 
+                             !['canceled', 'incomplete_expired'].includes(hotelProfile.stripe_subscription_status));
+
+        const isGermany = address.countryCode === 'DE' || address.country === 'Germany' || address.country === 'Deutschland';
+        const taxRate = isGermany ? 0.19 : 0;
+        const taxAmount = netPrice * taxRate;
+        const totalPrice = netPrice + taxAmount;
+
+        return {
+            lines: null,
+            subtotal: basePrice + addonsPrice,
+            proration: 0,
+            discount: (basePrice + addonsPrice) - netPrice,
+            netPrice: netPrice,
+            taxAmount: taxAmount,
+            totalPrice: totalPrice,
+            isGermany,
+            hasProration: false,
+            hasActiveSub
+        };
+    };
+
+    const priceBreakdown = calculateFinalPrice();
+
+    const handleValidatePromo = async () => {
+        if (!promoCode.trim()) return;
+
+        setIsValidatingPromo(true);
+        setPromoError(null);
+        setPromoDetails(null);
 
         try {
             const token = localStorage.getItem('pfotencard_token');
-            const res = await fetch(`${API_BASE_URL}/api/stripe/create-subscription`, {
-                method: 'POST',
+            const { data, error: functionError } = await supabase.functions.invoke('validate-promo-code', {
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                    'x-tenant-subdomain': subdomain || ''
+                    Authorization: `Bearer ${token}`
                 },
-                body: JSON.stringify({
-                    subdomain,
-                    plan: plan.toLowerCase(),
-                    cycle: cycle.toLowerCase(),
-                    addons: [], // Vorerst leer, kann später dynamisch befüllt werden
-                    billing_details: billingData,
-                    trial_allowed: false
-                })
+                body: {
+                    code: promoCode.trim(),
+                    plan: planId
+                }
             });
 
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.detail || "Konnte Checkout-Session nicht erstellen");
-            }
+            if (functionError) throw functionError;
 
-            const data = await res.json();
+            if (data?.valid) {
+                setPromoDetails(data);
+                toast({
+                    title: "Erfolg",
+                    description: `Gutschein "${data.name}" angewendet!`,
+                });
 
-            if (data.clientSecret) {
-                setClientSecret(data.clientSecret);
-                if (data.amountDue !== undefined) {
-                    setAmountDue(data.amountDue); // <-- NEU
+                // Nach Gutschein-Anwendung Vorschau aktualisieren
+                try {
+                    const token = localStorage.getItem('pfotencard_token');
+                    const { data: intentData } = await supabase.functions.invoke('create-subscription-intent', {
+                        headers: { 
+                            'x-tenant-subdomain': hotelProfile?.subdomain || '',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: {
+                            action: 'create_intent',
+                            plan: planId,
+                            addons: addons,
+                            billingCycle: billingCycle,
+                            address,
+                            vatId,
+                            promoCodeId: data.id // Hier die ID des Gutscheins nutzen
+                        }
+                    });
+                    if (intentData?.preview) {
+                        setPreview(intentData.preview);
+                    }
+                } catch (e) {
+                    console.error("Error updating preview after promo:", e);
                 }
-                setStep('payment');
-                setStatus('idle');
-            } else if (data.status === 'updated' || data.status === 'created' || data.status === 'success') {
-                setStep('success');
             } else {
-                throw new Error(`Unerwarteter Status: ${data.status}`);
+                setPromoError(data?.message || 'Gutscheincode ungültig.');
             }
-        } catch (e: any) {
-            setStatus('error');
-            setErrorMsg(e.message || "Ein unerwarteter Fehler ist aufgetreten.");
+        } catch (err: any) {
+            console.error('Promo validation error:', err);
+            setPromoError('Fehler bei der Validierung.');
+        } finally {
+            setIsValidatingPromo(false);
         }
     };
 
-    const appearance = { theme: 'stripe' as const, variables: { colorPrimary: '#22c55e' } };
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!stripe || !elements) return;
+
+        setIsLoading(true);
+        setError(null);
+        const returnUrl = `${window.location.origin}/billing`;
+
+        const { error: submitValidationError } = await elements.submit();
+        if (submitValidationError) {
+            setError(submitValidationError.message ?? 'Bitte füllen Sie alle Felder aus.');
+            setIsLoading(false);
+            return;
+        }
+
+        // =====================================
+        // ROUTE A: BEREITS GESPEICHERTE KARTE
+        // =====================================
+        if (selectedMethod !== 'new') {
+            try {
+                const token = localStorage.getItem('pfotencard_token');
+                const { data, error: finalizeError } = await supabase.functions.invoke('create-subscription-intent', {
+                    headers: {
+                        'x-tenant-subdomain': hotelProfile?.subdomain || '',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: {
+                        action: 'finalize_subscription',
+                        plan: planId,
+                        addons: addons,
+                        billingCycle: billingCycle,
+                        paymentMethodId: selectedMethod,
+                        vatId,
+                        address,
+                        promoCodeId: promoDetails?.promoCodeId
+                    }
+                });
+
+                if (finalizeError) throw finalizeError;
+                // NEU: Backend Fehler fangen
+                if (data?.error) throw new Error(data.error);
+
+                // Neu: Erst Erfolgsmeldung, dann Reload
+                toast({
+                    title: "Erfolg",
+                    description: 'Abonnement erfolgreich abgeschlossen!',
+                });
+
+                setTimeout(() => {
+                    window.location.href = returnUrl;
+                    if (window.location.pathname === '/billing') {
+                        window.location.reload();
+                    }
+                }, 1000);
+            } catch (err: any) {
+                setError(err.message || 'Fehler beim Aktualisieren des Abos mit gespeicherter Karte.');
+                setIsLoading(false);
+            }
+            return;
+        }
+
+        // =====================================
+        // ROUTE B: KOMPLETT NEUE KARTE EINGEGEBEN
+        // =====================================
+
+        // Daten für PayPal Redirect speichern
+        localStorage.setItem('pending_subscription_checkout', JSON.stringify({
+            planId,
+            vatId,
+            address,
+            promoCodeId: promoDetails?.promoCodeId || null
+        }));
+
+        const { error: confirmError, setupIntent, paymentIntent } = await (intentType === 'setup'
+                ? stripe.confirmSetup({
+                    elements,
+                    confirmParams: { return_url: returnUrl },
+                    redirect: 'if_required',
+                })
+                : stripe.confirmPayment({
+                    elements,
+                    confirmParams: { return_url: returnUrl },
+                    redirect: 'if_required',
+                })
+        );
+
+        if (confirmError) {
+            localStorage.removeItem('pending_subscription_checkout'); // Cleanup bei Fehler
+            setError(confirmError.message ?? 'Zahlungsdetails konnten nicht geprüft werden.');
+            setIsLoading(false);
+            return;
+        }
+
+        // Block für Methoden ohne Redirect (z.B. Kreditkarte)
+        if ((setupIntent && setupIntent.status === 'succeeded') || (paymentIntent && paymentIntent.status === 'succeeded')) {
+            try {
+                const paymentMethodId = setupIntent?.payment_method
+                    ? (typeof setupIntent.payment_method === 'string' ? setupIntent.payment_method : setupIntent.payment_method.id)
+                    : paymentIntent?.payment_method
+                        ? (typeof paymentIntent.payment_method === 'string' ? paymentIntent.payment_method : paymentIntent.payment_method.id)
+                        : undefined;
+
+                const token = localStorage.getItem('pfotencard_token');
+                const { data, error: finalizeError } = await supabase.functions.invoke('create-subscription-intent', {
+                    headers: {
+                        'x-tenant-subdomain': hotelProfile?.subdomain || '',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: {
+                        action: 'finalize_subscription',
+                        plan: planId,
+                        addons: addons,
+                        billingCycle: billingCycle,
+                        vatId,
+                        address,
+                        promoCodeId: promoDetails?.promoCodeId,
+                        paymentMethodId // <-- Auch hier mitsenden für Konsistenz
+                    }
+                });
+
+                if (finalizeError) throw finalizeError;
+                if (data?.error) throw new Error(data.error);
+
+                // Aufräumen
+                localStorage.removeItem('pending_subscription_checkout');
+                window.location.href = returnUrl;
+            } catch (err: any) {
+                localStorage.removeItem('pending_subscription_checkout');
+                setError(err.message || 'Das Abo konnte nicht final gestartet werden.');
+                setIsLoading(false);
+            }
+        }
+    };
 
     return (
-        <main className="pt-24 pb-12 bg-background min-h-screen flex items-center justify-center">
-            <div className="container mx-auto px-4 max-w-lg">
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                    <Card className="border-2 border-primary/20 shadow-xl overflow-hidden">
-                        <CardHeader className="bg-muted/30 border-b text-center">
-                            <CardTitle>
-                                {step === 'success' ? "Erfolgreich!" : "Checkout"}
-                            </CardTitle>
-                            <CardDescription>
-                                {step === 'success'
-                                    ? "Dein Abo wurde aktualisiert."
-                                    : `Pfotencard ${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`}
-                            </CardDescription>
-                        </CardHeader>
-
-                        <CardContent className="pt-8 pb-8">
-                            {/* ERROR MELDUNG */}
-                            {status === 'error' && (
-                                <div className="text-center space-y-4 mb-6">
-                                    <div className="text-red-500 text-sm font-medium bg-red-50 p-3 rounded border border-red-200">{errorMsg}</div>
-                                </div>
-                            )}
-
-                            {/* SCHRITT 1: RECHNUNGSDATEN */}
-                            {step === 'billing' && (
-                                <form onSubmit={handleBillingSubmit} className="space-y-4 animate-in fade-in">
-                                    <h3 className="font-semibold flex items-center gap-2 mb-4"><Building size={18}/> Rechnungsdetails</h3>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2 col-span-2 md:col-span-1">
-                                            <Label>Vor- & Nachname *</Label>
-                                            <Input required value={billingData.name} onChange={e => setBillingData({...billingData, name: e.target.value})} placeholder="Max Mustermann" />
-                                        </div>
-                                        <div className="space-y-2 col-span-2 md:col-span-1">
-                                            <Label>Firmenname (Optional)</Label>
-                                            <Input value={billingData.company_name} onChange={e => setBillingData({...billingData, company_name: e.target.value})} placeholder="Hundeschule Mustermann" />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>Straße & Hausnummer *</Label>
-                                        <Input required value={billingData.address_line1} onChange={e => setBillingData({...billingData, address_line1: e.target.value})} placeholder="Musterstraße 1" />
-                                    </div>
-
-                                    <div className="grid grid-cols-3 gap-4">
-                                        <div className="space-y-2 col-span-1">
-                                            <Label>PLZ *</Label>
-                                            <Input required value={billingData.postal_code} onChange={e => setBillingData({...billingData, postal_code: e.target.value})} placeholder="12345" />
-                                        </div>
-                                        <div className="space-y-2 col-span-2">
-                                            <Label>Ort *</Label>
-                                            <Input required value={billingData.city} onChange={e => setBillingData({...billingData, city: e.target.value})} placeholder="Musterstadt" />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>Umsatzsteuer-ID (Optional)</Label>
-                                        <Input value={billingData.vat_id} onChange={e => setBillingData({...billingData, vat_id: e.target.value})} placeholder="DE123456789" />
-                                        <p className="text-xs text-muted-foreground">Relevant für B2B-Kunden (Reverse-Charge Verfahren)</p>
-                                    </div>
-
-                                    <Button type="submit" disabled={status === 'loading'} className="w-full mt-6 h-12">
-                                        {status === 'loading' ? <><Loader2 className="animate-spin mr-2"/> Speichere Daten...</> : 'Weiter zur Zahlung'}
-                                    </Button>
-                                </form>
-                            )}
-
-                            {/* SCHRITT 2: STRIPE ZAHLUNG */}
-                            {step === 'payment' && clientSecret && (
-                                <div className="animate-in slide-in-from-right-8 duration-300">
-                                    <div className="mb-6 flex items-center justify-between bg-muted/50 p-3 rounded-lg border">
-                                        <div>
-                                            <p className="text-xs text-muted-foreground uppercase font-bold">Rechnung an</p>
-                                            <p className="text-sm font-medium">{billingData.company_name || billingData.name}</p>
-                                        </div>
-                                        <Button type="button" variant="ghost" size="sm" onClick={() => setStep('billing')}>Ändern</Button>
-                                    </div>
-                                    
-                                    {/* NEU: Anzeige des zu zahlenden Betrags */}
-                                    {amountDue !== null && (
-                                        <div className="mb-6 p-5 bg-primary/5 border border-primary/20 rounded-lg text-center shadow-sm">
-                                            <p className="text-sm font-medium text-primary/80 mb-1">
-                                                {amountDue === 0 ? "Kostenlose Testphase" : "Jetzt zu zahlender Betrag"}
-                                            </p>
-                                            <p className="text-4xl font-black text-foreground tracking-tight">
-                                                {amountDue === 0 ? "0,00 €" : `${amountDue.toFixed(2).replace('.', ',')} €`}
-                                            </p>
-                                            {amountDue > 0 && <p className="text-xs text-muted-foreground mt-2 font-medium">Inklusive Mehrwertsteuer. Bei einem Plan-Wechsel (Upgrade) wird dein bisheriges Guthaben bereits automatisch anteilig verrechnet.</p>}
-                                        </div>
-                                    )}
-
-                                    {!hasCookieConsent ? (
-                                        <div className="p-8 text-center border-2 border-dashed rounded-xl bg-muted/30 space-y-4">
-                                            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto text-primary">
-                                                <Cookie size={24} />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <h4 className="font-semibold">Cookies erforderlich</h4>
-                                                <p className="text-sm text-muted-foreground">
-                                                    Um die sichere Zahlungsabwicklung via Stripe zu laden, müssen Sie den Cookies zustimmen.
-                                                </p>
-                                            </div>
-                                            <Button 
-                                                variant="outline" 
-                                                onClick={() => {
-                                                    localStorage.setItem('cookie-consent-seen', 'true');
-                                                    window.dispatchEvent(new Event('cookie-consent-updated'));
-                                                }}
-                                            >
-                                                Zustimmen & Zahlung laden
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <Suspense fallback={<div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}>
-                                            <LazyElements stripe={getStripe()} options={{ clientSecret, appearance, locale: 'de' }}>
-                                                <StripeFormWrapper clientSecret={clientSecret} amountDue={amountDue} />
-                                            </LazyElements>
-                                        </Suspense>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* SCHRITT 3: ERFOLG */}
-                            {step === 'success' && (
-                                <div className="text-center space-y-6 animate-in zoom-in-95 duration-300">
-                                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                                        <CheckCircle2 className="w-10 h-10 text-green-600" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-bold text-lg text-foreground">Alles erledigt!</h3>
-                                        <p className="text-muted-foreground text-sm mt-2">Vielen Dank. Dein Abo ist jetzt aktiv.</p>
-                                    </div>
-                                    <Button className="w-full gap-2" onClick={() => navigate('/einstellungen')}>
-                                        Zu den Einstellungen <ArrowRight className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            )}
-                        </CardContent>
-
-                        <CardFooter className="bg-muted/10 border-t py-4 justify-center">
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <ShieldCheck className="w-4 h-4 text-green-600" />
-                                <span>100% Sichere SSL-Verschlüsselung via Stripe</span>
-                            </div>
-                        </CardFooter>
-                    </Card>
-                </motion.div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="text-center mb-4">
+                <h2 className="text-xl font-semibold">Zahlung für {planName}</h2>
+                <p className="text-muted-foreground mt-2 text-sm">
+                    {promoDetails?.percent_off === 100
+                        ? 'Durch Ihren Gutschein nutzen Sie den Plan dauerhaft oder zeitweise kostenlos.'
+                        : isContinuingTrial
+                            ? 'Ihr aktueller Testzeitraum bleibt bestehen und wird auf den neuen Plan angewendet.'
+                            : isEligibleForTrial
+                                ? 'Sie nutzen die Plattform 90 Tage völlig kostenlos. Erst danach wird abgebucht.'
+                                : 'Bitte bestätigen Sie Ihre Zahlung für den kostenpflichtigen Plan.'}
+                </p>
             </div>
-        </main>
+
+            {/* GUTSCHEINCODE - Jetzt prominenter oben platziert */}
+            <div className="bg-muted/30 p-4 rounded-lg border space-y-3">
+                <h3 className="font-medium text-sm flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-primary" /> Haben Sie einen Gutscheincode?
+                </h3>
+                <div className="flex gap-2">
+                    <Input
+                        placeholder="Code eingeben (z.B. SAVE20)"
+                        value={promoCode}
+                        onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                        disabled={isValidatingPromo || !!promoDetails}
+                        className="flex-1 bg-background"
+                    />
+                    {promoDetails ? (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                setPromoDetails(null);
+                                setPromoCode('');
+                            }}
+                        >
+                            Entfernen
+                        </Button>
+                    ) : (
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={handleValidatePromo}
+                            disabled={isValidatingPromo || !promoCode.trim()}
+                        >
+                            {isValidatingPromo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Prüfen'}
+                        </Button>
+                    )}
+                </div>
+
+                {promoError && (
+                    <p className="text-xs text-destructive flex items-center gap-1 mt-1">
+                        <XCircle className="w-3 h-3" /> {promoError}
+                    </p>
+                )}
+
+                {promoDetails && (
+                    <div className="bg-primary/10 border border-primary/20 rounded-md p-3 flex items-start gap-3">
+                        <CheckCircle2 className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                            <p className="font-medium text-primary">Gutschein "{promoDetails.name}" aktiv</p>
+                            <p className="text-muted-foreground text-xs">
+                                Rabatt: {promoDetails.percent_off ? `${promoDetails.percent_off}%` : promoDetails.amount_off ? `${(promoDetails.amount_off / 100).toFixed(2)} ${promoDetails.currency?.toUpperCase()}` : 'Gültig'}
+                                {promoDetails.duration === 'repeating' && promoDetails.duration_in_months && (
+                                    <span className="ml-1">• für {promoDetails.duration_in_months} Monate</span>
+                                )}
+                                {promoDetails.duration === 'once' && (
+                                    <span className="ml-1">• einmalig</span>
+                                )}
+                                {promoDetails.duration === 'forever' && (
+                                    <span className="ml-1">• dauerhaft</span>
+                                )}
+                            </p>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <h3 className="font-medium text-sm">Rechnungsadresse</h3>
+                    <div className="flex items-center space-x-2">
+                        {isSavingAddress ? (
+                            <div className="flex items-center text-xs text-muted-foreground animate-pulse">
+                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                Speichere...
+                            </div>
+                        ) : (
+                            <div className="flex items-center text-xs text-green-600">
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Gespeichert
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Adresse suchen</Label>
+                        <AddressAutocomplete
+                            value={addressSearchValue}
+                            onChange={setAddressSearchValue}
+                            onAddressSelect={(selectedAddress) => {
+                                setAddress({
+                                    street: selectedAddress.street,
+                                    city: selectedAddress.city,
+                                    postcode: selectedAddress.postcode,
+                                    country: selectedAddress.country,
+                                    countryCode: selectedAddress.countryCode || getCountryCode(selectedAddress.country),
+                                });
+                                setAddressSearchValue('');
+                            }}
+                            placeholder="Adresse eingeben..."
+                        />
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="street">Straße *</Label>
+                            <Input
+                                id="street"
+                                value={address.street}
+                                readOnly
+                                className="bg-muted/50 cursor-not-allowed"
+                                placeholder="Straße"
+                                required
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="postcode">PLZ *</Label>
+                                <Input
+                                    id="postcode"
+                                    value={address.postcode}
+                                    readOnly
+                                    className="bg-muted/50 cursor-not-allowed"
+                                    placeholder="PLZ"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="city">Ort *</Label>
+                                <Input
+                                    id="city"
+                                    value={address.city}
+                                    readOnly
+                                    className="bg-muted/50 cursor-not-allowed"
+                                    placeholder="Ort"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="country">Land *</Label>
+                            <Input
+                                id="country"
+                                value={address.country}
+                                readOnly
+                                className="bg-muted/50 cursor-not-allowed"
+                                placeholder="Land"
+                                required
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-4">
+                    <VatIdInput
+                        value={vatId}
+                        onChange={setVatId}
+                        label="USt-IdNr. (für Rechnungen)"
+                        onErrorStateChange={setHasVatError}
+                        onValidatingStateChange={setIsVatValidating}
+                    />
+                </div>
+            </div>
+
+            {savedMethods.length > 0 && (
+                <div className="space-y-3 pt-4 border-t">
+                    <h3 className="font-medium text-sm">Zahlungsmethode wählen</h3>
+                    <RadioGroup value={selectedMethod} onValueChange={setSelectedMethod} className="grid gap-2">
+
+                        {savedMethods.map((method) => (
+                            <Label
+                                key={method.id}
+                                htmlFor={method.id}
+                                className={`flex items-center space-x-3 border p-4 rounded-lg cursor-pointer transition-colors ${selectedMethod === method.id ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:bg-muted/50'}`}
+                            >
+                                <RadioGroupItem value={method.id} id={method.id} />
+                                <div className="flex-1 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        {method.type === 'card' ? (
+                                            <>
+                                                <CreditCard className="w-4 h-4 text-muted-foreground" />
+                                                <span className="uppercase font-medium">{method.card?.brand || 'Karte'} •••• {method.card?.last4}</span>
+                                            </>
+                                        ) : method.type === 'sepa_debit' ? (
+                                            <>
+                                                <Building2 className="w-4 h-4 text-muted-foreground" />
+                                                <span className="font-medium">SEPA Lastschrift •••• {method.sepa_debit?.last4}</span>
+                                            </>
+                                        ) : method.type === 'paypal' ? (
+                                            <>
+                                                <Wallet className="w-4 h-4 text-muted-foreground" />
+                                                <span className="font-medium">PayPal ({method.paypal?.email})</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CreditCard className="w-4 h-4 text-muted-foreground" />
+                                                <span className="font-medium">Zahlungsmethode ({method.type})</span>
+                                            </>
+                                        )}
+                                    </div>
+                                    {method.type === 'card' && method.card && (
+                                        <span className="text-muted-foreground text-xs font-normal">
+                            Exp: {method.card.expMonth}/{method.card.expYear}
+                          </span>
+                                    )}
+                                </div>
+                            </Label>
+                        ))}
+
+                        <Label
+                            htmlFor="new"
+                            className={`flex items-center space-x-3 border p-4 rounded-lg cursor-pointer transition-colors ${selectedMethod === 'new' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:bg-muted/50'}`}
+                        >
+                            <RadioGroupItem value="new" id="new" />
+                            <span className="font-medium text-sm">Neue Zahlungsmethode hinzufügen</span>
+                        </Label>
+
+                    </RadioGroup>
+                </div>
+            )}
+
+            {selectedMethod === 'new' && (
+                <div className="space-y-3 mt-4 pt-4 border-t">
+                    <h3 className="font-medium text-sm">Neue Kartendaten</h3>
+                    <PaymentElement options={{ layout: 'tabs' }} />
+                </div>
+            )}
+
+            {/* Preisaufschlüsselung */}
+            <div className="mt-6 pt-6 border-t space-y-3">
+                <h3 className="font-medium text-sm">Zusammenfassung</h3>
+                <div className="space-y-4">
+
+                    {preview && preview.lines ? (
+                        <div className="space-y-4">
+                            {/* FALL: Heute nichts fällig (Bestandskunde mit Vormerkung) */}
+                            {preview.amountDueToday === 0 && hotelProfile?.stripe_subscription_id && (
+                                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
+                                    <div className="flex justify-center mb-2">
+                                        <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+                                            <Clock className="h-4 w-4" />
+                                        </div>
+                                    </div>
+                                    <p className="text-orange-600 font-bold text-base">Keine Zahlung heute</p>
+                                    <p className="text-[11px] text-orange-700 mt-1 leading-tight">
+                                        Der Wechsel wird heute <strong>vorgemerkt</strong>, wird aber erst zum nächsten Abrechnungsdatum am <strong>{preview?.nextBillingDate ? new Date(preview.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Heute fällige Posten */}
+                            <div className="space-y-2">
+                                {preview.lines
+                                    .filter((line: any) => {
+                                        const hasProrations = preview.lines.some((l: any) => l.proration);
+                                        if (hasProrations) {
+                                            // Upgrade/Downgrade Case: Nur Prorations anzeigen, die heute den Preis beeinflussen
+                                            return line.proration && (line.amount > 0 || (line.amount < 0 && line.package_type !== 'addon'));
+                                        }
+                                        // Neukunden Case: Alles anzeigen was einen Betrag hat
+                                        return line.amount !== 0;
+                                    })
+                                    .map((line: any, index: number) => (
+                                        <div key={index} className="flex justify-between text-muted-foreground text-sm leading-relaxed">
+                                            <span className="pr-4">{line.description}</span>
+                                            <span className={`whitespace-nowrap ${line.amount < 0 ? "text-green-600" : ""}`}>
+                                                {(line.amount / 100).toFixed(2)} €
+                                            </span>
+                                        </div>
+                                    ))
+                                }
+                            </div>
+
+                            {/* Hinweis zu vorgemerkten Downgrades (Plan oder Addons) */}
+                            {((planId !== hotelProfile?.plan && !preview.isBaseUpgrade) || 
+                              (hotelProfile?.config?.active_addons?.some((a: string) => !addons.includes(a)))) && (
+                                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-2">
+                                    <p className="text-[11px] text-orange-700 leading-relaxed">
+                                        <Info className="h-3.5 w-3.5 inline-block mr-1.5 -mt-0.5" />
+                                        Der Wechsel wird heute <strong>vorgemerkt</strong>, wird aber erst zum nächsten Abrechnungsdatum am <strong>{preview?.nextBillingDate ? new Date(preview.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="pt-4 space-y-2 border-t">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Zwischensumme (Netto)</span>
+                                    <span className="font-medium">{preview.netDueToday?.toFixed(2)} €</span>
+                                </div>
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                    <span>MwSt. (19%)</span>
+                                    <span>{preview.taxDueToday?.toFixed(2)} €</span>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        /* Fallback, falls die Stripe-Vorschau noch lädt / nicht verfügbar ist */
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between text-muted-foreground text-sm pb-1">
+                                <span>Paket: {planName}</span>
+                                <span>{basePrice.toFixed(2)} €</span>
+                            </div>
+
+                            {addons.map(addonName => {
+                                const pkg = packages.find(p => p.plan_name === addonName);
+                                const price = pkg ? (billingCycle === 'yearly' ? pkg.price_yearly : pkg.price_monthly) : 0;
+                                if (price === 0) return null;
+                                return (
+                                    <div key={addonName} className="flex justify-between text-muted-foreground text-sm pb-1">
+                                        <span className="capitalize">Modul: {addonName}</span>
+                                        <span>{price.toFixed(2)} €</span>
+                                    </div>
+                                );
+                            })}
+
+                            {priceBreakdown.discount > 0 && (
+                                <div className="flex justify-between text-primary">
+                                    <span>Rabatt</span>
+                                    <span>-{priceBreakdown.discount.toFixed(2)} €</span>
+                                </div>
+                            )}
+
+                            <div className="flex justify-between font-medium pt-2 border-t">
+                                <span>Netto-Betrag</span>
+                                <span>{priceBreakdown.netPrice.toFixed(2)} €</span>
+                            </div>
+
+                            {priceBreakdown.isGermany && (
+                                <div className="flex justify-between text-muted-foreground">
+                                    <span>MwSt. (19%)</span>
+                                    <span>{priceBreakdown.taxAmount.toFixed(2)} €</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex justify-between text-xl font-bold pt-4 border-t-2 text-primary">
+                        <span>{preview && preview.lines && preview.lines.some((l: any) => l.proration) ? 'Heute fällig' : 'Zu zahlen'}</span>
+                        <span>{priceBreakdown.totalPrice.toFixed(2)} €</span>
+                    </div>
+
+                    {priceBreakdown.isGermany && (
+                        <p className="text-[10px] text-muted-foreground mt-2 italic">
+                            Hinweis: Für Kunden aus Deutschland wird die gesetzliche Mehrwertsteuer von 19% erhoben.
+                        </p>
+                    )}
+                    {!priceBreakdown.isGermany && address.countryCode && (
+                        <p className="text-[10px] text-muted-foreground mt-2 italic">
+                            Hinweis: Bei grenzüberschreitenden Leistungen innerhalb der EU kann das Reverse-Charge-Verfahren Anwendung finden.
+                        </p>
+                    )}
+                </div>
+            </div>
+
+            {error && <div className="text-destructive text-sm font-medium bg-destructive/10 p-3 rounded-md">{error}</div>}
+
+            <Button
+                type="submit"
+                disabled={!stripe || isLoading || hasVatError || isVatValidating}
+                className="w-full mt-8"
+                size="lg"
+            >
+                {isLoading ? (
+                    <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Wird verarbeitet...
+                    </>
+                ) : (
+                    promoDetails?.percent_off === 100
+                        ? 'Kostenlos starten'
+                        : isContinuingTrial
+                            ? 'Testzeitraum fortsetzen'
+                            : isEligibleForTrial
+                                ? '14 Tage kostenlos starten'
+                                : 'Kostenpflichtig abonnieren'
+                )}
+            </Button>
+        </form>
     );
 }

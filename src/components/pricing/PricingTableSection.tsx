@@ -82,7 +82,11 @@ export function PricingTableSection({
           }
 
           if (!isAddon) {
-             featuresToDisplay.push({ name: 'Unbegrenzte Kunden', included: true });
+            if (pkg.included_customers && pkg.included_customers > 0) {
+              featuresToDisplay.push({ name: `${pkg.included_customers} Kunden inklusive`, included: true });
+            } else if (pkg.plan_name.toLowerCase() === 'enterprise') {
+              featuresToDisplay.push({ name: 'Unbegrenzte Kunden', included: true });
+            }
           }
 
           // Neue Module finden
@@ -106,7 +110,9 @@ export function PricingTableSection({
             monthlyPrice: pkg.price_monthly,
             yearlyPrice: pkg.price_yearly || Math.round(pkg.price_monthly * 10),
             featured: pkg.plan_name.toLowerCase() === 'pro',
-            additionalCost: isAddon ? null : `${pkg.additional_cost_per_customer.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} pro weiterem Kunden/Monat`,
+            additionalCost: isAddon ? null : pkg.additional_cost_per_customer > 0 
+              ? `${pkg.additional_cost_per_customer.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} pro weiterem Kunden/Monat`
+              : null,
             features: featuresToDisplay
           };
         });
@@ -129,11 +135,6 @@ export function PricingTableSection({
     }
   };
 
-  const getAdditionalCost = (pkg: DBPackage) => {
-    if (pkg.plan_name.toLowerCase() === 'enterprise') return 'Keine Zusatzkosten für Kunden';
-    if (pkg.plan_name.toLowerCase() === 'pro') return '0,40€ pro weiterem Kunden/Monat';
-    return '0,50€ pro weiterem Kunden/Monat';
-  };
 
   const handleAction = (planName: string) => {
     if (onSelectPlan) {

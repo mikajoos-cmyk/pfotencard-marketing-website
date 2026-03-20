@@ -15,6 +15,7 @@ import { AGBPage } from './pages/AGBPage';
 import { EinstellungenPage } from './pages/EinstellungenPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { BillingPage } from './pages/BillingPage';
+import { UpgradeWizard } from './pages/UpgradeWizard';
 import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
 import SuperAdminTenantUsers from './pages/superadmin/SuperAdminTenantUsers';
@@ -75,8 +76,8 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
   }
 
   // 3. Eingeloggt, aber Abo abgelaufen/ungültig
-  // Ausnahme: Wir sind schon auf der Checkout- oder Billing-Seite (sonst Endlosschleife)
-  const isPaymentPage = location.pathname.startsWith('/checkout') || location.pathname.startsWith('/billing') || location.pathname.startsWith('/preise');
+  // Ausnahme: Wir sind schon auf der Checkout-, Billing- oder Upgrade-Seite (sonst Endlosschleife)
+  const isPaymentPage = location.pathname.startsWith('/checkout') || location.pathname.startsWith('/billing') || location.pathname.startsWith('/preise') || location.pathname.startsWith('/upgrade');
 
   if (!subscriptionValid && !isPaymentPage) {
     // Wenn ein "Pending Plan" im Storage ist (vom Login Flow), schicken wir ihn zum Checkout
@@ -138,6 +139,14 @@ function AppContent() {
             element={
               <ProtectedRoute>
                 <BillingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/upgrade"
+            element={
+              <ProtectedRoute>
+                <UpgradeWizard />
               </ProtectedRoute>
             }
           />
