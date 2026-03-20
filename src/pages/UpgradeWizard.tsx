@@ -59,12 +59,16 @@ export function UpgradeWizard() {
 
         setTenantStatus(status);
         setPackages(pkgs);
-        setSelectedPlan(status.plan || 'starter');
         
-        // Aktive Addons vorbesetzen
-        if (status.active_addons) {
-          setSelectedAddons(status.active_addons);
-        }
+        // Initialen Plan setzen: Bevorzuge vorgemerkten Plan
+        const initialPlan = status.upcoming_plan || status.plan || 'starter';
+        setSelectedPlan(initialPlan);
+        
+        // Addons vorbesetzen: Bevorzuge vorgemerkte Addons
+        const initialAddons = status.upcoming_addons && status.upcoming_addons.length > 0 
+          ? status.upcoming_addons 
+          : (status.active_addons || []);
+        setSelectedAddons(initialAddons);
 
         setLoading(false);
       } catch (err) {
@@ -325,7 +329,12 @@ export function UpgradeWizard() {
                   }}
                 >
                   {tenantStatus.plan === plan.plan_name && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground hover:bg-primary z-10">Dein aktuelles Paket</Badge>
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground hover:bg-primary z-10 shadow-sm border-none">
+                       {tenantStatus.upcoming_plan && tenantStatus.upcoming_plan !== tenantStatus.plan ? "Noch aktiv" : "Dein Paket"}
+                    </Badge>
+                  )}
+                  {tenantStatus.upcoming_plan === plan.plan_name && tenantStatus.upcoming_plan !== tenantStatus.plan && (
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-orange-500 text-white hover:bg-orange-600 z-10 shadow-sm border-none">Wechsel vorgemerkt</Badge>
                   )}
                   <CardHeader>
                     <CardTitle className="capitalize flex items-center justify-between gap-2">
@@ -333,8 +342,10 @@ export function UpgradeWizard() {
                       {(() => {
                         const currentPkg = packages.find(p => p.plan_name === tenantStatus.plan);
                         const isDowngrade = currentPkg && (billingCycle === 'yearly' ? plan.price_yearly < currentPkg.price_yearly : plan.price_monthly < currentPkg.price_monthly);
-                        if (isDowngrade && selectedPlan === plan.plan_name) {
-                          return <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 text-[10px] py-0 h-4">Wechsel vorgemerkt</Badge>
+                        
+                        // Wenn es das aktuell ausgewählte ist UND ein Downgrade zum tatsächlichen Status ist
+                        if (selectedPlan === plan.plan_name && isDowngrade && plan.plan_name !== tenantStatus.plan) {
+                           return <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 text-[10px] py-0 h-4">Wechsel vorgemerkt</Badge>
                         }
                         return null;
                       })()}
@@ -400,10 +411,18 @@ export function UpgradeWizard() {
                         <div className="flex items-center gap-2">
                           <h3 className="font-semibold capitalize">{addon.plan_name}</h3>
                           {tenantStatus.active_addons?.includes(addon.plan_name) && (
-                            <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 border-none text-[10px] py-0 h-4">Aktuell aktiv</Badge>
+                            <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 border-none text-[10px] py-0 h-4">
+                               {tenantStatus.upcoming_addons && tenantStatus.upcoming_addons.length > 0 && !tenantStatus.upcoming_addons.includes(addon.plan_name) ? "Noch aktiv" : "Aktuell aktiv"}
+                            </Badge>
+                          )}
+                          {tenantStatus.upcoming_addons?.includes(addon.plan_name) && !tenantStatus.active_addons?.includes(addon.plan_name) && (
+                            <Badge className="bg-orange-500 text-white hover:bg-orange-600 border-none text-[10px] py-0 h-4">Zukünftig aktiv</Badge>
                           )}
                           {tenantStatus.active_addons?.includes(addon.plan_name) && !selectedAddons.includes(addon.plan_name) && (
                             <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 text-[10px] py-0 h-4">Abwahl vorgemerkt</Badge>
+                          )}
+                          {!tenantStatus.active_addons?.includes(addon.plan_name) && tenantStatus.upcoming_addons?.includes(addon.plan_name) && !selectedAddons.includes(addon.plan_name) && (
+                            <Badge variant="outline" className="text-gray-400 border-gray-200 bg-gray-50 text-[10px] py-0 h-4">Auswahl aufgehoben</Badge>
                           )}
                         </div>
                         {tenantStatus.active_addons?.includes(addon.plan_name) && !selectedAddons.includes(addon.plan_name) && (
@@ -477,7 +496,7 @@ export function UpgradeWizard() {
                              </div>
                              <p className="text-orange-600 font-bold text-base">Keine Zahlung heute</p>
                              <p className="text-[11px] text-orange-700 mt-1 leading-tight">
-                               Die Änderungen wurden erfolgreich <strong>vorgemerkt</strong> und werden zum nächsten Abrechnungszeitraum am <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.
+                               Der Wechsel wird heute <strong>vorgemerkt</strong>, wird aber erst zum nächsten Abrechnungsdatum am <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.
                              </p>
                            </div>
                         )}
@@ -513,14 +532,13 @@ export function UpgradeWizard() {
                           </div>
                         )}
 
-                        {/* Anzeige für vorgemerkte Downgrades (ohne Kosten heute) */}
-                        {previewData.lines.some((line: any) => line.proration && line.amount < 0 && line.package_type === 'addon') && (
-                           <div className="bg-orange-50/50 border border-orange-100 rounded-md p-3">
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600 mb-1 italic">Hinweis zu Downgrades / Abwahl</p>
-                              <p className="text-[11px] text-orange-700 leading-tight">
-                                Du hast Module abgewählt. 
-                                Diese Änderungen werden zum <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam. 
-                                Bis dahin stehen dir diese Funktionen noch zur Verfügung. Es erfolgt heute keine Erstattung für diese Module.
+                        {/* Hinweis zu vorgemerkten Downgrades (Plan oder Addons) */}
+                        {((selectedPlan !== tenantStatus?.plan && !previewData.isBaseUpgrade) || 
+                          (tenantStatus?.active_addons?.some((a: string) => !selectedAddons.includes(a)))) && (
+                           <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                              <p className="text-[11px] text-orange-700 leading-relaxed">
+                                <Info className="h-3.5 w-3.5 inline-block mr-1.5 -mt-0.5" />
+                                Der Wechsel wird heute <strong>vorgemerkt</strong>, wird aber erst zum nächsten Abrechnungsdatum am <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.
                               </p>
                            </div>
                         )}

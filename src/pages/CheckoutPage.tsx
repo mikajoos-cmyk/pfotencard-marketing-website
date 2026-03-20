@@ -5,7 +5,7 @@ import { useStripe, useElements, PaymentElement, Elements } from '@stripe/react-
 import { loadStripe } from '@stripe/stripe-js';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, CreditCard, Building2, Wallet, Tag, CheckCircle2, XCircle, MapPin, Clock } from 'lucide-react';
+import { Loader2, CreditCard, Building2, Wallet, Tag, CheckCircle2, XCircle, MapPin, Clock, Info } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -815,7 +815,7 @@ export function CheckoutForm({
                                     </div>
                                     <p className="text-orange-600 font-bold text-base">Keine Zahlung heute</p>
                                     <p className="text-[11px] text-orange-700 mt-1 leading-tight">
-                                        Der Wechsel wurde erfolgreich <strong>vorgemerkt</strong> und wird zum nächsten Abrechnungszeitraum (am {preview?.nextBillingDate ? new Date(preview.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}) wirksam. Bis dahin ändert sich an Ihrem Preis nichts.
+                                        Der Wechsel wird heute <strong>vorgemerkt</strong>, wird aber erst zum nächsten Abrechnungsdatum am <strong>{preview?.nextBillingDate ? new Date(preview.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.
                                     </p>
                                 </div>
                             )}
@@ -843,11 +843,13 @@ export function CheckoutForm({
                                 }
                             </div>
 
-                            {/* Downgrade Hinweis */}
-                            {preview.lines.some((line: any) => line.proration && line.amount < 0 && line.package_type === 'addon') && (
-                                <div className="bg-orange-50/50 border border-orange-100 rounded-md p-3">
-                                    <p className="text-[10px] text-orange-700 leading-tight">
-                                        Hinweis: Abgewählte Module bleiben bis zum Ende der Laufzeit aktiv. Es erfolgt heute keine Erstattung.
+                            {/* Hinweis zu vorgemerkten Downgrades (Plan oder Addons) */}
+                            {((planId !== hotelProfile?.plan && !preview.isBaseUpgrade) || 
+                              (hotelProfile?.config?.active_addons?.some((a: string) => !addons.includes(a)))) && (
+                                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-2">
+                                    <p className="text-[11px] text-orange-700 leading-relaxed">
+                                        <Info className="h-3.5 w-3.5 inline-block mr-1.5 -mt-0.5" />
+                                        Der Wechsel wird heute <strong>vorgemerkt</strong>, wird aber erst zum nächsten Abrechnungsdatum am <strong>{preview?.nextBillingDate ? new Date(preview.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.
                                     </p>
                                 </div>
                             )}
