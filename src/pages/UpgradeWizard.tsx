@@ -496,9 +496,9 @@ export function UpgradeWizard() {
                               const p = packages.find(pkg => pkg.plan_name === addonName);
                               return sum + (p ? (billingCycle === 'yearly' ? p.price_yearly : p.price_monthly) : 0);
                             }, 0);
-                            const total = basePrice + addonsPrice;
-                            const net = total / 1.19;
-                            const tax = total - net;
+                            const net = basePrice + addonsPrice;
+                            const tax = net * 0.19;
+                            const total = net + tax;
 
                             return (
                               <>
@@ -517,7 +517,7 @@ export function UpgradeWizard() {
                               </>
                             );
                           })()}
-                          <p className="text-[10px] text-muted-foreground italic text-right">Preise inkl. MwSt.</p>
+                          <p className="text-[10px] text-muted-foreground italic text-right">Preise zzgl. MwSt.</p>
                         </div>
                       </>
                     )}

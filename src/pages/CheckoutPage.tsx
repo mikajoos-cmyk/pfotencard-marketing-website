@@ -290,74 +290,77 @@ export function CheckoutForm({
             const prorationItems = preview.lines?.filter((l: any) => l.proration) || [];
 
             const hasProration = prorationItems.length > 0;
-
-            // Wenn Prorationen existieren (z.B. Upgrade), wird nur über diese sofort abgerechnet.
-            // Die regulären Posten für die nächste Periode erscheinen erst auf der nächsten Rechnung.
-            // Daher zeigen wir hier nur die Proration-Items an.
             const displayedLines = hasProration ? prorationItems : regularItems;
 
-            const subtotal = displayedLines.reduce((sum: number, l: any) => sum + l.amount, 0) / 100;
+            // Detaillierte Berechnung basierend auf den Steuer-Informationen von Stripe
+            let netCents = 0;
+            let taxCents = 0;
+
+            displayedLines.forEach((line: any) => {
+                let lineNet = line.amount;
+                if (line.tax_amounts) {
+                    line.tax_amounts.forEach((tax: any) => {
+                        if (!tax.inclusive) {
+                            taxCents += tax.amount;
+                        } else {
+                            // Bei inklusiven Steuern ist die Steuer bereits in line.amount enthalten.
+                            // Wir ziehen sie hier ab, um den reinen Netto-Betrag zu erhalten.
+                            lineNet -= tax.amount;
+                            taxCents += tax.amount;
+                        }
+                    });
+                }
+                netCents += lineNet;
+            });
+
+            const netPrice = netCents / 100;
+            const taxAmount = taxCents / 100;
+            const totalPrice = (netCents + taxCents) / 100;
 
             const isGermany = address.countryCode === 'DE' || address.country === 'Germany' || address.country === 'Deutschland';
 
-            let netPrice = subtotal;
-            let taxAmount = 0;
-            let totalPrice = subtotal;
-
-            // Preise sind in Stripe meist als brutto konfiguriert (inclusive tax)
-            if (isGermany) {
-                netPrice = subtotal / 1.19;
-                taxAmount = subtotal - netPrice;
-            } else if (preview.tax > 0 && !hasProration) {
-                taxAmount = preview.tax / 100;
-                netPrice = subtotal;
-                totalPrice = subtotal + taxAmount;
-            }
-
-            if (totalPrice < 0) {
-                totalPrice = 0;
-            }
-
             return {
                 lines: displayedLines,
-                subtotal,
-                proration: hasProration ? subtotal : 0,
+                subtotal: netPrice,
+                proration: hasProration ? totalPrice : 0,
                 discount: 0,
                 netPrice,
                 taxAmount,
-                totalPrice,
+                totalPrice: Math.max(0, totalPrice),
                 isGermany,
                 hasProration
             };
         }
 
-        let totalBasePrice = basePrice;
+        const base = packages.find(p => p.plan_name === planId);
+        const basePrice = base ? (billingCycle === 'yearly' ? base.price_yearly : base.price_monthly) : 0;
+        
         const addonsPrice = (addons || []).reduce((sum, addonName) => {
             const pkg = packages.find(p => p.plan_name === addonName);
             if (!pkg) return sum;
             return sum + (billingCycle === 'yearly' ? pkg.price_yearly : pkg.price_monthly);
         }, 0);
 
-        let price = totalBasePrice + addonsPrice;
+        let netPrice = basePrice + addonsPrice;
         if (promoDetails) {
             if (promoDetails.percent_off) {
-                price = price * (1 - promoDetails.percent_off / 100);
+                netPrice = netPrice * (1 - promoDetails.percent_off / 100);
             } else if (promoDetails.amount_off) {
-                price = Math.max(0, price - promoDetails.amount_off / 100);
+                netPrice = Math.max(0, netPrice - promoDetails.amount_off / 100);
             }
         }
 
         const isGermany = address.countryCode === 'DE' || address.country === 'Germany' || address.country === 'Deutschland';
         const taxRate = isGermany ? 0.19 : 0;
-        const taxAmount = price * taxRate;
-        const totalPrice = price + taxAmount;
+        const taxAmount = netPrice * taxRate;
+        const totalPrice = netPrice + taxAmount;
 
         return {
             lines: null,
-            subtotal: totalBasePrice + addonsPrice,
+            subtotal: basePrice + addonsPrice,
             proration: 0,
-            discount: (totalBasePrice + addonsPrice) - price,
-            netPrice: price,
+            discount: (basePrice + addonsPrice) - netPrice,
+            netPrice: netPrice,
             taxAmount: taxAmount,
             totalPrice: totalPrice,
             isGermany,
