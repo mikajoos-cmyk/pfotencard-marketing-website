@@ -5,7 +5,7 @@ import { useStripe, useElements, PaymentElement, Elements } from '@stripe/react-
 import { loadStripe } from '@stripe/stripe-js';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, CreditCard, Building2, Wallet, Tag, CheckCircle2, XCircle, MapPin } from 'lucide-react';
+import { Loader2, CreditCard, Building2, Wallet, Tag, CheckCircle2, XCircle, MapPin, Clock } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -805,6 +805,21 @@ export function CheckoutForm({
 
                     {preview && preview.lines ? (
                         <div className="space-y-4">
+                            {/* FALL: Heute nichts fällig (Bestandskunde mit Vormerkung) */}
+                            {preview.amountDueToday === 0 && hotelProfile?.stripe_subscription_id && (
+                                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
+                                    <div className="flex justify-center mb-2">
+                                        <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+                                            <Clock className="h-4 w-4" />
+                                        </div>
+                                    </div>
+                                    <p className="text-orange-600 font-bold text-base">Keine Zahlung heute</p>
+                                    <p className="text-[11px] text-orange-700 mt-1 leading-tight">
+                                        Der Wechsel wurde erfolgreich <strong>vorgemerkt</strong> und wird zum nächsten Abrechnungszeitraum (am {preview?.nextBillingDate ? new Date(preview.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}) wirksam. Bis dahin ändert sich an Ihrem Preis nichts.
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Heute fällige Posten */}
                             <div className="space-y-2">
                                 {preview.lines

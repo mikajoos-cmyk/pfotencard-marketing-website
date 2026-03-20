@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Check, ArrowRight, ArrowLeft, Package, Layers, CreditCard, Info, AlertCircle } from 'lucide-react';
+import { Loader2, Check, ArrowRight, ArrowLeft, Package, Layers, CreditCard, Info, AlertCircle, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -467,6 +467,21 @@ export function UpgradeWizard() {
                   <CardContent className="space-y-4">
                     {previewData && previewData.lines && previewData.lines.length > 0 ? (
                       <div className="space-y-6">
+                        {/* FALL: Heute nichts fällig (Downgrade / Vormerkung) */}
+                        {previewData.amountDueToday === 0 && (
+                           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
+                             <div className="flex justify-center mb-2">
+                               <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+                                 <Clock className="h-4 w-4" />
+                               </div>
+                             </div>
+                             <p className="text-orange-600 font-bold text-base">Keine Zahlung heute</p>
+                             <p className="text-[11px] text-orange-700 mt-1 leading-tight">
+                               Die Änderungen wurden erfolgreich <strong>vorgemerkt</strong> und werden zum nächsten Abrechnungszeitraum am <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.
+                             </p>
+                           </div>
+                        )}
+
                         {/* 1. Einmalige Verrechnung (Heute) */}
                         {previewData.lines.some((line: any) => line.proration && (line.amount > 0 || (line.amount < 0 && line.package_type !== 'addon'))) && (
                           <div className="space-y-3">
