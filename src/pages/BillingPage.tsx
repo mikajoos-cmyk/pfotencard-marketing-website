@@ -21,6 +21,8 @@ export function BillingPage() {
         const [reactivating, setReactivating] = useState(false);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
     const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [upcomingInvoice, setUpcomingInvoice] = useState<any>(null);
+    const [loadingUpcoming, setLoadingUpcoming] = useState(false);
     const [acceptingAvv, setAcceptingAvv] = useState(false);
     const [latestAvvVersion, setLatestAvvVersion] = useState("1.0");
     const [showAvvPreview, setShowAvvPreview] = useState(false);
@@ -47,6 +49,26 @@ export function BillingPage() {
                     setInvoices(invoiceData);
                 } catch (err) {
                     console.error("Konnte Rechnungen nicht laden", err);
+                }
+
+                // Nächste Zahlung laden
+                try {
+                    setLoadingUpcoming(true);
+                    const token = localStorage.getItem('pfotencard_token');
+                    const { data, error } = await supabase.functions.invoke('manage-subscription', {
+                        headers: { Authorization: `Bearer ${token}` },
+                        body: { 
+                            action: 'get_upcoming_invoice',
+                            tenantId: configStatus.tenant_id 
+                        }
+                    });
+                    if (data && !error && !data.error) {
+                        setUpcomingInvoice(data);
+                    }
+                } catch (err) {
+                    console.error("Konnte nächste Zahlung nicht laden", err);
+                } finally {
+                    setLoadingUpcoming(false);
                 }
             }
         } catch (e) {
@@ -457,12 +479,53 @@ export function BillingPage() {
                                             <div className="p-2 bg-green-100 rounded-full text-green-700">
                                                 <Wallet className="w-5 h-5" />
                                             </div>
-                                            <div>
+                                            <div className="flex-1">
                                                 <p className="text-sm font-medium text-muted-foreground mb-1">
                                                     {isPendingSwitch ? 'Nächste Zahlung & Wechsel' : 'Nächste Zahlung'}
                                                 </p>
 
-                                                {status?.next_payment_date ? (
+                                                {loadingUpcoming ? (
+                                                    <div className="flex items-center gap-2 text-muted-foreground py-2">
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                        <span className="text-sm italic font-medium">Lade Details von Stripe...</span>
+                                                    </div>
+                                                ) : upcomingInvoice ? (
+                                                    <div>
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="flex items-baseline gap-2">
+                                                                <span className="text-3xl font-bold text-foreground">
+                                                                    {formatCurrency(upcomingInvoice.total)}
+                                                                </span>
+                                                                <span className="text-sm text-muted-foreground">
+                                                                    am {new Date(upcomingInvoice.next_payment_attempt * 1000).toLocaleDateString('de-DE')}
+                                                                </span>
+                                                            </div>
+                                                            
+                                                            {/* Aufschlüsselung der Kosten von Stripe */}
+                                                            <div className="text-xs text-muted-foreground mt-2 space-y-1 border-t pt-2 max-w-[450px]">
+                                                                {upcomingInvoice.lines.map((line: any, idx: number) => (
+                                                                    <div key={idx} className="flex justify-between items-start gap-2">
+                                                                        <span className="pr-4">{line.description || 'Position'}</span>
+                                                                        <span className="whitespace-nowrap font-medium text-foreground">{formatCurrency(line.amount / 100)}</span>
+                                                                    </div>
+                                                                ))}
+                                                                {upcomingInvoice.tax > 0 && (
+                                                                    <div className="flex justify-between border-t border-dashed mt-1 pt-1 text-[11px]">
+                                                                        <span className="italic">davon MwSt.</span>
+                                                                        <span className="font-medium">{formatCurrency(upcomingInvoice.tax)}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {isPendingSwitch && (
+                                                            <div className="mt-2 text-sm text-blue-600 flex items-center gap-1.5 bg-blue-50 px-2 py-1 rounded w-fit">
+                                                                <ArrowRight className="w-3.5 h-3.5" />
+                                                                Wechsel auf <strong>{upcomingPlanName}</strong>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : status?.next_payment_date ? (
                                                     <div>
                                                         <div className="flex flex-col gap-1">
                                                             <div className="flex items-baseline gap-2">

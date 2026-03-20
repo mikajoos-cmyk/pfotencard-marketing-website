@@ -394,6 +394,7 @@ export function EinstellungenPage() {
   const [packages, setPackages] = useState<any[]>([]);
 
   const [schoolName, setSchoolName] = useState('');
+  const [dataLoaded, setDataLoaded] = useState(false); // NEU: Flag ob Daten geladen wurden
   const [supportEmail, setSupportEmail] = useState('');
   const [subdomain, setSubdomain] = useState('');
   const [isWidgetModalOpen, setIsWidgetModalOpen] = useState(false);
@@ -889,6 +890,22 @@ export function EinstellungenPage() {
           }
       }
 
+      // --- NEU: Add-ons berücksichtigen ---
+      const activeAddons = t.config?.active_addons || [];
+      if (activeAddons.length > 0) {
+          activeAddons.forEach((addonName: string) => {
+              const addonPkg = dbPackages.find((p: any) => p.plan_name.toLowerCase() === addonName.toLowerCase());
+              if (addonPkg) {
+                  (addonPkg.allowed_modules || []).forEach((m: string) => {
+                      if (!allowedModules.includes(m)) allowedModules.push(m);
+                  });
+                  Object.entries(addonPkg.features || {}).forEach(([k, v]) => {
+                      if (v && !allFeatures[k]) allFeatures[k] = true;
+                  });
+              }
+          });
+      }
+
       const branding = t.config?.branding || {};
       const wording = t.config?.wording || {};
       const balance = t.config?.balance || {};
@@ -958,6 +975,7 @@ export function EinstellungenPage() {
         }))
       }));
       setLevels(mappedLevels);
+      setDataLoaded(true); // Flag setzen: Daten sind bereit zum Speichern
 
       if (t.config?.legal_settings) {
         setLegalSettings(t.config.legal_settings);
@@ -1123,6 +1141,15 @@ export function EinstellungenPage() {
   };
 
   const handleSaveSettings = async () => {
+    if (!dataLoaded) {
+      toast({
+        variant: "destructive",
+        title: "Fehler",
+        description: "Daten wurden noch nicht vollständig geladen. Bitte warte kurz."
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       // Wenn keine abweichende Rechnungsadresse, dann synchronisieren
