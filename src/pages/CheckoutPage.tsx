@@ -138,12 +138,17 @@ export function CheckoutPage() {
     return (
         <main className="pt-24 pb-12 bg-background min-h-screen">
             <div className="container mx-auto px-4 max-w-2xl">
-                <div className="mb-8 flex items-center justify-between">
+                <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h1 className="text-3xl font-sans font-bold text-foreground mb-2">Checkout</h1>
                         <p className="text-muted-foreground">Sichere Bezahlung via Stripe</p>
                     </div>
-                    <Button variant="ghost" onClick={() => navigate('/billing')}>Abbrechen</Button>
+                    <div className="flex gap-2">
+                        {searchParams.get('from') === 'upgrade' && (
+                            <Button variant="outline" onClick={() => navigate(`/upgrade`)}>Zurück zur Auswahl</Button>
+                        )}
+                        <Button variant="ghost" onClick={() => navigate('/billing')}>Abbrechen</Button>
+                    </div>
                 </div>
 
                 <div className="bg-card border rounded-xl shadow-sm p-6 md:p-8">
@@ -283,55 +288,30 @@ export function CheckoutForm({
     const basePrice = planDetails?.price || 0;
 
     const calculateFinalPrice = () => {
-        if (preview) {
+        if (preview && preview.amountDueToday !== undefined) {
             console.log("[CHECKOUT] Received Preview from Stripe:", preview);
 
-            const regularItems = preview.lines?.filter((l: any) => !l.proration) || [];
-            const prorationItems = preview.lines?.filter((l: any) => l.proration) || [];
-
-            const hasProration = prorationItems.length > 0;
-            const displayedLines = hasProration ? prorationItems : regularItems;
-
-            // Detaillierte Berechnung basierend auf den Steuer-Informationen von Stripe
-            let netCents = 0;
-            let taxCents = 0;
-
-            displayedLines.forEach((line: any) => {
-                let lineNet = line.amount;
-                if (line.tax_amounts) {
-                    line.tax_amounts.forEach((tax: any) => {
-                        if (!tax.inclusive) {
-                            taxCents += tax.amount;
-                        } else {
-                            // Bei inklusiven Steuern ist die Steuer bereits in line.amount enthalten.
-                            // Wir ziehen sie hier ab, um den reinen Netto-Betrag zu erhalten.
-                            lineNet -= tax.amount;
-                            taxCents += tax.amount;
-                        }
-                    });
-                }
-                netCents += lineNet;
-            });
-
-            const netPrice = netCents / 100;
-            const taxAmount = taxCents / 100;
-            const totalPrice = (netCents + taxCents) / 100;
+            const hasActiveSub = !!(hotelProfile?.stripe_subscription_id && 
+                                 hotelProfile?.stripe_subscription_status && 
+                                 !['canceled', 'incomplete_expired'].includes(hotelProfile.stripe_subscription_status));
 
             const isGermany = address.countryCode === 'DE' || address.country === 'Germany' || address.country === 'Deutschland';
 
             return {
-                lines: displayedLines,
-                subtotal: netPrice,
-                proration: hasProration ? totalPrice : 0,
+                lines: preview.lines || [],
+                subtotal: preview.netDueToday,
+                proration: preview.amountDueToday, // In diesem Kontext ist proration das was heute fällig ist
                 discount: 0,
-                netPrice,
-                taxAmount,
-                totalPrice: Math.max(0, totalPrice),
+                netPrice: preview.netDueToday,
+                taxAmount: preview.taxDueToday,
+                totalPrice: preview.amountDueToday,
                 isGermany,
-                hasProration
+                hasProration: (preview.lines || []).some((l: any) => l.proration),
+                hasActiveSub
             };
         }
 
+        // Fallback-Logik für den Fall, dass keine Vorschau da ist (z.B. Offline oder Fehler)
         const base = packages.find(p => p.plan_name === planId);
         const basePrice = base ? (billingCycle === 'yearly' ? base.price_yearly : base.price_monthly) : 0;
         
@@ -350,6 +330,10 @@ export function CheckoutForm({
             }
         }
 
+        const hasActiveSub = !!(hotelProfile?.stripe_subscription_id && 
+                             hotelProfile?.stripe_subscription_status && 
+                             !['canceled', 'incomplete_expired'].includes(hotelProfile.stripe_subscription_status));
+
         const isGermany = address.countryCode === 'DE' || address.country === 'Germany' || address.country === 'Deutschland';
         const taxRate = isGermany ? 0.19 : 0;
         const taxAmount = netPrice * taxRate;
@@ -364,7 +348,8 @@ export function CheckoutForm({
             taxAmount: taxAmount,
             totalPrice: totalPrice,
             isGermany,
-            hasProration: false
+            hasProration: false,
+            hasActiveSub
         };
     };
 
@@ -816,45 +801,56 @@ export function CheckoutForm({
             {/* Preisaufschlüsselung */}
             <div className="mt-6 pt-6 border-t space-y-3">
                 <h3 className="font-medium text-sm">Zusammenfassung</h3>
-                <div className="space-y-2 text-sm">
+                <div className="space-y-4">
 
-                    {preview && priceBreakdown.lines ? (
-                        <>
-                            {/* Exakte Positionen aus der Stripe Rechnungsvorschau */}
-                            <div className="space-y-2 pb-2">
-                                {priceBreakdown.lines
-                                    .filter((line: any) => line.amount !== 0)
+                    {preview && preview.lines ? (
+                        <div className="space-y-4">
+                            {/* Heute fällige Posten */}
+                            <div className="space-y-2">
+                                {preview.lines
+                                    .filter((line: any) => {
+                                        const hasProrations = preview.lines.some((l: any) => l.proration);
+                                        if (hasProrations) {
+                                            // Upgrade/Downgrade Case: Nur Prorations anzeigen, die heute den Preis beeinflussen
+                                            return line.proration && (line.amount > 0 || (line.amount < 0 && line.package_type !== 'addon'));
+                                        }
+                                        // Neukunden Case: Alles anzeigen was einen Betrag hat
+                                        return line.amount !== 0;
+                                    })
                                     .map((line: any, index: number) => (
-                                        <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
+                                        <div key={index} className="flex justify-between text-muted-foreground text-sm leading-relaxed">
                                             <span className="pr-4">{line.description}</span>
-                                            <span className="whitespace-nowrap">{(line.amount / 100).toFixed(2)} €</span>
+                                            <span className={`whitespace-nowrap ${line.amount < 0 ? "text-green-600" : ""}`}>
+                                                {(line.amount / 100).toFixed(2)} €
+                                            </span>
                                         </div>
                                     ))
                                 }
                             </div>
 
-                            {priceBreakdown.discount > 0 && (
-                                <div className="flex justify-between text-primary pt-2 border-t">
-                                    <span>Rabatt</span>
-                                    <span>-{priceBreakdown.discount.toFixed(2)} €</span>
+                            {/* Downgrade Hinweis */}
+                            {preview.lines.some((line: any) => line.proration && line.amount < 0 && line.package_type === 'addon') && (
+                                <div className="bg-orange-50/50 border border-orange-100 rounded-md p-3">
+                                    <p className="text-[10px] text-orange-700 leading-tight">
+                                        Hinweis: Abgewählte Module bleiben bis zum Ende der Laufzeit aktiv. Es erfolgt heute keine Erstattung.
+                                    </p>
                                 </div>
                             )}
 
-                            <div className="flex justify-between font-medium pt-2 border-t">
-                                <span>Netto-Betrag</span>
-                                <span>{priceBreakdown.netPrice.toFixed(2)} €</span>
+                            <div className="pt-4 space-y-2 border-t">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Zwischensumme (Netto)</span>
+                                    <span className="font-medium">{preview.netDueToday?.toFixed(2)} €</span>
+                                </div>
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                    <span>MwSt. (19%)</span>
+                                    <span>{preview.taxDueToday?.toFixed(2)} €</span>
+                                </div>
                             </div>
-
-                            {priceBreakdown.taxAmount > 0 && (
-                                <div className="flex justify-between text-muted-foreground">
-                                    <span>MwSt.</span>
-                                    <span>{priceBreakdown.taxAmount.toFixed(2)} €</span>
-                                </div>
-                            )}
-                        </>
+                        </div>
                     ) : (
                         /* Fallback, falls die Stripe-Vorschau noch lädt / nicht verfügbar ist */
-                        <>
+                        <div className="space-y-2 text-sm">
                             <div className="flex justify-between text-muted-foreground text-sm pb-1">
                                 <span>Paket: {planName}</span>
                                 <span>{basePrice.toFixed(2)} €</span>
@@ -890,11 +886,11 @@ export function CheckoutForm({
                                     <span>{priceBreakdown.taxAmount.toFixed(2)} €</span>
                                 </div>
                             )}
-                        </>
+                        </div>
                     )}
 
-                    <div className="flex justify-between text-lg font-bold pt-2 border-t text-primary">
-                        <span>Zu zahlen</span>
+                    <div className="flex justify-between text-xl font-bold pt-4 border-t-2 text-primary">
+                        <span>{preview && preview.lines && preview.lines.some((l: any) => l.proration) ? 'Heute fällig' : 'Zu zahlen'}</span>
                         <span>{priceBreakdown.totalPrice.toFixed(2)} €</span>
                     </div>
 

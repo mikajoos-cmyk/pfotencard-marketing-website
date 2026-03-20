@@ -61,15 +61,9 @@ export function UpgradeWizard() {
         setPackages(pkgs);
         setSelectedPlan(status.plan || 'starter');
         
-        // Aktive Addons vorbesetzen (falls wir sie identifizieren können)
-        // In diesem Setup gehen wir davon aus, dass wir neue Addons hinzufügen wollen.
-        // Wenn der User schon Addons hat, sollten diese in selectedAddons sein, aber als "aktiv" markiert.
-        // Das Backend-Handling von existing items ist wichtig.
-        
-        if (status.stripe_subscription_items) {
-           // Wir könnten hier versuchen, die Addons aus den Items zu extrahieren.
-           // Da wir aber in Schritt 2 die Addons wählen lassen, 
-           // laden wir sie im Backend sowieso basierend auf der Auswahl neu.
+        // Aktive Addons vorbesetzen
+        if (status.active_addons) {
+          setSelectedAddons(status.active_addons);
         }
 
         setLoading(false);
@@ -141,7 +135,8 @@ export function UpgradeWizard() {
         console.log("Navigiere zum Checkout für Neukunde / Reaktivierung...");
         const params = new URLSearchParams({
           plan: selectedPlan,
-          cycle: billingCycle
+          cycle: billingCycle,
+          from: 'upgrade'
         });
         if (selectedAddons.length > 0) {
           params.set('addons', selectedAddons.join(','));
@@ -314,13 +309,36 @@ export function UpgradeWizard() {
                 <Card 
                   key={plan.id} 
                   className={`relative cursor-pointer transition-all hover:shadow-md flex flex-col ${selectedPlan === plan.plan_name ? "ring-2 ring-primary border-primary" : ""}`}
-                  onClick={() => setSelectedPlan(plan.plan_name)}
+                  onClick={() => {
+                    if (selectedPlan !== plan.plan_name) {
+                      const currentPkg = packages.find(p => p.plan_name === tenantStatus.plan);
+                      const isDowngrade = currentPkg && (billingCycle === 'yearly' ? plan.price_yearly < currentPkg.price_yearly : plan.price_monthly < currentPkg.price_monthly);
+                      
+                      if (isDowngrade) {
+                        toast({
+                          title: "Downgrade vorgemerkt",
+                          description: `Der Wechsel zu ${plan.plan_name} erfolgt zum Ende der aktuellen Laufzeit. Heute wird keine Erstattung fällig.`,
+                        });
+                      }
+                      setSelectedPlan(plan.plan_name);
+                    }
+                  }}
                 >
                   {tenantStatus.plan === plan.plan_name && (
-                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-secondary text-secondary-foreground hover:bg-secondary">Dein aktuelles Paket</Badge>
+                    <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground hover:bg-primary z-10">Dein aktuelles Paket</Badge>
                   )}
                   <CardHeader>
-                    <CardTitle className="capitalize">{plan.plan_name}</CardTitle>
+                    <CardTitle className="capitalize flex items-center justify-between gap-2">
+                      {plan.plan_name}
+                      {(() => {
+                        const currentPkg = packages.find(p => p.plan_name === tenantStatus.plan);
+                        const isDowngrade = currentPkg && (billingCycle === 'yearly' ? plan.price_yearly < currentPkg.price_yearly : plan.price_monthly < currentPkg.price_monthly);
+                        if (isDowngrade && selectedPlan === plan.plan_name) {
+                          return <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 text-[10px] py-0 h-4">Wechsel vorgemerkt</Badge>
+                        }
+                        return null;
+                      })()}
+                    </CardTitle>
                     <CardDescription>
                       <span className="text-2xl font-bold text-foreground">
                         {billingCycle === 'yearly' ? plan.price_yearly.toFixed(2) : plan.price_monthly.toFixed(2)} €
@@ -379,7 +397,18 @@ export function UpgradeWizard() {
                         <Layers className="h-5 w-5" />
                       </div>
                       <div>
-                        <h3 className="font-semibold capitalize">{addon.plan_name}</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold capitalize">{addon.plan_name}</h3>
+                          {tenantStatus.active_addons?.includes(addon.plan_name) && (
+                            <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100 border-none text-[10px] py-0 h-4">Aktuell aktiv</Badge>
+                          )}
+                          {tenantStatus.active_addons?.includes(addon.plan_name) && !selectedAddons.includes(addon.plan_name) && (
+                            <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 text-[10px] py-0 h-4">Abwahl vorgemerkt</Badge>
+                          )}
+                        </div>
+                        {tenantStatus.active_addons?.includes(addon.plan_name) && !selectedAddons.includes(addon.plan_name) && (
+                           <p className="text-[10px] text-orange-600 mt-0.5 font-medium italic">Behältst du bis zum Ende der aktuellen Laufzeit</p>
+                        )}
                         <p className="text-sm text-muted-foreground">
                           +{billingCycle === 'yearly' ? addon.price_yearly.toFixed(2) : addon.price_monthly.toFixed(2)} € / {billingCycle === 'yearly' ? 'Jahr' : 'Monat'}
                         </p>
@@ -388,8 +417,19 @@ export function UpgradeWizard() {
                     <Switch 
                       checked={selectedAddons.includes(addon.plan_name)}
                       onCheckedChange={(checked) => {
-                        if (checked) setSelectedAddons([...selectedAddons, addon.plan_name]);
-                        else setSelectedAddons(selectedAddons.filter(a => a !== addon.plan_name));
+                        if (checked) {
+                          setSelectedAddons([...selectedAddons, addon.plan_name]);
+                        } else {
+                          setSelectedAddons(selectedAddons.filter(a => a !== addon.plan_name));
+                          // Hinweis bei Abwahl eines aktiven Moduls
+                          if (tenantStatus.active_addons?.includes(addon.plan_name)) {
+                            toast({
+                              title: "Abwahl vorgemerkt",
+                              description: `${addon.plan_name} bleibt bis zum Ende der aktuellen Laufzeit aktiv. Es erfolgt heute keine Erstattung.`,
+                              variant: "default"
+                            });
+                          }
+                        }
                       }}
                     />
                   </div>
@@ -426,36 +466,84 @@ export function UpgradeWizard() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {previewData && previewData.lines && previewData.lines.length > 0 ? (
-                      <>
-                        <div className="space-y-2 pb-2">
-                          {previewData.lines
-                            .filter((line: any) => !line.proration && line.amount !== 0)
-                            .map((line: any, index: number) => (
-                              <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
-                                <span className="pr-4">{line.description}</span>
-                                <span className="whitespace-nowrap">{(line.amount / 100).toFixed(2)} €</span>
+                      <div className="space-y-6">
+                        {/* 1. Einmalige Verrechnung (Heute) */}
+                        {previewData.lines.some((line: any) => line.proration && (line.amount > 0 || (line.amount < 0 && line.package_type !== 'addon'))) && (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                               <div className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                               <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600">Einmalige Verrechnung (Heute fällig)</p>
+                            </div>
+                            <div className="space-y-2 pl-3 border-l border-orange-200">
+                              {previewData.lines
+                                .filter((line: any) => line.proration && (line.amount > 0 || (line.amount < 0 && line.package_type !== 'addon')))
+                                .map((line: any, index: number) => (
+                                  <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
+                                    <span className="pr-4">{line.description}</span>
+                                    <span className={`whitespace-nowrap ${line.amount < 0 ? "text-green-600" : ""}`}>
+                                      {(line.amount / 100).toFixed(2)} €
+                                    </span>
+                                  </div>
+                                ))
+                              }
+                              <div className="pt-1 flex justify-between font-medium text-xs text-orange-700">
+                                <span>Zwischensumme Heute (Netto)</span>
+                                <span>{previewData.netDueToday?.toFixed(2)} €</span>
                               </div>
-                            ))
-                          }
+                              <div className="flex justify-between font-bold text-xs text-orange-700 border-t border-orange-200/50 pt-1">
+                                <span>Zwischensumme Heute (Brutto)</span>
+                                <span>{previewData.amountDueToday?.toFixed(2)} €</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Anzeige für vorgemerkte Downgrades (ohne Kosten heute) */}
+                        {previewData.lines.some((line: any) => line.proration && line.amount < 0 && line.package_type === 'addon') && (
+                           <div className="bg-orange-50/50 border border-orange-100 rounded-md p-3">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600 mb-1 italic">Hinweis zu Downgrades / Abwahl</p>
+                              <p className="text-[11px] text-orange-700 leading-tight">
+                                Du hast Module abgewählt. 
+                                Diese Änderungen werden zum <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam. 
+                                Bis dahin stehen dir diese Funktionen noch zur Verfügung. Es erfolgt heute keine Erstattung für diese Module.
+                              </p>
+                           </div>
+                        )}
+
+                        {/* 2. Zukünftige Abo-Gebühren */}
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                             <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Reguläre Abo-Posten (ab nächster Periode)</p>
+                          </div>
+                          <div className="space-y-2 pl-3 border-l border-primary/20">
+                            {previewData.lines
+                              .filter((line: any) => !line.proration && line.amount !== 0)
+                              .map((line: any, index: number) => (
+                                <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
+                                  <span className="pr-4">{line.description}</span>
+                                  <span className="whitespace-nowrap">{(line.amount / 100).toFixed(2)} €</span>
+                                </div>
+                              ))
+                            }
+                            <div className="pt-1 flex justify-between font-medium text-xs">
+                                <span>Zukünftiger Paketpreis (Netto)</span>
+                                <span>{previewData.netDueNextMonth?.toFixed(2)} €</span>
+                            </div>
+                          </div>
                         </div>
                         
                         <div className="pt-4 space-y-2 border-t">
                           <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Netto-Betrag</span>
-                            <span>{previewData.netDueNextMonth?.toFixed(2) || '0.00'} €</span>
+                            <span className="text-muted-foreground">Zukünftige MwSt.</span>
+                            <span>{previewData.taxDueNextMonth?.toFixed(2) || '0.00'} €</span>
                           </div>
-                          {previewData.taxDueNextMonth > 0 && (
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">MwSt.</span>
-                              <span>{previewData.taxDueNextMonth?.toFixed(2) || '0.00'} €</span>
-                            </div>
-                          )}
                           <div className="pt-2 flex justify-between font-bold text-lg border-t text-primary">
-                            <span>Zu zahlen ({billingCycle === 'yearly' ? 'pro Jahr' : 'pro Monat'})</span>
+                            <span>Ab {previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'nächstem Monat'} zu zahlen</span>
                             <span>{previewData.amountDueNextMonth?.toFixed(2) || '0.00'} €</span>
                           </div>
                         </div>
-                      </>
+                      </div>
                     ) : (
                       <>
                         <div className="flex justify-between items-center pb-2 border-b">
@@ -551,6 +639,11 @@ export function UpgradeWizard() {
                         <div className="text-4xl font-bold text-primary mb-1">
                           {previewData ? `${previewData.amountDueToday.toFixed(2)} €` : '0.00 €'}
                         </div>
+                        {previewData && previewData.amountDueToday === 0 && (
+                           <div className="text-[10px] text-muted-foreground font-medium mb-1 uppercase tracking-wider">
+                              Keine Zahlung heute (Vorgemerkt)
+                           </div>
+                        )}
                         {(() => {
                            const hasActiveSub = !!(tenantStatus?.stripe_subscription_id && 
                                                 tenantStatus?.stripe_subscription_status && 
