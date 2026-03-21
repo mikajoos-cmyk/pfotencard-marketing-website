@@ -262,6 +262,13 @@ export function BillingPage() {
 
     const isPendingSwitch = !!status?.upcoming_plan && status.upcoming_plan !== status.plan;
 
+    // Prüfen ob Add-ons sich ändern werden
+    const currentAddons = status?.config?.active_addons || [];
+    const upcomingAddons = status?.upcoming_addons || [];
+    const cancelledAddons = status?.cancelled_addons || [];
+    const hasPendingAddonChanges = (status?.upcoming_addons !== null && status?.upcoming_addons !== undefined) && JSON.stringify([...currentAddons].sort()) !== JSON.stringify([...upcomingAddons].sort());
+    const hasCancelledAddons = cancelledAddons.length > 0;
+
     // --- NEUE FEHLER-STATI ---
     const isIncompleteExpired = status?.stripe_subscription_status === 'incomplete_expired';
     const isPastDue = status?.stripe_subscription_status === 'past_due' || status?.stripe_subscription_status === 'unpaid';
@@ -275,7 +282,7 @@ export function BillingPage() {
     // WICHTIG: Bei past_due zeigen wir KEINE neuen Pläne, da der User ins Portal muss.
     const showPricing = (!hasPaymentMethod || isExpired || isIncompleteExpired || isIncomplete) && !isPastDue;
 
-    const planName = status?.plan ? status.plan.charAt(0).toUpperCase() + status.plan.slice(1) : 'Starter';
+    const planName = status?.plan ? status.plan.charAt(0).toUpperCase() + status.plan.slice(1) : 'Kein Paket';
     const upcomingPlanName = status?.upcoming_plan ? status.upcoming_plan.charAt(0).toUpperCase() + status.upcoming_plan.slice(1) : '';
 
     // --- BADGE FARBEN LOGIK ---
@@ -371,16 +378,56 @@ export function BillingPage() {
                 )}
 
                 {/* 6. Plan Wechsel (Nur wenn nicht abgelaufen) */}
-                {isPendingSwitch && !isCancelled && !isExpired && (
+                {(isPendingSwitch || hasPendingAddonChanges || hasCancelledAddons) && !isCancelled && !isExpired && (
                     <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg mb-6 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-                        <Info className="w-5 h-5 mt-0.5" />
-                        <div>
-                            <strong>Plan-Wechsel vorgemerkt</strong>
-                            <div className="flex items-center gap-2 mt-1 text-sm">
-                                <span>Aktuell: <b>{planName}</b></span>
-                                <ArrowRight className="w-4 h-4" />
-                                <span>Ab {formatDate(status.next_payment_date)}: <b>{upcomingPlanName}</b></span>
-                            </div>
+                        <Info className="w-5 h-5 mt-0.5 shrink-0" />
+                        <div className="flex-1">
+                            <strong>Änderung vorgemerkt zum {formatDate(status.next_payment_date)}</strong>
+
+                            {isPendingSwitch && (
+                                <div className="flex items-center gap-2 mt-2 text-sm">
+                                    <span>Basis-Paket: <b>{planName}</b></span>
+                                    <ArrowRight className="w-4 h-4" />
+                                    <span><b>{upcomingPlanName}</b></span>
+                                </div>
+                            )}
+
+                            {hasPendingAddonChanges && (
+                                <div className="mt-2 text-sm space-y-1">
+                                    <div>
+                                        <span className="font-medium">Aktuelle Module:</span>{' '}
+                                        {currentAddons.length > 0
+                                            ? currentAddons.map((a: string) => a.charAt(0).toUpperCase() + a.slice(1)).join(', ')
+                                            : 'Keine'}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <ArrowRight className="w-4 h-4" />
+                                        <span>
+                                            <span className="font-medium">Neue Module:</span>{' '}
+                                            {upcomingAddons.length > 0
+                                                ? upcomingAddons.map((a: string) => a.charAt(0).toUpperCase() + a.slice(1)).join(', ')
+                                                : 'Keine'}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {hasCancelledAddons && !hasPendingAddonChanges && (
+                                <div className="mt-2 text-sm p-2 bg-blue-100/50 rounded border border-blue-200">
+                                    <div className="font-medium text-blue-900 mb-1">Folgende Module wurden zum Periodenende abgewählt:</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {cancelledAddons.map((a: string) => (
+                                            <span key={a} className="px-2 py-0.5 bg-white border border-blue-200 rounded text-xs">
+                                                {a.charAt(0).toUpperCase() + a.slice(1)}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <p className="text-xs mt-3 text-blue-700">
+                                Die Änderungen werden zum Ende des aktuellen Abrechnungszeitraums wirksam.
+                            </p>
                         </div>
                     </div>
                 )}

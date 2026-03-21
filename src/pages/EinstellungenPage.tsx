@@ -852,6 +852,10 @@ export function EinstellungenPage() {
         console.error("Fehler beim Laden der Pakete:", err);
       }
 
+      console.log("[DEBUG] API Response config:", config);
+      console.log("[DEBUG] Tenant Data (t):", t);
+      console.log("[DEBUG] Tenant Config:", t.config);
+
       setSchoolName(t.name);
       setSupportEmail(t.support_email || '');
       setSubdomain(t.subdomain);
@@ -859,6 +863,8 @@ export function EinstellungenPage() {
       let plan = (t.plan || 'starter').toLowerCase();
       if (plan === 'verband') plan = 'enterprise';
       setCurrentPlan(plan as PlanType);
+
+      console.log("[DEBUG] Current Plan:", plan);
 
       // --- Dynamische Modul- & Feature-Auflösung ---
       let allowedModules: string[] = [];
@@ -868,6 +874,9 @@ export function EinstellungenPage() {
       if (currentPkg) {
           allowedModules = [...(currentPkg.allowed_modules || [])];
           allFeatures = { ...(currentPkg.features || {}) };
+          
+          console.log("[DEBUG] Base Plan Package found:", currentPkg.plan_name);
+          console.log("[DEBUG] Base Plan Modules:", allowedModules);
 
           // Vererbung auflösen (max 10 Ebenen Sicherheit)
           let parentPkgName = Object.keys(currentPkg.features || {}).find(k => k.startsWith('inherits_') && currentPkg.features[k])?.replace('inherits_', '');
@@ -891,20 +900,45 @@ export function EinstellungenPage() {
       }
 
       // --- NEU: Add-ons berücksichtigen ---
-      const activeAddons = t.config?.active_addons || [];
+      // Wir prüfen verschiedene Quellen für Addons aufgrund der Backend-Redundanz
+      const activeAddonsFromConfig = t.config?.active_addons || [];
+      const activeAddonsFromTenant = (t as any).active_addons || [];
+      const activeAddonsFromRoot = (config as any).active_addons || [];
+      
+      const activeAddons = [...new Set([...activeAddonsFromConfig, ...activeAddonsFromTenant, ...activeAddonsFromRoot])];
+      
+      console.log("[DEBUG] Active Addons from all sources:", {
+          config: activeAddonsFromConfig,
+          tenant: activeAddonsFromTenant,
+          root: activeAddonsFromRoot,
+          merged: activeAddons
+      });
+
       if (activeAddons.length > 0) {
           activeAddons.forEach((addonName: string) => {
               const addonPkg = dbPackages.find((p: any) => p.plan_name.toLowerCase() === addonName.toLowerCase());
               if (addonPkg) {
+                  console.log(`[DEBUG] Found package for addon "${addonName}":`, addonPkg.plan_name);
                   (addonPkg.allowed_modules || []).forEach((m: string) => {
-                      if (!allowedModules.includes(m)) allowedModules.push(m);
+                      if (!allowedModules.includes(m)) {
+                          console.log(`[DEBUG] Adding module "${m}" from addon "${addonName}"`);
+                          allowedModules.push(m);
+                      }
                   });
                   Object.entries(addonPkg.features || {}).forEach(([k, v]) => {
-                      if (v && !allFeatures[k]) allFeatures[k] = true;
+                      if (v && !allFeatures[k]) {
+                          console.log(`[DEBUG] Enabling feature "${k}" from addon "${addonName}"`);
+                          allFeatures[k] = true;
+                      }
                   });
+              } else {
+                  console.warn(`[DEBUG] No package found in dbPackages for addon: "${addonName}"`);
               }
           });
       }
+
+      console.log("[DEBUG] Final resolved allowedModules:", allowedModules);
+      console.log("[DEBUG] Final resolved allFeatures:", allFeatures);
 
       const branding = t.config?.branding || {};
       const wording = t.config?.wording || {};

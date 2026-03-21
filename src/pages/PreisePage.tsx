@@ -11,6 +11,8 @@ export function PreisePage() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [currentPlan, setCurrentPlan] = useState<string | null>(null);
   const [upcomingPlan, setUpcomingPlan] = useState<string | null>(null); // NEU
+  const [activeAddons, setActiveAddons] = useState<string[]>([]); // NEU
+  const [upcomingAddons, setUpcomingAddons] = useState<string[]>([]); // NEU
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -25,8 +27,10 @@ export function PreisePage() {
     if (activeSubdomain) {
       checkTenantStatus(activeSubdomain).then((status) => {
         if (status && status.exists) {
-          setCurrentPlan(status.plan || 'starter');
+          setCurrentPlan(status.plan || null);
           setUpcomingPlan(status.upcoming_plan); // NEU: Upcoming Plan setzen
+          setActiveAddons(status.active_addons || []); // NEU: Aktive Addons setzen
+          setUpcomingAddons(status.upcoming_addons || []); // NEU: Vorgemerkte Addons setzen
         }
       }).catch(console.error);
     }
@@ -57,6 +61,8 @@ export function PreisePage() {
         isUpgradeMode={!!activeSubdomain}
         currentPlan={currentPlan}
         upcomingPlan={upcomingPlan} // NEU: Prop übergeben
+        activeAddons={activeAddons} // NEU: Aktive Addons übergeben
+        upcomingAddons={upcomingAddons} // NEU: Vorgemerkte Addons übergeben
       />
 
       {!activeSubdomain && <TrialReminderSection />}

@@ -42,6 +42,10 @@ export function UpgradeWizard() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const hasActiveSub = !!(tenantStatus?.stripe_subscription_id &&
+                       tenantStatus?.stripe_subscription_status &&
+                       !['canceled', 'incomplete_expired'].includes(tenantStatus.stripe_subscription_status));
+
   useEffect(() => {
     async function init() {
       try {
@@ -61,8 +65,10 @@ export function UpgradeWizard() {
         setPackages(pkgs);
         
         // Initialen Plan setzen: Bevorzuge vorgemerkten Plan
-        const initialPlan = status.upcoming_plan || status.plan || 'starter';
-        setSelectedPlan(initialPlan);
+        const initialPlan = status.upcoming_plan || status.plan;
+        if (initialPlan) {
+            setSelectedPlan(initialPlan);
+        }
         
         // Addons vorbesetzen: Bevorzuge vorgemerkte Addons
         const initialAddons = status.upcoming_addons && status.upcoming_addons.length > 0 
@@ -127,12 +133,22 @@ export function UpgradeWizard() {
       console.error("Keine Tenant ID vorhanden");
       return;
     }
-    
+
     setIsProcessing(true);
     try {
-      const hasActiveSub = !!(tenantStatus?.stripe_subscription_id && 
-                           tenantStatus?.stripe_subscription_status && 
-                           !['canceled', 'incomplete_expired'].includes(tenantStatus.stripe_subscription_status));
+      console.log("🔍 Checking tenant status:", {
+        stripe_subscription_id: tenantStatus?.stripe_subscription_id,
+        stripe_subscription_status: tenantStatus?.stripe_subscription_status,
+        plan: tenantStatus?.plan
+      });
+
+      const hasActiveSub = !!(
+        tenantStatus?.stripe_subscription_id &&
+        tenantStatus?.stripe_subscription_status &&
+        ['active', 'trialing', 'past_due'].includes(tenantStatus.stripe_subscription_status)
+      );
+
+      console.log("hasActiveSub:", hasActiveSub);
 
       if (!hasActiveSub) {
         // NEUKUNDE oder REAKTIVIERUNG: Zum Checkout weiterleiten
@@ -145,7 +161,7 @@ export function UpgradeWizard() {
         if (selectedAddons.length > 0) {
           params.set('addons', selectedAddons.join(','));
         }
-        
+
         const checkoutUrl = `/checkout?${params.toString()}`;
         console.log("Navigiere zu:", checkoutUrl);
         navigate(checkoutUrl);
@@ -487,7 +503,7 @@ export function UpgradeWizard() {
                     {previewData && previewData.lines && previewData.lines.length > 0 ? (
                       <div className="space-y-6">
                         {/* FALL: Heute nichts fällig (Downgrade / Vormerkung) */}
-                        {previewData.amountDueToday === 0 && (
+                        {hasActiveSub && previewData.amountDueToday === 0 && (
                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
                              <div className="flex justify-center mb-2">
                                <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
@@ -533,7 +549,7 @@ export function UpgradeWizard() {
                         )}
 
                         {/* Hinweis zu vorgemerkten Downgrades (Plan oder Addons) */}
-                        {((selectedPlan !== tenantStatus?.plan && !previewData.isBaseUpgrade) || 
+                        {hasActiveSub && ((selectedPlan !== tenantStatus?.plan && !previewData.isBaseUpgrade) || 
                           (tenantStatus?.active_addons?.some((a: string) => !selectedAddons.includes(a)))) && (
                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
                               <p className="text-[11px] text-orange-700 leading-relaxed">
@@ -547,7 +563,9 @@ export function UpgradeWizard() {
                         <div className="space-y-3">
                           <div className="flex items-center gap-2">
                              <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Reguläre Abo-Posten (ab nächster Periode)</p>
+                             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                               {hasActiveSub ? "Reguläre Abo-Posten (ab nächster Periode)" : "Abo-Posten (ab sofort)"}
+                             </p>
                           </div>
                           <div className="space-y-2 pl-3 border-l border-primary/20">
                             {previewData.lines
@@ -572,7 +590,11 @@ export function UpgradeWizard() {
                             <span>{previewData.taxDueNextMonth?.toFixed(2) || '0.00'} €</span>
                           </div>
                           <div className="pt-2 flex justify-between font-bold text-lg border-t text-primary">
-                            <span>Ab {previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'nächstem Monat'} zu zahlen</span>
+                            <span>
+                               {hasActiveSub 
+                                 ? `Ab ${previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'nächstem Monat'} zu zahlen` 
+                                 : "Künftiger Paketpreis (pro Periode)"}
+                            </span>
                             <span>{previewData.amountDueNextMonth?.toFixed(2) || '0.00'} €</span>
                           </div>
                         </div>
@@ -672,7 +694,7 @@ export function UpgradeWizard() {
                         <div className="text-4xl font-bold text-primary mb-1">
                           {previewData ? `${previewData.amountDueToday.toFixed(2)} €` : '0.00 €'}
                         </div>
-                        {previewData && previewData.amountDueToday === 0 && (
+                        {previewData && previewData.amountDueToday === 0 && hasActiveSub && (
                            <div className="text-[10px] text-muted-foreground font-medium mb-1 uppercase tracking-wider">
                               Keine Zahlung heute (Vorgemerkt)
                            </div>

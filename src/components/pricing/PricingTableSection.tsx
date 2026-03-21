@@ -33,13 +33,17 @@ export function PricingTableSection({
   onSelectPlan,
   isUpgradeMode = false,
   currentPlan,
-  upcomingPlan
+  upcomingPlan,
+  activeAddons = [],
+  upcomingAddons = []
 }: {
   billingCycle: 'monthly' | 'yearly';
   onSelectPlan?: (planName: string) => void;
   isUpgradeMode?: boolean;
   currentPlan?: string | null;
   upcomingPlan?: string | null;
+  activeAddons?: string[];
+  upcomingAddons?: string[];
 }) {
 
   const [plans, setPlans] = useState<any[]>([]);
@@ -160,7 +164,7 @@ export function PricingTableSection({
           <h2 className="text-2xl font-sans font-bold text-slate-900 mb-8 text-center">Basis-Pakete</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
             {plans.filter(p => p.packageType === 'base' || !p.packageType).map((plan, index) => (
-              <PlanCard key={index} plan={plan} index={index} billingCycle={billingCycle} currentPlan={currentPlan} upcomingPlan={upcomingPlan} isUpgradeMode={isUpgradeMode} handleAction={handleAction} />
+              <PlanCard key={index} plan={plan} index={index} billingCycle={billingCycle} currentPlan={currentPlan} upcomingPlan={upcomingPlan} activeAddons={activeAddons} upcomingAddons={upcomingAddons} isUpgradeMode={isUpgradeMode} handleAction={handleAction} />
             ))}
           </div>
         </div>
@@ -171,7 +175,7 @@ export function PricingTableSection({
             <h2 className="text-2xl font-sans font-bold text-slate-900 mb-8 text-center">Zusatz-Module (Add-ons)</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
               {plans.filter(p => p.packageType === 'addon').map((plan, index) => (
-                <PlanCard key={index} plan={plan} index={index} billingCycle={billingCycle} currentPlan={currentPlan} upcomingPlan={upcomingPlan} isUpgradeMode={isUpgradeMode} handleAction={handleAction} />
+                <PlanCard key={index} plan={plan} index={index} billingCycle={billingCycle} currentPlan={currentPlan} upcomingPlan={upcomingPlan} activeAddons={activeAddons} upcomingAddons={upcomingAddons} isUpgradeMode={isUpgradeMode} handleAction={handleAction} />
               ))}
             </div>
           </div>
@@ -181,12 +185,17 @@ export function PricingTableSection({
   );
 }
 
-function PlanCard({ plan, index, billingCycle, currentPlan, upcomingPlan, isUpgradeMode, handleAction }: any) {
+function PlanCard({ plan, index, billingCycle, currentPlan, upcomingPlan, activeAddons = [], upcomingAddons = [], isUpgradeMode, handleAction }: any) {
   const isAddon = plan.packageType === 'addon';
   
   // Status-Checks
-  const isCurrentPlan = currentPlan && plan.dbName.toLowerCase() === currentPlan.toLowerCase();
-  const isUpcomingPlan = upcomingPlan && plan.dbName.toLowerCase() === upcomingPlan.toLowerCase();
+  const isBasePlanActive = currentPlan && plan.dbName.toLowerCase() === currentPlan.toLowerCase();
+  const isAddonActive = isAddon && activeAddons.some((a: string) => a.toLowerCase() === plan.dbName.toLowerCase());
+  const isCurrentPlan = isBasePlanActive || isAddonActive;
+  
+  const isBasePlanUpcoming = upcomingPlan && plan.dbName.toLowerCase() === upcomingPlan.toLowerCase();
+  const isAddonUpcoming = isAddon && upcomingAddons.some((a: string) => a.toLowerCase() === plan.dbName.toLowerCase());
+  const isUpcomingPlan = isBasePlanUpcoming || isAddonUpcoming;
 
   // Ein Wechsel steht an, wenn ein Upcoming Plan existiert und dieser NICHT der aktuelle Plan ist
   const isSwitchPending = !!upcomingPlan && (upcomingPlan.toLowerCase() !== (currentPlan || '').toLowerCase());
