@@ -18,7 +18,8 @@ export function BillingPage() {
     const [loading, setLoading] = useState(true);
     const [status, setStatus] = useState<any>(null);
     const [canceling, setCanceling] = useState(false);
-        const [reactivating, setReactivating] = useState(false);
+    const [reactivating, setReactivating] = useState(false);
+    const [cancelingChanges, setCancelingChanges] = useState(false);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [upcomingInvoice, setUpcomingInvoice] = useState<any>(null);
@@ -131,6 +132,32 @@ export function BillingPage() {
             toast({ variant: "destructive", title: "Fehler", description: "Konnte nicht reaktivieren." });
         } finally {
             setReactivating(false);
+        }
+    };
+
+    const handleCancelPendingChanges = async () => {
+        if (!confirm("Möchtest du die vorgemerkten Änderungen an deinem Abo wirklich verwerfen und dein aktuelles Abo behalten?")) return;
+        setCancelingChanges(true);
+        try {
+            const token = localStorage.getItem('pfotencard_token');
+            const { error } = await supabase.functions.invoke('manage-subscription', {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
+                body: {
+                    action: 'cancel_pending_changes',
+                    tenantId: status?.tenant_id
+                }
+            });
+
+            if (error) throw error;
+            
+            toast({ title: "Änderungen verworfen", description: "Dein aktuelles Abo wird beibehalten." });
+            await fetchBillingData();
+        } catch (e) {
+            toast({ variant: "destructive", title: "Fehler", description: "Konnte Änderungen nicht verwerfen." });
+        } finally {
+            setCancelingChanges(false);
         }
     };
 
@@ -429,6 +456,15 @@ export function BillingPage() {
                                 Die Änderungen werden zum Ende des aktuellen Abrechnungszeitraums wirksam.
                             </p>
                         </div>
+                        <Button 
+                            variant="default" 
+                            size="sm" 
+                            onClick={handleCancelPendingChanges} 
+                            disabled={cancelingChanges}
+                            className="shrink-0"
+                        >
+                            {cancelingChanges ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Bitte warten...</> : 'Aktuelles Abo behalten'}
+                        </Button>
                     </div>
                 )}
 

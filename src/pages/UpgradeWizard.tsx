@@ -185,7 +185,7 @@ export function UpgradeWizard() {
       if (error) throw error;
 
       toast({ title: "Upgrade erfolgreich!", description: "Dein Abo wurde aktualisiert." });
-      navigate('/einstellungen/billing'); // Zurück zur Billing Seite
+      navigate('/billing'); // Zurück zur Billing Seite
     } catch (err: any) {
       console.error("Fehler beim Upgrade", err);
       toast({ variant: "destructive", title: "Upgrade fehlgeschlagen", description: err.message || "Die Zahlung konnte nicht verarbeitet werden." });
