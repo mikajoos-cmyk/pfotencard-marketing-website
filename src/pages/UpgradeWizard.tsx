@@ -70,10 +70,17 @@ export function UpgradeWizard() {
             setSelectedPlan(initialPlan);
         }
         
-        // Addons vorbesetzen: Bevorzuge vorgemerkte Addons
-        const initialAddons = status.upcoming_addons && status.upcoming_addons.length > 0 
+        // Addons vorbesetzen: 
+        // 1. Wenn ein kompletter neuer "Zukunfts-Satz" (upcoming_addons) da ist, nimm diesen.
+        // 2. Sonst nimm die aktuell aktiven, aber FILTERE die bereits gekündigten (removes_at_period_end) raus.
+        const activeAddons = status.active_addons || [];
+        const cancelledAddons = status.cancelled_addons || [];
+        const activeButNotDropped = activeAddons.filter((a: string) => !cancelledAddons.includes(a));
+
+        const initialAddons = (status.upcoming_addons && status.upcoming_addons.length > 0) 
           ? status.upcoming_addons 
-          : (status.active_addons || []);
+          : activeButNotDropped;
+        
         setSelectedAddons(initialAddons);
 
         setLoading(false);
@@ -259,6 +266,41 @@ export function UpgradeWizard() {
     return featuresToDisplay;
   };
 
+  const currentPlan = tenantStatus?.plan;
+  const currentAddons = tenantStatus?.active_addons || [];
+  const cancelledAddons = tenantStatus?.cancelled_addons || [];
+  const scheduledPlan = tenantStatus?.upcoming_plan || currentPlan;
+  
+  // Der "Soll-Zustand" (was laut DB passieren wird, wenn man nichts tut)
+  const scheduledAddons = (tenantStatus?.upcoming_addons && tenantStatus.upcoming_addons.length > 0)
+    ? tenantStatus.upcoming_addons
+    : currentAddons.filter(a => !cancelledAddons.includes(a));
+
+  // Check if anything was changed in THIS session
+  const planChangedFromActive = selectedPlan !== currentPlan;
+  const addonsChangedFromActive = JSON.stringify([...selectedAddons].sort()) !== JSON.stringify([...currentAddons].sort());
+  const isDiffFromActive = planChangedFromActive || addonsChangedFromActive;
+
+  // Check if selection differs from what was ALREADY in the database/pending
+  const planChangedFromScheduled = selectedPlan !== scheduledPlan;
+  const addonsChangedFromScheduled = JSON.stringify([...selectedAddons].sort()) !== JSON.stringify([...scheduledAddons].sort());
+  const isNewActionInWizard = planChangedFromScheduled || addonsChangedFromScheduled;
+
+  // Revert Detection (Heading back to active state)
+  const dbHasPending = !!tenantStatus?.upcoming_plan || (tenantStatus?.upcoming_addons && tenantStatus.upcoming_addons.length > 0) || (cancelledAddons.length > 0);
+  const isFullyReverting = !isDiffFromActive && dbHasPending;
+  
+  const isRevertingPlan = (tenantStatus?.upcoming_plan && tenantStatus.upcoming_plan !== currentPlan) && selectedPlan === currentPlan;
+  const isRevertingAddonRemoval = cancelledAddons.some((a: string) => selectedAddons.includes(a));
+  const isRevertingAddonActivation = (tenantStatus?.upcoming_addons || []).some((a: string) => !currentAddons.includes(a) && !selectedAddons.includes(a));
+  
+  const isAnyPartialRevert = (isRevertingPlan || isRevertingAddonRemoval || isRevertingAddonActivation) && !isFullyReverting;
+
+  const isImmediate = !!previewData?.isBaseUpgrade || selectedAddons.some(a => !currentAddons.includes(a));
+
+  const isMakingNewDowngrade = (planChangedFromActive && selectedPlan !== scheduledPlan && !previewData?.isBaseUpgrade) || 
+                               (currentAddons.some((a: string) => !selectedAddons.includes(a) && scheduledAddons.includes(a)));
+
   return (
     <main className="min-h-screen bg-background pt-24 pb-12">
       <div className="max-w-4xl mx-auto px-4">
@@ -434,14 +476,17 @@ export function UpgradeWizard() {
                           {tenantStatus.upcoming_addons?.includes(addon.plan_name) && !tenantStatus.active_addons?.includes(addon.plan_name) && (
                             <Badge className="bg-orange-500 text-white hover:bg-orange-600 border-none text-[10px] py-0 h-4">Zukünftig aktiv</Badge>
                           )}
-                          {tenantStatus.active_addons?.includes(addon.plan_name) && !selectedAddons.includes(addon.plan_name) && (
+                          {tenantStatus.active_addons?.includes(addon.plan_name) && !selectedAddons.includes(addon.plan_name) && !tenantStatus.cancelled_addons?.includes(addon.plan_name) && (
                             <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 text-[10px] py-0 h-4">Abwahl vorgemerkt</Badge>
+                          )}
+                          {tenantStatus.cancelled_addons?.includes(addon.plan_name) && (
+                            <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 text-[10px] py-0 h-4">Änderung vorgemerkt</Badge>
                           )}
                           {!tenantStatus.active_addons?.includes(addon.plan_name) && tenantStatus.upcoming_addons?.includes(addon.plan_name) && !selectedAddons.includes(addon.plan_name) && (
                             <Badge variant="outline" className="text-gray-400 border-gray-200 bg-gray-50 text-[10px] py-0 h-4">Auswahl aufgehoben</Badge>
                           )}
                         </div>
-                        {tenantStatus.active_addons?.includes(addon.plan_name) && !selectedAddons.includes(addon.plan_name) && (
+                        {(tenantStatus.active_addons?.includes(addon.plan_name) && !selectedAddons.includes(addon.plan_name) || tenantStatus.cancelled_addons?.includes(addon.plan_name) && !selectedAddons.includes(addon.plan_name)) && (
                            <p className="text-[10px] text-orange-600 mt-0.5 font-medium italic">Behältst du bis zum Ende der aktuellen Laufzeit</p>
                         )}
                         <p className="text-sm text-muted-foreground">
@@ -502,20 +547,96 @@ export function UpgradeWizard() {
                   <CardContent className="space-y-4">
                     {previewData && previewData.lines && previewData.lines.length > 0 ? (
                       <div className="space-y-6">
-                        {/* FALL: Heute nichts fällig (Downgrade / Vormerkung) */}
-                        {hasActiveSub && previewData.amountDueToday === 0 && (
-                           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
-                             <div className="flex justify-center mb-2">
-                               <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
-                                 <Clock className="h-4 w-4" />
+                        {/* --- UNIFIED NOTIFICATION BLOCK --- */}
+                        {(() => {
+                          // Case 1: Full Revert
+                          if (isFullyReverting) {
+                            return (
+                               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                                 <div className="flex justify-center mb-2">
+                                   <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                                     <Check className="h-4 w-4" />
+                                   </div>
+                                 </div>
+                                 <p className="text-blue-600 font-bold text-base">Rückkehr zum aktuellen Paket</p>
+                                 <p className="text-[11px] text-blue-700 mt-1 leading-tight">
+                                   Alle vorgemerkten Änderungen wurden widerrufen. Dein Abonnement läuft <strong>wie gehabt</strong> weiter.
+                                 </p>
                                </div>
-                             </div>
-                             <p className="text-orange-600 font-bold text-base">Keine Zahlung heute</p>
-                             <p className="text-[11px] text-orange-700 mt-1 leading-tight">
-                               Der Wechsel wird heute <strong>vorgemerkt</strong>, wird aber erst zum nächsten Abrechnungsdatum am <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.
-                             </p>
-                           </div>
-                        )}
+                            );
+                          }
+
+                          // Case 2: Partial Revert
+                          if (isAnyPartialRevert) {
+                            return (
+                               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                 <p className="text-[11px] text-blue-700 leading-relaxed font-medium">
+                                   <Info className="h-3.5 w-3.5 inline-block mr-1.5 -mt-0.5" />
+                                   Du widerrufst hiermit bereits vorgemerkte Änderungen: 
+                                   {isRevertingPlan && ' Dein aktuelles Basis-Paket bleibt bestehen.'}
+                                   {(isRevertingAddonRemoval || isRevertingAddonActivation) && ' Deine Modul-Auswahl wird auf den aktuellen Stand zurückgesetzt.'}
+                                 </p>
+                               </div>
+                            );
+                          }
+
+                          // Case 3: Immediate Activation (Upgrade)
+                          if (isNewActionInWizard && isImmediate) {
+                            return (
+                               <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                                 <div className="flex justify-center mb-2">
+                                   <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                                     <CreditCard className="h-4 w-4" />
+                                   </div>
+                                 </div>
+                                 <p className="text-green-600 font-bold text-base">Sofortige Aktivierung</p>
+                                 <p className="text-[11px] text-green-700 mt-1 leading-tight">
+                                   Deine Änderungen werden <strong>sofort</strong> wirksam. 
+                                   {previewData?.amountDueToday > 0 ? (
+                                      <>Heute wird ein Betrag von <strong>{previewData.amountDueToday.toFixed(2)} {previewData.currency?.toUpperCase() || '€'}</strong> (inkl. MwSt.) verrechnet.</>
+                                   ) : (
+                                      <>Es ist heute keine zusätzliche Zahlung fällig (z.B. durch Gutschriften).</>
+                                   )}
+                                 </p>
+                               </div>
+                            );
+                          }
+
+                          // Case 4: New Downgrade or Scheduled Info (Only if changed in Wizard)
+                          if (isNewActionInWizard) {
+                            return (
+                               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
+                                 <div className="flex justify-center mb-2">
+                                   <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+                                     <Clock className="h-4 w-4" />
+                                   </div>
+                                 </div>
+                                 <p className="text-orange-600 font-bold text-base">Änderung vorgemerkt</p>
+                                 <p className="text-[11px] text-orange-700 mt-1 leading-tight">
+                                   {isMakingNewDowngrade ? (
+                                     <>Deine Änderungen beinhalten einen Downgrade. Dieser wird heute <strong>vorgemerkt</strong> und erst zum nächsten Abrechnungsdatum am <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.</>
+                                   ) : (
+                                     <>Die Auswahl wird heute <strong>vorgemerkt</strong> und zum nächsten Abrechnungsdatum am <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.</>
+                                   )}
+                                 </p>
+                               </div>
+                            );
+                          }
+
+                          // Case 5: No Changes selected (Viewing existing schedule)
+                          if (!isNewActionInWizard && isDiffFromActive) {
+                            return (
+                               <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                                 <p className="text-[11px] text-gray-600 font-medium italic">
+                                   <Info className="h-3.5 w-3.5 inline-block mr-1.5 -mt-0.5" />
+                                   Hier sind deine bereits geplanten Änderungen für die nächste Periode. Du hast keine weiteren Änderungen im Wizard vorgenommen.
+                                 </p>
+                               </div>
+                            );
+                          }
+
+                          return null;
+                        })()}
 
                         {/* 1. Einmalige Verrechnung (Heute) */}
                         {previewData.lines.some((line: any) => line.proration && (line.amount > 0 || (line.amount < 0 && line.package_type !== 'addon'))) && (
@@ -546,17 +667,6 @@ export function UpgradeWizard() {
                               </div>
                             </div>
                           </div>
-                        )}
-
-                        {/* Hinweis zu vorgemerkten Downgrades (Plan oder Addons) */}
-                        {hasActiveSub && ((selectedPlan !== tenantStatus?.plan && !previewData.isBaseUpgrade) || 
-                          (tenantStatus?.active_addons?.some((a: string) => !selectedAddons.includes(a)))) && (
-                           <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                              <p className="text-[11px] text-orange-700 leading-relaxed">
-                                <Info className="h-3.5 w-3.5 inline-block mr-1.5 -mt-0.5" />
-                                Der Wechsel wird heute <strong>vorgemerkt</strong>, wird aber erst zum nächsten Abrechnungsdatum am <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.
-                              </p>
-                           </div>
                         )}
 
                         {/* 2. Zukünftige Abo-Gebühren */}
@@ -696,7 +806,7 @@ export function UpgradeWizard() {
                         </div>
                         {previewData && previewData.amountDueToday === 0 && hasActiveSub && (
                            <div className="text-[10px] text-muted-foreground font-medium mb-1 uppercase tracking-wider">
-                              Keine Zahlung heute (Vorgemerkt)
+                              {isFullyReverting ? "Keine Änderung heute" : "Keine Zahlung heute (Vorgemerkt)"}
                            </div>
                         )}
                         {(() => {
@@ -744,6 +854,8 @@ export function UpgradeWizard() {
                           <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 
                           Wird verarbeitet...
                         </>
+                      ) : isFullyReverting ? (
+                        "Änderungen verwerfen & Zurückkehren"
                       ) : (
                         (() => {
                           const hasActiveSub = !!(tenantStatus?.stripe_subscription_id && 
