@@ -43,12 +43,22 @@ export function PreisePage() {
     }
   }, [activeSubdomain, urlSubdomain, toast]);
 
-  const handleSelectPlan = async (planName: string) => {
+  const handleSelectPlan = async (planName: string, type?: 'base' | 'addon') => {
     if (!activeSubdomain) {
       navigate(`/anmelden?register=true&plan=${planName.toLowerCase()}&cycle=${billingCycle}`);
       return;
     }
-    navigate(`/checkout?plan=${planName.toLowerCase()}&cycle=${billingCycle}`);
+    const step = type === 'addon' ? 2 : 1;
+    const params = new URLSearchParams({
+        step: step.toString(),
+        cycle: billingCycle
+    });
+    if (type === 'addon') {
+        params.set('addon', planName);
+    } else {
+        params.set('plan', planName);
+    }
+    navigate(`/upgrade?${params.toString()}`);
   };
 
   return (

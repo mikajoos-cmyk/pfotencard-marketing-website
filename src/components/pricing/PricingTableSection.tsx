@@ -38,7 +38,7 @@ export function PricingTableSection({
   upcomingAddons = []
 }: {
   billingCycle: 'monthly' | 'yearly';
-  onSelectPlan?: (planName: string) => void;
+  onSelectPlan?: (planName: string, packageType?: 'base' | 'addon') => void;
   isUpgradeMode?: boolean;
   currentPlan?: string | null;
   upcomingPlan?: string | null;
@@ -142,7 +142,9 @@ export function PricingTableSection({
 
   const handleAction = (planName: string) => {
     if (onSelectPlan) {
-      onSelectPlan(planName);
+      // Find package type if not provided
+      const pkg = plans.find(p => p.dbName === planName);
+      onSelectPlan(planName, pkg?.packageType);
     } else {
       navigate('/anmelden?register=true');
     }

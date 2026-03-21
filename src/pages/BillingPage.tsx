@@ -522,7 +522,19 @@ export function BillingPage() {
                         </div>
                         <PricingTableSection
                             billingCycle={billingCycle}
-                            onSelectPlan={(p) => navigate(`/checkout?plan=${p.toLowerCase()}&cycle=${billingCycle}`)}
+                            onSelectPlan={(p, type) => {
+                                const step = type === 'addon' ? 2 : 1;
+                                const params = new URLSearchParams({
+                                    step: step.toString(),
+                                    cycle: billingCycle
+                                });
+                                if (type === 'addon') {
+                                    params.set('addon', p);
+                                } else {
+                                    params.set('plan', p);
+                                }
+                                navigate(`/upgrade?${params.toString()}`);
+                            }}
                             isUpgradeMode={true}
                             // WICHTIG: Wenn abgelaufen, keinen aktuellen Plan anzeigen
                             currentPlan={isExpired ? null : status?.plan}

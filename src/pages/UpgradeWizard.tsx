@@ -5,11 +5,22 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Check, ArrowRight, ArrowLeft, Package, Layers, CreditCard, Info, AlertCircle, Clock } from 'lucide-react';
+import { Loader2, Check, ArrowRight, ArrowLeft, Package, Layers, CreditCard, Info, AlertCircle, Clock, Tag, Building2, MapPin, Wallet, XCircle, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { PLAN_MODULES, PLAN_FEATURES } from '@/lib/planConfig';
+import { useAuth } from "@/context/AuthContext";
+import { useStripe, useElements, PaymentElement, Elements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
+import { Input } from '@/components/ui/input';
+import { Label } from "@/components/ui/label";
+import { VatIdInput } from "@/components/ui/VatIdInput";
+import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
+import { getCountryCode } from "@/lib/country-mapping";
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '');
 
 interface DBPackage {
   id: number;
@@ -21,6 +32,516 @@ interface DBPackage {
   included_customers: number;
   additional_cost_per_customer: number;
   features: Record<string, boolean>;
+}
+
+function UpgradeStep3Form({
+  previewData,
+  selectedPlan,
+  selectedAddons,
+  billingCycle,
+  packages,
+  hasActiveSub,
+  tenantStatus,
+  isFullyReverting,
+  isAnyPartialRevert,
+  isNewActionInWizard,
+  isImmediate,
+  isMakingNewDowngrade,
+  isDiffFromActive,
+  isRevertingPlan,
+  isRevertingAddonRemoval,
+  isRevertingAddonActivation,
+  isLoadingPreview,
+  isProcessing,
+  handleFinalUpgrade,
+  promoCode,
+  setPromoCode,
+  promoDetails,
+  setPromoDetails,
+  promoError,
+  isValidatingPromo,
+  handleValidatePromo,
+  address,
+  setAddress,
+  addressSearchValue,
+  setAddressSearchValue,
+  vatId,
+  setVatId,
+  isSavingAddress,
+  intentType,
+  onBack,
+  stripe,
+  elements,
+  savedMethods = [],
+  selectedMethodId,
+  setSelectedMethodId,
+  isLoadingMethods
+}: any) {
+  return (
+    <div className="grid md:grid-cols-3 gap-8 items-start">
+      <div className="md:col-span-2 space-y-6">
+        {/* 1. Posten-Zusammenfassung */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Zusammenfassung</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {previewData && previewData.lines && previewData.lines.length > 0 ? (
+              <div className="space-y-6">
+                {/* --- UNIFIED NOTIFICATION BLOCK --- */}
+                {(() => {
+                  if (isFullyReverting) {
+                    return (
+                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                         <div className="flex justify-center mb-2">
+                           <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                             <Check className="h-4 w-4" />
+                           </div>
+                         </div>
+                         <p className="text-blue-600 font-bold text-base">Rückkehr zum aktuellen Paket</p>
+                         <p className="text-[11px] text-blue-700 mt-1 leading-tight">
+                           Alle vorgemerkten Änderungen wurden widerrufen. Dein Abonnement läuft <strong>wie gehabt</strong> weiter.
+                         </p>
+                       </div>
+                    );
+                  }
+
+                  if (isAnyPartialRevert) {
+                    return (
+                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                         <p className="text-[11px] text-blue-700 leading-relaxed font-medium">
+                           <Info className="h-3.5 w-3.5 inline-block mr-1.5 -mt-0.5" />
+                           Du widerrufst hiermit bereits vorgemerkte Änderungen: 
+                           {isRevertingPlan && ' Dein aktuelles Basis-Paket bleibt bestehen.'}
+                           {(isRevertingAddonRemoval || isRevertingAddonActivation) && ' Deine Modul-Auswahl wird auf den aktuellen Stand zurückgesetzt.'}
+                         </p>
+                       </div>
+                    );
+                  }
+
+                  if (isNewActionInWizard && isImmediate) {
+                    return (
+                       <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                         <div className="flex justify-center mb-2">
+                           <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                             <CreditCard className="h-4 w-4" />
+                           </div>
+                         </div>
+                         <p className="text-green-600 font-bold text-base">Sofortige Aktivierung</p>
+                         <p className="text-[11px] text-green-700 mt-1 leading-tight">
+                           Deine Änderungen werden <strong>sofort</strong> wirksam. 
+                           {previewData?.amountDueToday > 0 ? (
+                              <>Heute wird ein Betrag von <strong>{previewData.amountDueToday.toFixed(2)} {previewData.currency?.toUpperCase() || '€'}</strong> (inkl. MwSt.) verrechnet.</>
+                           ) : (
+                              <>Es ist heute keine zusätzliche Zahlung fällig (z.B. durch Gutschriften).</>
+                           )}
+                         </p>
+                       </div>
+                    );
+                  }
+
+                  if (isNewActionInWizard) {
+                    return (
+                       <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
+                         <div className="flex justify-center mb-2">
+                           <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+                             <Clock className="h-4 w-4" />
+                           </div>
+                         </div>
+                         <p className="text-orange-600 font-bold text-base">Änderung vorgemerkt</p>
+                         <p className="text-[11px] text-orange-700 mt-1 leading-tight">
+                           {isMakingNewDowngrade ? (
+                             <>Deine Änderungen beinhalten einen Downgrade. Dieser wird heute <strong>vorgemerkt</strong> und erst zum nächsten Abrechnungsdatum am <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.</>
+                           ) : (
+                             <>Die Auswahl wird heute <strong>vorgemerkt</strong> und zum nächsten Abrechnungsdatum am <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.</>
+                           )}
+                         </p>
+                       </div>
+                    );
+                  }
+
+                  if (!isNewActionInWizard && isDiffFromActive) {
+                    return (
+                       <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                         <p className="text-[11px] text-gray-600 font-medium italic">
+                           <Info className="h-3.5 w-3.5 inline-block mr-1.5 -mt-0.5" />
+                           Hier sind deine bereits geplanten Änderungen für die nächste Periode. Du hast keine weiteren Änderungen im Wizard vorgenommen.
+                         </p>
+                       </div>
+                    );
+                  }
+
+                  return null;
+                })()}
+
+                {/* 1. Einmalige Verrechnung (Heute) */}
+                {previewData.lines.some((line: any) => line.proration && (line.amount > 0 || (line.amount < 0 && line.package_type !== 'addon'))) && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                       <div className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                       <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600">Einmalige Verrechnung (Heute fällig)</p>
+                    </div>
+                    <div className="space-y-2 pl-3 border-l border-orange-200">
+                      {previewData.lines
+                        .filter((line: any) => line.proration && (line.amount > 0 || (line.amount < 0 && line.package_type !== 'addon')))
+                        .map((line: any, index: number) => (
+                          <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
+                            <span className="pr-4">{line.description}</span>
+                            <span className={`whitespace-nowrap ${line.amount < 0 ? "text-green-600" : ""}`}>
+                              {(line.amount / 100).toFixed(2)} €
+                            </span>
+                          </div>
+                        ))
+                      }
+                      <div className="pt-1 flex justify-between font-medium text-xs text-orange-700">
+                        <span>Zwischensumme Heute (Netto)</span>
+                        <span>{previewData.netDueToday?.toFixed(2)} €</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-xs text-orange-700 border-t border-orange-200/50 pt-1">
+                        <span>Zwischensumme Heute (Brutto)</span>
+                        <span>{previewData.amountDueToday?.toFixed(2)} €</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Zukünftige Abo-Gebühren */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                     <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                     <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                       {hasActiveSub ? "Reguläre Abo-Posten (ab nächster Periode)" : "Abo-Posten (ab sofort)"}
+                     </p>
+                  </div>
+                  <div className="space-y-2 pl-3 border-l border-primary/20">
+                    {previewData.lines
+                      .filter((line: any) => !line.proration && line.amount !== 0)
+                      .map((line: any, index: number) => (
+                        <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
+                          <span className="pr-4">{line.description}</span>
+                          <span className="whitespace-nowrap">{(line.amount / 100).toFixed(2)} €</span>
+                        </div>
+                      ))
+                    }
+                    <div className="pt-1 flex justify-between font-medium text-xs">
+                        <span>Zukünftiger Paketpreis (Netto)</span>
+                        <span>{previewData.netDueNextMonth?.toFixed(2)} €</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="pt-4 space-y-2 border-t">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Zukünftige MwSt.</span>
+                    <span>{previewData.taxDueNextMonth?.toFixed(2) || '0.00'} €</span>
+                  </div>
+                  <div className="pt-2 flex justify-between font-bold text-lg border-t text-primary">
+                    <span>
+                       {hasActiveSub 
+                         ? `Ab ${previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'nächstem Monat'} zu zahlen` 
+                         : "Künftiger Paketpreis (pro Periode)"}
+                    </span>
+                    <span>{previewData.amountDueNextMonth?.toFixed(2) || '0.00'} €</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center py-10 gap-4">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Berechne Zusammenfassung...</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 2. Gutscheincode */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Tag className="w-4 h-4 text-primary" /> Gutscheincode
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Code eingeben"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                disabled={isValidatingPromo || !!promoDetails}
+                className="flex-1 bg-background"
+              />
+              {promoDetails ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setPromoDetails(null);
+                    setPromoCode('');
+                  }}
+                >
+                  Entfernen
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleValidatePromo}
+                  disabled={isValidatingPromo || !promoCode.trim()}
+                >
+                  {isValidatingPromo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Prüfen'}
+                </Button>
+              )}
+            </div>
+            {promoError && <p className="text-xs text-destructive mt-2">{promoError}</p>}
+            {promoDetails && (
+              <div className="bg-primary/10 border border-primary/20 rounded-md p-3 flex items-start gap-3 mt-3">
+                <CheckCircle2 className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-primary">Gutschein "{promoDetails.name}" aktiv</p>
+                  <p className="text-muted-foreground text-xs">
+                    Rabatt: {promoDetails.percent_off ? `${promoDetails.percent_off}%` : promoDetails.amount_off ? `${(promoDetails.amount_off / 100).toFixed(2)} €` : 'Gültig'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 3. Rechnungsadresse */}
+        <Card>
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-primary" /> Rechnungsadresse
+            </CardTitle>
+            {isSavingAddress ? (
+              <span className="text-[10px] text-muted-foreground animate-pulse">Speichere...</span>
+            ) : (
+              <span className="text-[10px] text-green-600 flex items-center gap-1">
+                <Check className="w-3 h-3" /> Gespeichert
+              </span>
+            )}
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs">Adresse suchen</Label>
+              <AddressAutocomplete
+                value={addressSearchValue}
+                onChange={setAddressSearchValue}
+                onAddressSelect={(selectedAddress: any) => {
+                  setAddress({
+                    street: selectedAddress.street,
+                    city: selectedAddress.city,
+                    postcode: selectedAddress.postcode,
+                    country: selectedAddress.country,
+                    countryCode: selectedAddress.countryCode || getCountryCode(selectedAddress.country),
+                  });
+                  setAddressSearchValue('');
+                }}
+                placeholder="Adresse eingeben..."
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-xs">Straße *</Label>
+                <Input value={address.street} readOnly className="bg-muted/50 cursor-not-allowed text-sm" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">PLZ *</Label>
+                <Input value={address.postcode} readOnly className="bg-muted/50 cursor-not-allowed text-sm" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Ort *</Label>
+                <Input value={address.city} readOnly className="bg-muted/50 cursor-not-allowed text-sm" />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-xs">Land *</Label>
+                <Input value={address.country} readOnly className="bg-muted/50 cursor-not-allowed text-sm" />
+              </div>
+            </div>
+            <div className="pt-2">
+              <VatIdInput
+                value={vatId}
+                onChange={setVatId}
+                label="USt-IdNr. (optional)"
+                className="text-sm"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 4. Zahlungsmethode */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-primary" /> Zahlungsmethode
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingMethods ? (
+              <div className="flex flex-col items-center py-10 gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Zahlungsmethoden werden geladen...</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                 {savedMethods.length > 0 && (
+                   <div className="space-y-3 mb-6">
+                     <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Hinterlegte Zahlungsmethoden</Label>
+                     <RadioGroup value={selectedMethodId} onValueChange={setSelectedMethodId} className="grid gap-2">
+                       {savedMethods.map((method: any) => (
+                         <Label
+                           key={method.id}
+                           htmlFor={method.id}
+                           className={`flex items-center space-x-3 border p-3 rounded-lg cursor-pointer transition-colors ${selectedMethodId === method.id ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:bg-muted/50'}`}
+                         >
+                           <RadioGroupItem value={method.id} id={method.id} />
+                           <div className="flex-1 flex items-center justify-between">
+                             <div className="flex items-center gap-2 text-sm">
+                               <CreditCard className="w-4 h-4 text-muted-foreground" />
+                               <span className="uppercase font-medium">{method.card?.brand} •••• {method.card?.last4}</span>
+                             </div>
+                             <span className="text-muted-foreground text-[10px]">
+                               Exp: {method.card?.exp_month}/{method.card?.exp_year}
+                             </span>
+                           </div>
+                         </Label>
+                       ))}
+                       <Label
+                         htmlFor="new"
+                         className={`flex items-center space-x-3 border p-3 rounded-lg cursor-pointer transition-colors ${selectedMethodId === 'new' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:bg-muted/50'}`}
+                       >
+                         <RadioGroupItem value="new" id="new" />
+                         <span className="font-medium text-sm">Neue Zahlungsmethode hinzufügen</span>
+                       </Label>
+                     </RadioGroup>
+                   </div>
+                 )}
+
+                 {selectedMethodId === 'new' ? (
+                   <div className="space-y-4">
+                     {stripe && elements ? (
+                       <>
+                         <PaymentElement options={{ layout: 'tabs' }} />
+                         <p className="text-[10px] text-muted-foreground italic mt-2">
+                           Deine Zahlungsdaten werden sicher bei Stripe gespeichert.
+                         </p>
+                       </>
+                     ) : (
+                       <div className="p-8 bg-muted/30 rounded-lg border border-dashed flex flex-col items-center gap-3">
+                         <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                         <p className="text-xs text-muted-foreground text-center">
+                           Bezahlmodul wird vorbereitet...<br/>
+                           <span className="text-[10px]">(Nur erforderlich bei neuen Zahlungsdaten)</span>
+                         </p>
+                       </div>
+                     )}
+                   </div>
+                 ) : (
+                   <div className="flex items-center gap-3 p-4 bg-primary/5 rounded-lg border border-primary/20">
+                     <CheckCircle2 className="w-5 h-5 text-primary" />
+                     <div className="text-sm">
+                       <p className="font-medium">Ausgewählte Karte wird genutzt</p>
+                       <p className="text-xs text-muted-foreground">Wir verwenden diese Karte für dein Abonnement.</p>
+                     </div>
+                   </div>
+                 )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-start mt-8">
+          <Button variant="outline" onClick={onBack} size="lg" disabled={isProcessing}>
+            <ArrowLeft className="mr-2 h-5 w-5" /> Zurück zu Modulen
+          </Button>
+        </div>
+      </div>
+
+      {/* RECHTE SPALTE (Sticky Sidebar) */}
+      <div className="md:sticky md:top-24 space-y-6">
+        <Card className="border-primary ring-1 ring-primary/20 shadow-lg">
+          <CardHeader className="bg-primary/5">
+            <CardTitle className="text-base flex items-center gap-2">
+               <CreditCard className="h-5 w-5" /> Heute fällig
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {isLoadingPreview ? (
+              <div className="flex flex-col items-center py-6 gap-2">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground text-center">Stripe berechnet den besten Preis...</span>
+              </div>
+            ) : (
+              <div className="text-center">
+                <div className="text-4xl font-bold text-primary mb-1">
+                  {previewData ? `${previewData.amountDueToday.toFixed(2)} €` : '0.00 €'}
+                </div>
+                {previewData && previewData.amountDueToday === 0 && hasActiveSub && (
+                   <div className="text-[10px] text-muted-foreground font-medium mb-1 uppercase tracking-wider">
+                      {isFullyReverting ? "Keine Änderung heute" : "Keine Zahlung heute (Vorgemerkt)"}
+                   </div>
+                )}
+                {hasActiveSub && previewData && previewData.amountDueToday > 0 && (
+                  <div className="text-[10px] text-orange-600 font-medium mb-1 uppercase tracking-wider">
+                    Anteilige Kosten (einmalig)
+                  </div>
+                )}
+                {previewData && previewData.taxDueToday > 0 && (
+                  <p className="text-[10px] text-muted-foreground">
+                    (davon {previewData.taxDueToday.toFixed(2)} € MwSt.)
+                  </p>
+                )}
+                <p className="text-sm text-muted-foreground">inkl. MwSt.</p>
+                
+                <div className="mt-6 text-left space-y-3">
+                   <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <Check className="h-3 w-3 text-green-500 mt-0.5" />
+                      <span>Sofortiger Zugriff auf alle Funktionen</span>
+                   </div>
+                   <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <Check className="h-3 w-3 text-green-500 mt-0.5" />
+                      <span>Nächste Abrechnung am {previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : '01. des Monats'}</span>
+                   </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+          <CardFooter className="pt-0">
+            <Button 
+              className="w-full" 
+              size="lg" 
+              onClick={() => handleFinalUpgrade(stripe, elements)}
+              disabled={isLoadingPreview || isProcessing || !tenantStatus?.tenant_id || (selectedMethodId === 'new' && (!stripe || !elements) && (!hasActiveSub || (previewData && previewData.amountDueToday > 0)))}
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 
+                  Wird verarbeitet...
+                </>
+              ) : isFullyReverting ? (
+                "Änderungen verwerfen"
+              ) : (
+                hasActiveSub ? "Jetzt zahlungspflichtig upgraden" : "Kostenpflichtig abonnieren"
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
+
+        <div className="text-[10px] text-muted-foreground text-center px-2">
+          Durch Klicken auf den Button stimmst du der sofortigen Ausführung der Dienstleistung und den geltenden Bedingungen zu.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Wrapper für UpgradeStep3Form, um Stripe-Hooks sicher zu verwenden
+function UpgradeStep3FormWithStripe(props: any) {
+  const stripe = useStripe();
+  const elements = useElements();
+  return <UpgradeStep3Form {...props} stripe={stripe} elements={elements} />;
 }
 
 export function UpgradeWizard() {
@@ -39,12 +560,46 @@ export function UpgradeWizard() {
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const { hotelProfile, isLoading: authLoading } = useAuth();
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [intentType, setIntentType] = useState<'payment' | 'setup'>('payment');
+  const [address, setAddress] = useState({
+    street: '',
+    city: '',
+    postcode: '',
+    country: 'DE',
+    countryCode: 'DE',
+  });
+  const [addressSearchValue, setAddressSearchValue] = useState('');
+  const [vatId, setVatId] = useState('');
+  const [promoCode, setPromoCode] = useState('');
+  const [promoDetails, setPromoDetails] = useState<any>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
+  const [savedMethods, setSavedMethods] = useState<any[]>([]);
+  const [selectedMethodId, setSelectedMethodId] = useState<string>('new');
+  const [isLoadingMethods, setIsLoadingMethods] = useState(false);
+
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const hasActiveSub = !!(tenantStatus?.stripe_subscription_id &&
                        tenantStatus?.stripe_subscription_status &&
                        !['canceled', 'incomplete_expired'].includes(tenantStatus.stripe_subscription_status));
+
+  useEffect(() => {
+    if (hotelProfile) {
+      setAddress({
+        street: hotelProfile.street || '',
+        city: hotelProfile.city || '',
+        postcode: (hotelProfile as any).postcode || '',
+        country: hotelProfile.country || 'DE',
+        countryCode: getCountryCode(hotelProfile.country || 'DE'),
+      });
+      setVatId(hotelProfile.vat_id || '');
+    }
+  }, [hotelProfile]);
 
   useEffect(() => {
     async function init() {
@@ -93,12 +648,14 @@ export function UpgradeWizard() {
     init();
   }, []);
 
-  const loadPricePreview = async () => {
+  const loadPricePreview = async (promoCodeIdOverride?: string) => {
     if (!tenantStatus?.tenant_id) return;
     setIsLoadingPreview(true);
     try {
       const token = localStorage.getItem('pfotencard_token');
       console.log("Starte Preisvorschau...", { selectedPlan, selectedAddons, billingCycle });
+      
+      // 1. Hole die normale Preisvorschau
       const { data, error } = await supabase.functions.invoke('manage-subscription', {
         headers: {
           Authorization: `Bearer ${token}`
@@ -108,7 +665,10 @@ export function UpgradeWizard() {
           tenantId: tenantStatus.tenant_id,
           newPlan: selectedPlan,
           newAddons: selectedAddons,
-          cycle: billingCycle
+          cycle: billingCycle,
+          promoCodeId: promoCodeIdOverride || promoDetails?.id,
+          address,
+          vatId
         }
       });
       if (error) {
@@ -120,6 +680,30 @@ export function UpgradeWizard() {
       if (data?.error) {
         toast({ title: "Hinweis", description: "Standardpreise werden angezeigt (Vorschau eingeschränkt)." });
       }
+
+      // 2. Falls Neukunde oder falls wir eine neue Karte brauchen: Intent erstellen
+      if (!hasActiveSub || !clientSecret) {
+          const { data: intentData, error: intentError } = await supabase.functions.invoke('create-subscription-intent', {
+              headers: {
+                  'x-tenant-subdomain': localStorage.getItem('pfotencard_subdomain') || '',
+                  'Authorization': `Bearer ${token}`
+              },
+              body: {
+                  action: 'create_intent',
+                  plan: selectedPlan,
+                  addons: selectedAddons,
+                  billingCycle: billingCycle,
+                  address,
+                  vatId,
+                  promoCodeId: promoCodeIdOverride || promoDetails?.id
+              }
+          });
+
+          if (!intentError && intentData?.clientSecret) {
+              setClientSecret(intentData.clientSecret);
+              setIntentType(intentData.intentType || 'payment');
+          }
+      }
     } catch (err: any) {
       console.error("Fehler bei Preisvorschau", err);
       toast({ variant: "destructive", title: "Vorschau fehlgeschlagen", description: err.message || "Stripe konnte die Vorschau nicht berechnen." });
@@ -129,13 +713,79 @@ export function UpgradeWizard() {
     }
   };
 
+  const loadPaymentMethods = async () => {
+    if (!tenantStatus?.tenant_id || !hasActiveSub) return;
+    setIsLoadingMethods(true);
+    try {
+      const token = localStorage.getItem('pfotencard_token');
+      const { data, error } = await supabase.functions.invoke('manage-subscription', {
+        headers: { Authorization: `Bearer ${token}` },
+        body: {
+          action: 'get_payment_methods',
+          tenantId: tenantStatus.tenant_id
+        }
+      });
+      if (!error && data?.paymentMethods) {
+        setSavedMethods(data.paymentMethods);
+        if (data.paymentMethods.length > 0) {
+          setSelectedMethodId(data.paymentMethods[0].id);
+        }
+      }
+    } catch (err) {
+      console.error("Fehler beim Laden der Zahlungsmethoden", err);
+    } finally {
+      setIsLoadingMethods(false);
+    }
+  };
+
   useEffect(() => {
     if (currentStep === 3) {
       loadPricePreview();
+      loadPaymentMethods();
     }
   }, [currentStep]);
 
-  const handleFinalUpgrade = async () => {
+  const handleValidatePromo = async () => {
+    if (!promoCode.trim()) return;
+
+    setIsValidatingPromo(true);
+    setPromoError(null);
+    setPromoDetails(null);
+
+    try {
+      const token = localStorage.getItem('pfotencard_token');
+      const { data, error: functionError } = await supabase.functions.invoke('validate-promo-code', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: {
+          code: promoCode.trim(),
+          plan: selectedPlan
+        }
+      });
+
+      if (functionError) throw functionError;
+
+      if (data?.valid) {
+        setPromoDetails(data);
+        toast({
+          title: "Erfolg",
+          description: `Gutschein "${data.name}" angewendet!`,
+        });
+        // Nach Gutschein-Anwendung Vorschau aktualisieren
+        loadPricePreview(data.id);
+      } else {
+        setPromoError(data?.message || 'Gutscheincode ungültig.');
+      }
+    } catch (err: any) {
+      console.error('Promo validation error:', err);
+      setPromoError('Fehler bei der Validierung.');
+    } finally {
+      setIsValidatingPromo(false);
+    }
+  };
+
+  const handleFinalUpgrade = async (stripe?: any, elements?: any) => {
     if (!tenantStatus?.tenant_id) {
       console.error("Keine Tenant ID vorhanden");
       return;
@@ -143,39 +793,134 @@ export function UpgradeWizard() {
 
     setIsProcessing(true);
     try {
-      console.log("🔍 Checking tenant status:", {
-        stripe_subscription_id: tenantStatus?.stripe_subscription_id,
-        stripe_subscription_status: tenantStatus?.stripe_subscription_status,
-        plan: tenantStatus?.plan
+      console.log("🔍 Checking upgrade path:", {
+        hasActiveSub,
+        clientSecret: !!clientSecret,
+        intentType,
+        selectedMethodId
       });
 
-      const hasActiveSub = !!(
-        tenantStatus?.stripe_subscription_id &&
-        tenantStatus?.stripe_subscription_status &&
-        ['active', 'trialing', 'past_due'].includes(tenantStatus.stripe_subscription_status)
-      );
-
-      console.log("hasActiveSub:", hasActiveSub);
-
+      // 1. NEUKUNDE ODER REAKTIVIERUNG (Zahlung erforderlich)
       if (!hasActiveSub) {
-        // NEUKUNDE oder REAKTIVIERUNG: Zum Checkout weiterleiten
-        console.log("Navigiere zum Checkout für Neukunde / Reaktivierung...");
-        const params = new URLSearchParams({
-          plan: selectedPlan,
-          cycle: billingCycle,
-          from: 'upgrade'
-        });
-        if (selectedAddons.length > 0) {
-          params.set('addons', selectedAddons.join(','));
-        }
+        if (selectedMethodId === 'new') {
+          if (!stripe || !elements || !clientSecret) {
+            throw new Error("Zahlungsmodul nicht bereit.");
+          }
 
-        const checkoutUrl = `/checkout?${params.toString()}`;
-        console.log("Navigiere zu:", checkoutUrl);
-        navigate(checkoutUrl);
+          const returnUrl = `${window.location.origin}/billing`;
+          const { error: submitError } = await elements.submit();
+          if (submitError) throw submitError;
+
+          const { error: confirmError, setupIntent, paymentIntent } = await (intentType === 'setup'
+            ? stripe.confirmSetup({
+                elements,
+                confirmParams: { return_url: returnUrl },
+                redirect: 'if_required',
+              })
+            : stripe.confirmPayment({
+                elements,
+                confirmParams: { return_url: returnUrl },
+                redirect: 'if_required',
+              })
+          );
+
+          if (confirmError) throw confirmError;
+
+          // Falls Succeeded (Kreditkarte meistens ohne Redirect)
+          if ((setupIntent?.status === 'succeeded') || (paymentIntent?.status === 'succeeded')) {
+             const paymentMethodId = setupIntent?.payment_method || paymentIntent?.payment_method;
+             
+             const token = localStorage.getItem('pfotencard_token');
+             const { data, error: finalizeError } = await supabase.functions.invoke('create-subscription-intent', {
+               headers: {
+                 'x-tenant-subdomain': localStorage.getItem('pfotencard_subdomain') || '',
+                 'Authorization': `Bearer ${token}`
+               },
+               body: {
+                 action: 'finalize_subscription',
+                 plan: selectedPlan,
+                 addons: selectedAddons,
+                 billingCycle: billingCycle,
+                 address,
+                 vatId,
+                 promoCodeId: promoDetails?.id || promoDetails?.promoCodeId,
+                 paymentMethodId
+               }
+             });
+
+             if (finalizeError) throw finalizeError;
+             if (data?.error) throw new Error(data.error);
+
+             toast({ title: "Erfolg", description: "Abonnement erfolgreich abgeschlossen!" });
+             navigate('/billing');
+             return;
+          }
+        } else {
+          // Bestehende Karte für Neukunde (unwahrscheinlich aber möglich bei Reaktivierung)
+          const token = localStorage.getItem('pfotencard_token');
+          const { data, error: finalizeError } = await supabase.functions.invoke('create-subscription-intent', {
+            headers: {
+              'x-tenant-subdomain': localStorage.getItem('pfotencard_subdomain') || '',
+              'Authorization': `Bearer ${token}`
+            },
+            body: {
+              action: 'finalize_subscription',
+              plan: selectedPlan,
+              addons: selectedAddons,
+              billingCycle: billingCycle,
+              address,
+              vatId,
+              promoCodeId: promoDetails?.id || promoDetails?.promoCodeId,
+              paymentMethodId: selectedMethodId
+            }
+          });
+
+          if (finalizeError) throw finalizeError;
+          if (data?.error) throw new Error(data.error);
+
+          toast({ title: "Erfolg", description: "Abonnement erfolgreich abgeschlossen!" });
+          navigate('/billing');
+          return;
+        }
+        
+        // Bei Redirect-Methoden (PayPal etc) passiert der Rest nach dem Redirect
         return;
       }
 
+      // 2. BESTANDSKUNDE (Upgrade/Downgrade)
       console.log("Führe Upgrade für Bestandskunde aus...");
+      
+      // Falls eine neue Karte eingegeben wurde (optional für Bestandskunden)
+      let finalPaymentMethodId = selectedMethodId === 'new' ? undefined : selectedMethodId;
+      
+      if (selectedMethodId === 'new' && stripe && elements) {
+          const { error: submitError } = await elements.submit();
+          if (submitError) throw submitError;
+
+          const returnUrl = `${window.location.origin}/billing`;
+          
+          if (clientSecret) {
+            const { error: confirmError, setupIntent, paymentIntent } = await (intentType === 'setup'
+              ? stripe.confirmSetup({
+                  elements,
+                  confirmParams: { return_url: returnUrl },
+                  redirect: 'if_required',
+                })
+              : stripe.confirmPayment({
+                  elements,
+                  confirmParams: { return_url: returnUrl },
+                  redirect: 'if_required',
+                })
+            );
+
+            if (confirmError) throw confirmError;
+
+            if ((setupIntent?.status === 'succeeded') || (paymentIntent?.status === 'succeeded')) {
+              finalPaymentMethodId = setupIntent?.payment_method || paymentIntent?.payment_method;
+            }
+          }
+      }
+
       const token = localStorage.getItem('pfotencard_token');
       const { data, error } = await supabase.functions.invoke('manage-subscription', {
         headers: {
@@ -186,16 +931,21 @@ export function UpgradeWizard() {
           tenantId: tenantStatus.tenant_id,
           newPlan: selectedPlan,
           newAddons: selectedAddons,
-          cycle: billingCycle
+          cycle: billingCycle,
+          address,
+          vatId,
+          promoCodeId: promoDetails?.id || promoDetails?.promoCodeId,
+          paymentMethodId: finalPaymentMethodId
         }
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast({ title: "Upgrade erfolgreich!", description: "Dein Abo wurde aktualisiert." });
-      navigate('/billing'); // Zurück zur Billing Seite
+      navigate('/billing');
     } catch (err: any) {
       console.error("Fehler beim Upgrade", err);
-      toast({ variant: "destructive", title: "Upgrade fehlgeschlagen", description: err.message || "Die Zahlung konnte nicht verarbeitet werden." });
+      toast({ variant: "destructive", title: "Aktion fehlgeschlagen", description: err.message || "Die Zahlung konnte nicht verarbeitet werden." });
     } finally {
       setIsProcessing(false);
     }
@@ -536,349 +1286,109 @@ export function UpgradeWizard() {
             exit={{ opacity: 0, x: -20 }}
             className="space-y-6"
           >
-            <h2 className="text-xl font-semibold mb-4">Schritt 3: Checkout & Preisvorschau</h2>
-
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="md:col-span-2 space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Zusammenfassung</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {previewData && previewData.lines && previewData.lines.length > 0 ? (
-                      <div className="space-y-6">
-                        {/* --- UNIFIED NOTIFICATION BLOCK --- */}
-                        {(() => {
-                          // Case 1: Full Revert
-                          if (isFullyReverting) {
-                            return (
-                               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                                 <div className="flex justify-center mb-2">
-                                   <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                                     <Check className="h-4 w-4" />
-                                   </div>
-                                 </div>
-                                 <p className="text-blue-600 font-bold text-base">Rückkehr zum aktuellen Paket</p>
-                                 <p className="text-[11px] text-blue-700 mt-1 leading-tight">
-                                   Alle vorgemerkten Änderungen wurden widerrufen. Dein Abonnement läuft <strong>wie gehabt</strong> weiter.
-                                 </p>
-                               </div>
-                            );
-                          }
-
-                          // Case 2: Partial Revert
-                          if (isAnyPartialRevert) {
-                            return (
-                               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                 <p className="text-[11px] text-blue-700 leading-relaxed font-medium">
-                                   <Info className="h-3.5 w-3.5 inline-block mr-1.5 -mt-0.5" />
-                                   Du widerrufst hiermit bereits vorgemerkte Änderungen: 
-                                   {isRevertingPlan && ' Dein aktuelles Basis-Paket bleibt bestehen.'}
-                                   {(isRevertingAddonRemoval || isRevertingAddonActivation) && ' Deine Modul-Auswahl wird auf den aktuellen Stand zurückgesetzt.'}
-                                 </p>
-                               </div>
-                            );
-                          }
-
-                          // Case 3: Immediate Activation (Upgrade)
-                          if (isNewActionInWizard && isImmediate) {
-                            return (
-                               <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                                 <div className="flex justify-center mb-2">
-                                   <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-                                     <CreditCard className="h-4 w-4" />
-                                   </div>
-                                 </div>
-                                 <p className="text-green-600 font-bold text-base">Sofortige Aktivierung</p>
-                                 <p className="text-[11px] text-green-700 mt-1 leading-tight">
-                                   Deine Änderungen werden <strong>sofort</strong> wirksam. 
-                                   {previewData?.amountDueToday > 0 ? (
-                                      <>Heute wird ein Betrag von <strong>{previewData.amountDueToday.toFixed(2)} {previewData.currency?.toUpperCase() || '€'}</strong> (inkl. MwSt.) verrechnet.</>
-                                   ) : (
-                                      <>Es ist heute keine zusätzliche Zahlung fällig (z.B. durch Gutschriften).</>
-                                   )}
-                                 </p>
-                               </div>
-                            );
-                          }
-
-                          // Case 4: New Downgrade or Scheduled Info (Only if changed in Wizard)
-                          if (isNewActionInWizard) {
-                            return (
-                               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
-                                 <div className="flex justify-center mb-2">
-                                   <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
-                                     <Clock className="h-4 w-4" />
-                                   </div>
-                                 </div>
-                                 <p className="text-orange-600 font-bold text-base">Änderung vorgemerkt</p>
-                                 <p className="text-[11px] text-orange-700 mt-1 leading-tight">
-                                   {isMakingNewDowngrade ? (
-                                     <>Deine Änderungen beinhalten einen Downgrade. Dieser wird heute <strong>vorgemerkt</strong> und erst zum nächsten Abrechnungsdatum am <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.</>
-                                   ) : (
-                                     <>Die Auswahl wird heute <strong>vorgemerkt</strong> und zum nächsten Abrechnungsdatum am <strong>{previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'Ende der Laufzeit'}</strong> wirksam.</>
-                                   )}
-                                 </p>
-                               </div>
-                            );
-                          }
-
-                          // Case 5: No Changes selected (Viewing existing schedule)
-                          if (!isNewActionInWizard && isDiffFromActive) {
-                            return (
-                               <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
-                                 <p className="text-[11px] text-gray-600 font-medium italic">
-                                   <Info className="h-3.5 w-3.5 inline-block mr-1.5 -mt-0.5" />
-                                   Hier sind deine bereits geplanten Änderungen für die nächste Periode. Du hast keine weiteren Änderungen im Wizard vorgenommen.
-                                 </p>
-                               </div>
-                            );
-                          }
-
-                          return null;
-                        })()}
-
-                        {/* 1. Einmalige Verrechnung (Heute) */}
-                        {previewData.lines.some((line: any) => line.proration && (line.amount > 0 || (line.amount < 0 && line.package_type !== 'addon'))) && (
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2">
-                               <div className="h-1.5 w-1.5 rounded-full bg-orange-500" />
-                               <p className="text-[10px] font-bold uppercase tracking-wider text-orange-600">Einmalige Verrechnung (Heute fällig)</p>
-                            </div>
-                            <div className="space-y-2 pl-3 border-l border-orange-200">
-                              {previewData.lines
-                                .filter((line: any) => line.proration && (line.amount > 0 || (line.amount < 0 && line.package_type !== 'addon')))
-                                .map((line: any, index: number) => (
-                                  <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
-                                    <span className="pr-4">{line.description}</span>
-                                    <span className={`whitespace-nowrap ${line.amount < 0 ? "text-green-600" : ""}`}>
-                                      {(line.amount / 100).toFixed(2)} €
-                                    </span>
-                                  </div>
-                                ))
-                              }
-                              <div className="pt-1 flex justify-between font-medium text-xs text-orange-700">
-                                <span>Zwischensumme Heute (Netto)</span>
-                                <span>{previewData.netDueToday?.toFixed(2)} €</span>
-                              </div>
-                              <div className="flex justify-between font-bold text-xs text-orange-700 border-t border-orange-200/50 pt-1">
-                                <span>Zwischensumme Heute (Brutto)</span>
-                                <span>{previewData.amountDueToday?.toFixed(2)} €</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 2. Zukünftige Abo-Gebühren */}
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2">
-                             <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                               {hasActiveSub ? "Reguläre Abo-Posten (ab nächster Periode)" : "Abo-Posten (ab sofort)"}
-                             </p>
-                          </div>
-                          <div className="space-y-2 pl-3 border-l border-primary/20">
-                            {previewData.lines
-                              .filter((line: any) => !line.proration && line.amount !== 0)
-                              .map((line: any, index: number) => (
-                                <div key={index} className="flex justify-between text-muted-foreground text-xs leading-relaxed">
-                                  <span className="pr-4">{line.description}</span>
-                                  <span className="whitespace-nowrap">{(line.amount / 100).toFixed(2)} €</span>
-                                </div>
-                              ))
-                            }
-                            <div className="pt-1 flex justify-between font-medium text-xs">
-                                <span>Zukünftiger Paketpreis (Netto)</span>
-                                <span>{previewData.netDueNextMonth?.toFixed(2)} €</span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="pt-4 space-y-2 border-t">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Zukünftige MwSt.</span>
-                            <span>{previewData.taxDueNextMonth?.toFixed(2) || '0.00'} €</span>
-                          </div>
-                          <div className="pt-2 flex justify-between font-bold text-lg border-t text-primary">
-                            <span>
-                               {hasActiveSub 
-                                 ? `Ab ${previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : 'nächstem Monat'} zu zahlen` 
-                                 : "Künftiger Paketpreis (pro Periode)"}
-                            </span>
-                            <span>{previewData.amountDueNextMonth?.toFixed(2) || '0.00'} €</span>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex justify-between items-center pb-2 border-b">
-                          <span>Basis-Paket: <span className="font-medium capitalize">{selectedPlan}</span></span>
-                          <span className="text-muted-foreground">
-                            {(() => {
-                              const p = packages.find(pkg => pkg.plan_name === selectedPlan);
-                              if (!p) return '0.00 €';
-                              return (billingCycle === 'yearly' ? p.price_yearly : p.price_monthly).toFixed(2) + ' €';
-                            })()}
-                          </span>
-                        </div>
-                        {selectedAddons
-                          .filter(addonName => {
-                            const p = packages.find(pkg => pkg.plan_name === addonName);
-                            const price = p ? (billingCycle === 'yearly' ? p.price_yearly : p.price_monthly) : 0;
-                            return price > 0;
-                          })
-                          .map(addonName => (
-                            <div key={addonName} className="flex justify-between items-center pb-2 border-b">
-                              <span>Modul: <span className="font-medium capitalize">{addonName}</span></span>
-                              <span className="text-muted-foreground">
-                                {(() => {
-                                  const p = packages.find(pkg => pkg.plan_name === addonName);
-                                  if (!p) return '0.00 €';
-                                  return (billingCycle === 'yearly' ? p.price_yearly : p.price_monthly).toFixed(2) + ' €';
-                                })()}
-                              </span>
-                            </div>
-                          ))
-                        }
-                        <div className="pt-4 space-y-2">
-                          {/* Fallback-Berechnung für Netto/MwSt */}
-                          {(() => {
-                            const base = packages.find(p => p.plan_name === selectedPlan);
-                            const basePrice = base ? (billingCycle === 'yearly' ? base.price_yearly : base.price_monthly) : 0;
-                            const addonsPrice = selectedAddons.reduce((sum, addonName) => {
-                              const p = packages.find(pkg => pkg.plan_name === addonName);
-                              return sum + (p ? (billingCycle === 'yearly' ? p.price_yearly : p.price_monthly) : 0);
-                            }, 0);
-                            const net = basePrice + addonsPrice;
-                            const tax = net * 0.19;
-                            const total = net + tax;
-
-                            return (
-                              <>
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">Netto-Betrag</span>
-                                  <span>{net.toFixed(2)} €</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-muted-foreground">MwSt. (19%)</span>
-                                  <span>{tax.toFixed(2)} €</span>
-                                </div>
-                                <div className="pt-2 flex justify-between font-bold text-lg border-t text-primary">
-                                  <span>Zu zahlen ({billingCycle === 'yearly' ? 'pro Jahr' : 'pro Monat'})</span>
-                                  <span>{total.toFixed(2)} €</span>
-                                </div>
-                              </>
-                            );
-                          })()}
-                          <p className="text-[10px] text-muted-foreground italic text-right">Preise zzgl. MwSt.</p>
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 flex gap-4">
-                  <Info className="h-6 w-6 text-primary shrink-0" />
-                  <div className="text-sm">
-                    <p className="font-semibold text-primary">Wie funktioniert die anteilige Berechnung?</p>
-                    <p className="text-muted-foreground">Wir berechnen nur die Differenz für die verbleibenden Tage des aktuellen Monats. Die volle Gebühr wird erst ab der nächsten regulären Rechnung fällig.</p>
-                  </div>
-                </div>
+            <h2 className="text-xl font-semibold mb-4 text-center">Checkout & Bestätigung</h2>
+            
+            {(!hasActiveSub || (previewData && previewData.amountDueToday > 0)) && !clientSecret ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                <p className="text-muted-foreground font-medium">Bezahlmodul wird geladen...</p>
               </div>
-
-              <div className="space-y-6">
-                <Card className="border-primary ring-1 ring-primary/20 shadow-lg">
-                  <CardHeader className="bg-primary/5">
-                    <CardTitle className="text-base flex items-center gap-2">
-                       <CreditCard className="h-5 w-5" /> Heute fällig
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pt-6">
-                    {isLoadingPreview ? (
-                      <div className="flex flex-col items-center py-6 gap-2">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        <span className="text-sm text-muted-foreground text-center">Stripe berechnet den besten Preis...</span>
-                      </div>
-                    ) : (
-                      <div className="text-center">
-                        <div className="text-4xl font-bold text-primary mb-1">
-                          {previewData ? `${previewData.amountDueToday.toFixed(2)} €` : '0.00 €'}
-                        </div>
-                        {previewData && previewData.amountDueToday === 0 && hasActiveSub && (
-                           <div className="text-[10px] text-muted-foreground font-medium mb-1 uppercase tracking-wider">
-                              {isFullyReverting ? "Keine Änderung heute" : "Keine Zahlung heute (Vorgemerkt)"}
-                           </div>
-                        )}
-                        {(() => {
-                           const hasActiveSub = !!(tenantStatus?.stripe_subscription_id && 
-                                                tenantStatus?.stripe_subscription_status && 
-                                                !['canceled', 'incomplete_expired'].includes(tenantStatus.stripe_subscription_status));
-                           return hasActiveSub && previewData && previewData.amountDueToday > 0;
-                        })() && (
-                          <div className="text-[10px] text-orange-600 font-medium mb-1 uppercase tracking-wider">
-                            Anteilige Kosten (einmalig)
-                          </div>
-                        )}
-                        {previewData && previewData.taxDueToday > 0 && (
-                          <p className="text-[10px] text-muted-foreground">
-                            (davon {previewData.taxDueToday.toFixed(2)} € MwSt.)
-                          </p>
-                        )}
-                        <p className="text-sm text-muted-foreground">inkl. MwSt.</p>
-                        
-                        <div className="mt-6 text-left space-y-3">
-                           <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                              <Check className="h-3 w-3 text-green-500 mt-0.5" />
-                              <span>Sofortiger Zugriff auf alle Funktionen</span>
-                           </div>
-                           <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                              <Check className="h-3 w-3 text-green-500 mt-0.5" />
-                              <span>Nächste Abrechnung am {previewData?.nextBillingDate ? new Date(previewData.nextBillingDate * 1000).toLocaleDateString() : '01. des Monats'}</span>
-                           </div>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                  <CardFooter className="pt-0">
-                    <Button 
-                      className="w-full" 
-                      size="lg" 
-                      onClick={() => {
-                        console.log("Button clicked!");
-                        handleFinalUpgrade();
-                      }}
-                      disabled={isLoadingPreview || isProcessing || !tenantStatus?.tenant_id}
-                    >
-                      {isProcessing ? (
-                        <>
-                          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 
-                          Wird verarbeitet...
-                        </>
-                      ) : isFullyReverting ? (
-                        "Änderungen verwerfen & Zurückkehren"
-                      ) : (
-                        (() => {
-                          const hasActiveSub = !!(tenantStatus?.stripe_subscription_id && 
-                                               tenantStatus?.stripe_subscription_status && 
-                                               !['canceled', 'incomplete_expired'].includes(tenantStatus.stripe_subscription_status));
-                          return hasActiveSub ? "Jetzt zahlungspflichtig upgraden" : "Weiter zur Kasse";
-                        })()
-                      )}
-                    </Button>
-                  </CardFooter>
-                </Card>
-
-                <div className="text-[10px] text-muted-foreground text-center px-2">
-                  Durch Klicken auf "Jetzt zahlungspflichtig upgraden" stimmst du der sofortigen Ausführung der Dienstleistung und den geltenden Bedingungen zu.
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-start mt-8">
-              <Button variant="outline" onClick={() => setCurrentStep(2)} size="lg" disabled={isProcessing}>
-                <ArrowLeft className="mr-2 h-5 w-5" /> Zurück zu Modulen
-              </Button>
-            </div>
+            ) : (clientSecret ? (
+              <Elements 
+                stripe={stripePromise} 
+                options={{ 
+                  clientSecret, 
+                  appearance: { theme: 'stripe' }, 
+                  locale: 'de' 
+                }}
+              >
+                <UpgradeStep3FormWithStripe
+                  previewData={previewData}
+                  selectedPlan={selectedPlan}
+                  selectedAddons={selectedAddons}
+                  billingCycle={billingCycle}
+                  packages={packages}
+                  hasActiveSub={hasActiveSub}
+                  tenantStatus={tenantStatus}
+                  isFullyReverting={isFullyReverting}
+                  isAnyPartialRevert={isAnyPartialRevert}
+                  isNewActionInWizard={isNewActionInWizard}
+                  isImmediate={isImmediate}
+                  isMakingNewDowngrade={isMakingNewDowngrade}
+                  isDiffFromActive={isDiffFromActive}
+                  isRevertingPlan={isRevertingPlan}
+                  isRevertingAddonRemoval={isRevertingAddonRemoval}
+                  isRevertingAddonActivation={isRevertingAddonActivation}
+                  isLoadingPreview={isLoadingPreview}
+                  isProcessing={isProcessing}
+                  handleFinalUpgrade={handleFinalUpgrade}
+                  promoCode={promoCode}
+                  setPromoCode={setPromoCode}
+                  promoDetails={promoDetails}
+                  setPromoDetails={setPromoDetails}
+                  promoError={promoError}
+                  isValidatingPromo={isValidatingPromo}
+                  handleValidatePromo={handleValidatePromo}
+                  address={address}
+                  setAddress={setAddress}
+                  addressSearchValue={addressSearchValue}
+                  setAddressSearchValue={setAddressSearchValue}
+                  vatId={vatId}
+                  setVatId={setVatId}
+                  isSavingAddress={isSavingAddress}
+                  intentType={intentType}
+                  onBack={() => setCurrentStep(2)}
+                  savedMethods={savedMethods}
+                  selectedMethodId={selectedMethodId}
+                  setSelectedMethodId={setSelectedMethodId}
+                  isLoadingMethods={isLoadingMethods}
+                />
+              </Elements>
+            ) : (
+              <UpgradeStep3Form
+                previewData={previewData}
+                selectedPlan={selectedPlan}
+                selectedAddons={selectedAddons}
+                billingCycle={billingCycle}
+                packages={packages}
+                hasActiveSub={hasActiveSub}
+                tenantStatus={tenantStatus}
+                isFullyReverting={isFullyReverting}
+                isAnyPartialRevert={isAnyPartialRevert}
+                isNewActionInWizard={isNewActionInWizard}
+                isImmediate={isImmediate}
+                isMakingNewDowngrade={isMakingNewDowngrade}
+                isDiffFromActive={isDiffFromActive}
+                isRevertingPlan={isRevertingPlan}
+                isRevertingAddonRemoval={isRevertingAddonRemoval}
+                isRevertingAddonActivation={isRevertingAddonActivation}
+                isLoadingPreview={isLoadingPreview}
+                isProcessing={isProcessing}
+                handleFinalUpgrade={handleFinalUpgrade}
+                promoCode={promoCode}
+                setPromoCode={setPromoCode}
+                promoDetails={promoDetails}
+                setPromoDetails={setPromoDetails}
+                promoError={promoError}
+                isValidatingPromo={isValidatingPromo}
+                handleValidatePromo={handleValidatePromo}
+                address={address}
+                setAddress={setAddress}
+                addressSearchValue={addressSearchValue}
+                setAddressSearchValue={setAddressSearchValue}
+                vatId={vatId}
+                setVatId={setVatId}
+                isSavingAddress={isSavingAddress}
+                intentType={intentType}
+                onBack={() => setCurrentStep(2)}
+                stripe={null}
+                elements={null}
+                savedMethods={savedMethods}
+                selectedMethodId={selectedMethodId}
+                setSelectedMethodId={setSelectedMethodId}
+                isLoadingMethods={isLoadingMethods}
+              />
+            ))}
           </motion.div>
         )}
       </AnimatePresence>
