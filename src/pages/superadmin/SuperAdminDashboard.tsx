@@ -12,7 +12,8 @@ import {
     XCircle,
     Calendar,
     Search,
-    Package
+    Package,
+    Ticket
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { API_BASE_URL } from '@/lib/api';
@@ -104,7 +105,7 @@ export default function SuperAdminDashboard() {
                 </header>
 
                 {stats && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
                         <StatCard 
                             title="Gesamtumsatz" 
                             value={stats.total_revenue.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })} 
@@ -131,6 +132,13 @@ export default function SuperAdminDashboard() {
                                 title="Pakete verwalten" 
                                 value="Preise & Limits" 
                                 icon={<Package className="w-6 h-6 text-indigo-600" />}
+                            />
+                        </Link>
+                        <Link to="/admin/promo-codes">
+                            <StatCard 
+                                title="Gutscheincodes" 
+                                value={`${stats.total_promo_codes || 0} Codes`} 
+                                icon={<Ticket className="w-6 h-6 text-emerald-600" />}
                             />
                         </Link>
                     </div>

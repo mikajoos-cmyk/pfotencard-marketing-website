@@ -669,6 +669,36 @@ export function BillingPage() {
                                         </div>
                                     </div>
 
+                                    {/* NEU: Gutscheincode-Bereich */}
+                                    {status?.active_promo_code && (
+                                        <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 mb-6">
+                                            <div className="flex items-start gap-4">
+                                                <div className="p-2 bg-emerald-100 rounded-full text-emerald-700">
+                                                    <Tag className="w-5 h-5" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-medium text-emerald-800 mb-1">
+                                                        Aktiver Gutschein: <span className="font-bold">{status.active_promo_code.code}</span>
+                                                    </p>
+                                                    <div className="flex flex-col gap-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-lg font-bold text-emerald-900">
+                                                                {status.active_promo_code.discount_percent}% Rabatt
+                                                            </span>
+                                                            <span className="text-xs text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded font-medium">
+                                                                {status.active_promo_code.name || 'Promotion'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-emerald-600">
+                                                            Gültig bis zum {new Date(status.active_promo_code.expires_at).toLocaleDateString('de-DE')}
+                                                            ({status.active_promo_code.duration_months} Monate ab Einlösung)
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                         <ShieldCheckIcon className="w-4 h-4 text-green-600" />
                                         <span>Zahlungsmethode sicher hinterlegt</span>

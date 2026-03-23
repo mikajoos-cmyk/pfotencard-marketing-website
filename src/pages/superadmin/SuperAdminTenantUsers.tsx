@@ -66,7 +66,7 @@ export default function SuperAdminTenantUsers() {
         fetchData();
     }, [tenantId, navigate, toast]);
 
-    const handleToggleUserStatus = async (userId: int, currentStatus: boolean) => {
+    const handleToggleUserStatus = async (userId: number, currentStatus: boolean) => {
         const token = localStorage.getItem('pfotencard_superadmin_token');
         try {
             const res = await fetch(`${API_BASE_URL}/api/superadmin/users/${userId}/ban?active=${!currentStatus}`, {
@@ -106,12 +106,11 @@ export default function SuperAdminTenantUsers() {
     return (
         <div className="min-h-screen bg-slate-50 pt-24 pb-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-7xl mx-auto">
-                <header className="mb-8">
-                    <Link to="/admin/dashboard" className="inline-flex items-center text-sm text-slate-500 hover:text-primary mb-4 transition-colors">
-                        <ArrowLeft className="w-4 h-4 mr-1" />
-                        Zurück zum Dashboard
-                    </Link>
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="flex items-center gap-4">
+                        <Link to="/admin/dashboard" className="p-2 hover:bg-white rounded-full transition-colors">
+                            <ArrowLeft className="w-6 h-6 text-slate-600" />
+                        </Link>
                         <div>
                             <h1 className="text-3xl font-sans font-bold text-slate-900">
                                 Nutzer von {tenant?.name || 'Hundeschule'}
