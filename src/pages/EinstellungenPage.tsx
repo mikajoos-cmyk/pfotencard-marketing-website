@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from 'react';
+﻿import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -371,7 +371,7 @@ const NAVIGATION = [
   {
     group: 'Finanzen',
     items: [
-      { id: 'modules/balance_topup', label: 'Guthaben', icon: Wallet, module: 'balance_topup' }
+      { id: 'finanzen/balance', label: 'Guthaben', icon: Wallet }
     ]
   },
   {
@@ -556,12 +556,9 @@ export function EinstellungenPage() {
   };
 
   useEffect(() => {
-    if (activeSection === 'modules' && moduleId) {
-      setSelectedModuleId(moduleId);
-      setCurrentView('module-settings');
-    } else if (activeSection === 'modules' && !moduleId) {
-      setSelectedModuleId(null);
-      setCurrentView('overview');
+    setSelectedModuleId(moduleId || null);
+    if (activeSection === 'modules') {
+      setCurrentView(moduleId ? 'module-settings' : 'overview');
     }
   }, [activeSection, moduleId]);
 
@@ -599,10 +596,13 @@ export function EinstellungenPage() {
     }
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     if (isLocalhost) {
+      // Wenn die Marketing-App auf 5174 läuft, ist die frontendApp meist auf 5173
       return window.location.origin.replace('5174', '5173');
     }
     // Live Seite: Nutze die Subdomain des aktuellen Tenants
-    return `https://${subdomain || 'app'}.pfotencard.de`;
+    // Falls keine Subdomain da ist, Fallback auf app.pfotencard.de
+    const targetSub = subdomain || 'app';
+    return `https://${targetSub}.pfotencard.de`;
   }, [subdomain]);
 
   // --- NEU: Automatische Bereinigung abhängiger Module ---
@@ -849,19 +849,37 @@ export function EinstellungenPage() {
   const [tenantId, setTenantId] = useState<number | null>(null);
   const [isConnectingStripe, setIsConnectingStripe] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const [loadingCertificates, setLoadingCertificates] = useState(false);
+  const loadingCertificatesRef = useRef(false);
+  const fetchCertificateTemplatesData = useCallback(async () => {
+    if (loadingCertificatesRef.current) return;
+    loadingCertificatesRef.current = true;
+    setLoadingCertificates(true);
     try {
-      const config = await fetchAppConfig();
-      const t = config.tenant;
+      const data = await fetchCertificateTemplates();
+      setCertificateTemplates(data);
+    } catch (error) {
+      console.error('Error fetching certificates:', error);
+    } finally {
+      loadingCertificatesRef.current = false;
+      setLoadingCertificates(false);
+    }
+  }, []); // Stabiler Callback dank Ref-Check
 
-      // Pakete laden für dynamische Berechtigungen
-      let dbPackages: any[] = [];
-      try {
-        dbPackages = await fetchPackages();
-        setPackages(dbPackages);
-      } catch (err) {
-        console.error("Fehler beim Laden der Pakete:", err);
-      }
+  const loadData = useCallback(async () => {
+    setDataLoaded(false);
+    try {
+      // API-Aufrufe parallel starten - NUR die kritischen Daten für den ersten Paint!
+      const [config, dbPackages] = await Promise.all([
+        fetchAppConfig(),
+        fetchPackages().catch(err => { console.error("Fehler beim Laden der Pakete:", err); return []; })
+      ]);
+      
+      const t = config.tenant;
+      setPackages(dbPackages);
+
+      // Zertifikate im Hintergrund laden (nicht blockierend)
+      fetchCertificateTemplatesData();
 
       console.log("[DEBUG] API Response config:", config);
       console.log("[DEBUG] Tenant Data (t):", t);
@@ -1025,7 +1043,6 @@ export function EinstellungenPage() {
         }))
       }));
       setLevels(mappedLevels);
-      setDataLoaded(true); // Flag setzen: Daten sind bereit zum Speichern
 
       if (t.config?.legal_settings) {
         setLegalSettings(t.config.legal_settings);
@@ -1054,7 +1071,8 @@ export function EinstellungenPage() {
         });
       }
 
-      fetchCertificateTemplatesData();
+      // Erst ganz am Ende das Flag setzen, wenn alles im State ist
+      setDataLoaded(true);
 
     } catch (e) {
       console.error(e);
@@ -1066,7 +1084,7 @@ export function EinstellungenPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, fetchCertificateTemplatesData]);
 
   // --- DATEN LADEN ---
   const handleConnectStripe = async () => {
@@ -1135,6 +1153,7 @@ export function EinstellungenPage() {
   // --- SYNCHRONISATION ZWISCHEN LEGAL UND INVOICE SETTINGS ---
   // 1. Von LegalSettings zu InvoiceSettings (Einweg-Synchronisation)
   useEffect(() => {
+    if (!dataLoaded) return;
     setInvoiceSettings(prev => {
       let updates: Partial<InvoiceSettings> = {};
 
@@ -1205,19 +1224,11 @@ export function EinstellungenPage() {
     legalSettings.registry_number,
     legalSettings.has_vat_id,
     legalSettings.vat_id,
-    legalSettings.legal_form
+    legalSettings.legal_form,
+    dataLoaded
   ]);
 
   // --- DATEN SPEICHERN ---
-  const fetchCertificateTemplatesData = useCallback(async () => {
-    try {
-      const data = await fetchCertificateTemplates();
-      setCertificateTemplates(data);
-    } catch (error) {
-      console.error('Error fetching certificates:', error);
-    }
-  }, []);
-
   const saveCertificateTemplateAction = async (template: any) => {
     try {
       if (editingCertificateTemplate) {
@@ -1577,7 +1588,10 @@ export function EinstellungenPage() {
     if (activeSection === 'rights') {
       loadStaff();
     }
-  }, [activeSection, loadStaff]);
+    if (activeSection === 'certificates') {
+      fetchCertificateTemplatesData();
+    }
+  }, [activeSection, loadStaff, fetchCertificateTemplatesData]);
 
   const handlePermissionChange = async (userId: number, field: keyof UserPermission, value: boolean) => {
     // Optimistisches Update
@@ -2248,6 +2262,27 @@ export function EinstellungenPage() {
 
 
 
+                  {/* Finanzen Section */}
+                  {activeSection === 'finanzen' && (
+                      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
+                          {selectedModuleId === 'balance' && (
+                              <div className="grid gap-6">
+                                  <TopupSection
+                                      allowCustomTopUp={allowCustomTopUp}
+                                      setAllowCustomTopUp={setAllowCustomTopUp}
+                                      topUpOptions={topUpOptions}
+                                      setTopUpOptions={setTopUpOptions}
+                                      stripeAccountActive={stripeAccountActive}
+                                      stripeAccountId={stripeAccountId}
+                                      onConnectStripe={handleConnectStripe}
+                                      isConnecting={isConnectingStripe}
+                                      showOnlyAmounts={true}
+                                  />
+                              </div>
+                          )}
+                      </motion.div>
+                  )}
+
                   {/* Module Hub - Master-Detail View */}
                   {activeSection === 'modules' && (
                       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
@@ -2544,6 +2579,7 @@ export function EinstellungenPage() {
                                         stripeAccountId={stripeAccountId}
                                         onConnectStripe={handleConnectStripe}
                                         isConnecting={isConnectingStripe}
+                                        showOnlyStripe={true}
                                     />
                                   </div>
                               )}
