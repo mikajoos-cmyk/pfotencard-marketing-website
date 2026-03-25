@@ -20,6 +20,7 @@ import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
 import SuperAdminDashboard from './pages/superadmin/SuperAdminDashboard';
 import SuperAdminTenantUsers from './pages/superadmin/SuperAdminTenantUsers';
 import SuperAdminPackages from './pages/superadmin/SuperAdminPackages';
+import SuperAdminPromoCodes from './pages/superadmin/SuperAdminPromoCodes';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster } from './components/ui/toaster';
 import { checkTenantStatus } from '@/lib/api';
@@ -115,6 +116,7 @@ function AppContent() {
           <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
           <Route path="/admin/tenants/:tenantId/users" element={<SuperAdminTenantUsers />} />
           <Route path="/admin/packages" element={<SuperAdminPackages />} />
+          <Route path="/admin/promo-codes" element={<SuperAdminPromoCodes />} />
 
           {/* Geschützte Routen */}
           <Route

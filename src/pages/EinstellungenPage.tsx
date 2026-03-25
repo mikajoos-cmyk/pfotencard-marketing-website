@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from 'react';
+﻿import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -353,8 +353,7 @@ const NAVIGATION = [
     group: 'Angebot',
     items: [
       { id: 'services', label: 'Leistungen', icon: Briefcase },
-      { id: 'levels', label: 'Level-System', icon: Award },
-      { id: 'topup', label: 'Guthaben & Aufladung', icon: Wallet }
+      { id: 'levels', label: 'Level-System', icon: Award }
     ]
   },
   {
@@ -367,6 +366,12 @@ const NAVIGATION = [
     group: 'Team',
     items: [
       { id: 'rights', label: 'Mitarbeiter-Rechte', icon: ShieldCheck }
+    ]
+  },
+  {
+    group: 'Finanzen',
+    items: [
+      { id: 'finanzen/balance', label: 'Guthaben', icon: Wallet }
     ]
   },
   {
@@ -551,12 +556,9 @@ export function EinstellungenPage() {
   };
 
   useEffect(() => {
-    if (activeSection === 'modules' && moduleId) {
-      setSelectedModuleId(moduleId);
-      setCurrentView('module-settings');
-    } else if (activeSection === 'modules' && !moduleId) {
-      setSelectedModuleId(null);
-      setCurrentView('overview');
+    setSelectedModuleId(moduleId || null);
+    if (activeSection === 'modules') {
+      setCurrentView(moduleId ? 'module-settings' : 'overview');
     }
   }, [activeSection, moduleId]);
 
@@ -594,10 +596,13 @@ export function EinstellungenPage() {
     }
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     if (isLocalhost) {
+      // Wenn die Marketing-App auf 5174 läuft, ist die frontendApp meist auf 5173
       return window.location.origin.replace('5174', '5173');
     }
     // Live Seite: Nutze die Subdomain des aktuellen Tenants
-    return `https://${subdomain || 'app'}.pfotencard.de`;
+    // Falls keine Subdomain da ist, Fallback auf app.pfotencard.de
+    const targetSub = subdomain || 'app';
+    return `https://${targetSub}.pfotencard.de`;
   }, [subdomain]);
 
   // --- NEU: Automatische Bereinigung abhängiger Module ---
@@ -838,19 +843,43 @@ export function EinstellungenPage() {
 
   const [uploadingLevelIndex, setUploadingLevelIndex] = useState<number | null>(null);
 
-  const loadData = useCallback(async () => {
-    try {
-      const config = await fetchAppConfig();
-      const t = config.tenant;
+  // Stripe Connect States
+  const [stripeAccountActive, setStripeAccountActive] = useState(false);
+  const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
+  const [tenantId, setTenantId] = useState<number | null>(null);
+  const [isConnectingStripe, setIsConnectingStripe] = useState(false);
 
-      // Pakete laden für dynamische Berechtigungen
-      let dbPackages: any[] = [];
-      try {
-        dbPackages = await fetchPackages();
-        setPackages(dbPackages);
-      } catch (err) {
-        console.error("Fehler beim Laden der Pakete:", err);
-      }
+  const [loadingCertificates, setLoadingCertificates] = useState(false);
+  const loadingCertificatesRef = useRef(false);
+  const fetchCertificateTemplatesData = useCallback(async () => {
+    if (loadingCertificatesRef.current) return;
+    loadingCertificatesRef.current = true;
+    setLoadingCertificates(true);
+    try {
+      const data = await fetchCertificateTemplates();
+      setCertificateTemplates(data);
+    } catch (error) {
+      console.error('Error fetching certificates:', error);
+    } finally {
+      loadingCertificatesRef.current = false;
+      setLoadingCertificates(false);
+    }
+  }, []); // Stabiler Callback dank Ref-Check
+
+  const loadData = useCallback(async () => {
+    setDataLoaded(false);
+    try {
+      // API-Aufrufe parallel starten - NUR die kritischen Daten für den ersten Paint!
+      const [config, dbPackages] = await Promise.all([
+        fetchAppConfig(),
+        fetchPackages().catch(err => { console.error("Fehler beim Laden der Pakete:", err); return []; })
+      ]);
+      
+      const t = config.tenant;
+      setPackages(dbPackages);
+
+      // Zertifikate im Hintergrund laden (nicht blockierend)
+      fetchCertificateTemplatesData();
 
       console.log("[DEBUG] API Response config:", config);
       console.log("[DEBUG] Tenant Data (t):", t);
@@ -859,6 +888,11 @@ export function EinstellungenPage() {
       setSchoolName(t.name);
       setSupportEmail(t.support_email || '');
       setSubdomain(t.subdomain);
+      setTenantId(t.id);
+
+      // Stripe Connect Info
+      setStripeAccountActive(t.stripe_account_active || false);
+      setStripeAccountId(t.stripe_account_id || null);
 
       let plan = (t.plan || 'starter').toLowerCase();
       if (plan === 'verband') plan = 'enterprise';
@@ -1009,7 +1043,6 @@ export function EinstellungenPage() {
         }))
       }));
       setLevels(mappedLevels);
-      setDataLoaded(true); // Flag setzen: Daten sind bereit zum Speichern
 
       if (t.config?.legal_settings) {
         setLegalSettings(t.config.legal_settings);
@@ -1038,7 +1071,8 @@ export function EinstellungenPage() {
         });
       }
 
-      fetchCertificateTemplatesData();
+      // Erst ganz am Ende das Flag setzen, wenn alles im State ist
+      setDataLoaded(true);
 
     } catch (e) {
       console.error(e);
@@ -1050,16 +1084,76 @@ export function EinstellungenPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, fetchCertificateTemplatesData]);
 
   // --- DATEN LADEN ---
+  const handleConnectStripe = async () => {
+    if (!tenantId) return;
+    setIsConnectingStripe(true);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ctsoisfxbhaynonnudua.supabase.co';
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const token = localStorage.getItem('pfotencard_token');
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/manage-connect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'apikey': supabaseAnonKey || ''
+        },
+        body: JSON.stringify({
+          action: 'create_connect_link',
+          tenantId: tenantId,
+          returnUrl: `${window.location.origin}/einstellungen/modules/balance_topup?success=true`,
+          refreshUrl: `${window.location.origin}/einstellungen/modules/balance_topup`
+        })
+      });
+
+      const data = await response.json();
+      if (data.url) {
+        toast({
+          title: "Weiterleitung",
+          description: "Du wirst nun sicher zu Stripe weitergeleitet, um dein Konto zu verknüpfen.",
+        });
+        setTimeout(() => {
+          window.location.href = data.url;
+        }, 1000);
+      } else {
+        throw new Error(data.error || 'Fehler beim Erstellen des Onboarding-Links');
+      }
+    } catch (err: any) {
+      console.error("Stripe Connect Error:", err);
+      toast({
+        title: "Fehler",
+        description: err.message || "Stripe-Verbindung konnte nicht gestartet werden.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsConnectingStripe(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    
+    // Check for success parameter from Stripe Connect
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('success') === 'true') {
+      toast({
+        title: "Konto verknüpft",
+        description: "Dein Auszahlungstyp wurde erfolgreich übermittelt. Die Verifizierung kann einen Moment dauern.",
+        variant: "default",
+      });
+      // URL aufräumen
+      window.history.replaceState({}, document.title, window.location.pathname + (window.location.hash || ''));
+    }
+  }, [loadData, toast]);
 
   // --- SYNCHRONISATION ZWISCHEN LEGAL UND INVOICE SETTINGS ---
   // 1. Von LegalSettings zu InvoiceSettings (Einweg-Synchronisation)
   useEffect(() => {
+    if (!dataLoaded) return;
     setInvoiceSettings(prev => {
       let updates: Partial<InvoiceSettings> = {};
 
@@ -1130,19 +1224,11 @@ export function EinstellungenPage() {
     legalSettings.registry_number,
     legalSettings.has_vat_id,
     legalSettings.vat_id,
-    legalSettings.legal_form
+    legalSettings.legal_form,
+    dataLoaded
   ]);
 
   // --- DATEN SPEICHERN ---
-  const fetchCertificateTemplatesData = useCallback(async () => {
-    try {
-      const data = await fetchCertificateTemplates();
-      setCertificateTemplates(data);
-    } catch (error) {
-      console.error('Error fetching certificates:', error);
-    }
-  }, []);
-
   const saveCertificateTemplateAction = async (template: any) => {
     try {
       if (editingCertificateTemplate) {
@@ -1502,7 +1588,10 @@ export function EinstellungenPage() {
     if (activeSection === 'rights') {
       loadStaff();
     }
-  }, [activeSection, loadStaff]);
+    if (activeSection === 'certificates') {
+      fetchCertificateTemplatesData();
+    }
+  }, [activeSection, loadStaff, fetchCertificateTemplatesData]);
 
   const handlePermissionChange = async (userId: number, field: keyof UserPermission, value: boolean) => {
     // Optimistisches Update
@@ -1572,10 +1661,15 @@ export function EinstellungenPage() {
                         <div className="flex items-center gap-1">
                           <button
                               onClick={() => {
-                                navigate(`/einstellungen/${item.id}`);
+                                if (item.id.includes('/')) {
+                                  navigate(`/einstellungen/${item.id}`);
+                                } else {
+                                  navigate(`/einstellungen/${item.id}`);
+                                }
                                 setIsMobileMenuOpen(false);
                               }}
-                              className={`flex-1 flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all ${activeSection === item.id && !moduleId
+                              className={`flex-1 flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all ${
+                                  (activeSection === item.id || (item.id.includes('/') && `${activeSection}/${moduleId}` === item.id)) && !moduleId?.includes('/')
                                   ? 'bg-primary text-primary-foreground shadow-sm'
                                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                               }`}
@@ -1611,17 +1705,13 @@ export function EinstellungenPage() {
                                 const mod = AVAILABLE_MODULES.find(m => m.id === modId);
                                 if (!mod) return null;
 
-                                const isSelected = (activeSection === 'modules' && selectedModuleId === modId) || (modId === 'balance_topup' && activeSection === 'topup');
+                                const isSelected = (activeSection === 'modules' && selectedModuleId === modId);
 
                                 return (
                                     <button
                                         key={modId}
                                         onClick={() => {
-                                          if (modId === 'balance_topup') {
-                                            navigate('/einstellungen/topup');
-                                          } else {
-                                            navigate(`/einstellungen/modules/${modId}`);
-                                          }
+                                          navigate(`/einstellungen/modules/${modId}`);
                                           setIsMobileMenuOpen(false);
                                         }}
                                         className={`w-full text-left px-3 py-1.5 text-xs font-medium rounded-md transition-colors truncate ${isSelected
@@ -2170,90 +2260,28 @@ export function EinstellungenPage() {
                   )}
 
 
-                  {/* Balance Section */}
-                  {activeSection === 'topup' && (
-                      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
-                        <Card>
-                          <CardHeader>
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <CardTitle>Guthaben-Aufladung</CardTitle>
-                                <CardDescription>Konfiguriere Bonus-Stufen und Optionen</CardDescription>
-                              </div>
-                              <Button onClick={() => setTopUpOptions([...topUpOptions, { amount: 0, bonus: 0 }])}>
-                                <Plus size={20} className="mr-2" />Neue Stufe
-                              </Button>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="space-y-6">
-                            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                              <div className="space-y-0.5">
-                                <Label>Individuelle Beträge</Label>
-                                <p className="text-sm text-muted-foreground">Kunden können beliebige Beträge aufladen</p>
-                              </div>
-                              <Switch checked={allowCustomTopUp} onCheckedChange={setAllowCustomTopUp} />
-                            </div>
 
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Betrag (€)</TableHead>
-                                  <TableHead>Bonus (€)</TableHead>
-                                  <TableHead className="text-right">Aktionen</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {topUpOptions.map((opt, index) => (
-                                    <TableRow key={index}>
-                                      <TableCell>
-                                        <Input
-                                            type="number"
-                                            value={opt.amount}
-                                            onChange={(e) => {
-                                              const newOpts = [...topUpOptions];
-                                              newOpts[index].amount = parseFloat(e.target.value) || 0;
-                                              setTopUpOptions(newOpts);
-                                            }}
-                                            className="w-32"
-                                        />
-                                      </TableCell>
-                                      <TableCell>
-                                        <Input
-                                            type="number"
-                                            value={opt.bonus}
-                                            onChange={(e) => {
-                                              const newOpts = [...topUpOptions];
-                                              newOpts[index].bonus = parseFloat(e.target.value) || 0;
-                                              setTopUpOptions(newOpts);
-                                            }}
-                                            className="w-32"
-                                        />
-                                      </TableCell>
-                                      <TableCell className="text-right">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => setTopUpOptions(topUpOptions.filter((_, i) => i !== index))}
-                                        >
-                                          <Trash2 size={16} className="text-destructive" />
-                                        </Button>
-                                      </TableCell>
-                                    </TableRow>
-                                ))}
-                                {topUpOptions.length === 0 && (
-                                    <TableRow>
-                                      <TableCell colSpan={3} className="text-center text-muted-foreground italic py-8">
-                                        Keine festen Auflade-Beträge definiert.
-                                      </TableCell>
-                                    </TableRow>
-                                )}
-                              </TableBody>
-                            </Table>
-                          </CardContent>
-                        </Card>
+
+                  {/* Finanzen Section */}
+                  {activeSection === 'finanzen' && (
+                      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="space-y-6">
+                          {selectedModuleId === 'balance' && (
+                              <div className="grid gap-6">
+                                  <TopupSection
+                                      allowCustomTopUp={allowCustomTopUp}
+                                      setAllowCustomTopUp={setAllowCustomTopUp}
+                                      topUpOptions={topUpOptions}
+                                      setTopUpOptions={setTopUpOptions}
+                                      stripeAccountActive={stripeAccountActive}
+                                      stripeAccountId={stripeAccountId}
+                                      onConnectStripe={handleConnectStripe}
+                                      isConnecting={isConnectingStripe}
+                                      showOnlyAmounts={true}
+                                  />
+                              </div>
+                          )}
                       </motion.div>
                   )}
-
 
                   {/* Module Hub - Master-Detail View */}
                   {activeSection === 'modules' && (
@@ -2536,6 +2564,23 @@ export function EinstellungenPage() {
                                         </div>
                                       </CardContent>
                                     </Card>
+                                  </div>
+                              )}
+
+                              {/* Balance Topup Module */}
+                              {selectedModuleId === 'balance_topup' && (
+                                  <div className="grid gap-6">
+                                    <TopupSection
+                                        allowCustomTopUp={allowCustomTopUp}
+                                        setAllowCustomTopUp={setAllowCustomTopUp}
+                                        topUpOptions={topUpOptions}
+                                        setTopUpOptions={setTopUpOptions}
+                                        stripeAccountActive={stripeAccountActive}
+                                        stripeAccountId={stripeAccountId}
+                                        onConnectStripe={handleConnectStripe}
+                                        isConnecting={isConnectingStripe}
+                                        showOnlyStripe={true}
+                                    />
                                   </div>
                               )}
 

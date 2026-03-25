@@ -182,10 +182,15 @@ export default function SuperAdminPackages() {
     return (
         <div className="min-h-screen bg-slate-50 pt-24 pb-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-7xl mx-auto">
-                <header className="mb-8 flex justify-between items-end">
-                    <div>
-                        <h1 className="text-3xl font-sans font-bold text-slate-900">Abonnement-Pakete</h1>
-                        <p className="text-slate-500">Detaillierte Konfiguration der Preispläne.</p>
+                <header className="mb-8 flex justify-between items-end gap-4">
+                    <div className="flex items-center gap-4">
+                        <Link to="/admin/dashboard" className="p-2 hover:bg-white rounded-full transition-colors">
+                            <ArrowLeft className="w-6 h-6 text-slate-600" />
+                        </Link>
+                        <div>
+                            <h1 className="text-3xl font-sans font-bold text-slate-900">Abonnement-Pakete</h1>
+                            <p className="text-slate-500">Detaillierte Konfiguration der Preispläne.</p>
+                        </div>
                     </div>
                     {!isAdding && <Button onClick={() => { resetForm(); setIsAdding(true); }}><Plus className="w-4 h-4 mr-2" /> Neues Paket</Button>}
                 </header>
